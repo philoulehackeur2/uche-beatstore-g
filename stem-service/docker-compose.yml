@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  stem-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # For CUDA GPU support, override:
+      # args:
+      #   TORCH_INDEX: https://download.pytorch.org/whl/cu121
+    image: antigravity-stem-service:latest
+    container_name: demucs_service
+    ports:
+      - "8001:8001"
+    volumes:
+      # Persist separated stems between container restarts
+      - stem_storage:/tmp/demucs_storage
+    environment:
+      - STORAGE_DIR=/tmp/demucs_storage
+    restart: unless-stopped
+    # GPU passthrough (uncomment if you have NVIDIA runtime installed)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  stem_storage:
+    driver: local

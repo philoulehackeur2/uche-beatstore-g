@@ -1,0 +1,634 @@
+'use client';
+
+/**
+ * Lyrics Studio.
+ *
+ *   ┌─────────────────────────┬───────────────────────┐
+ *   │  Editor (textarea)      │  Word tools           │
+ *   │  · auto-save 1.2s debounce                     │
+ *   │  · live syllable count per line                │
+ *   │  · click any word → lookup                     │
+ *   │                         │  · Rhymes / Near       │
+ *   │                         │  · Synonyms            │
+ *   │                         │  · Antonyms            │
+ *   │                         │  · Related (triggers)  │
+ *   │                         │  · Definition          │
+ *   ├─────────────────────────┴───────────────────────┤
+ *   │  Version history (revert / preview)             │
+ *   └─────────────────────────────────────────────────┘
+ *
+ * Word tool results are clickable — clicking inserts the word at the caret.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BookOpen, History, Loader2, RefreshCw, Save, Type, Volume2, X, Music2, Hash, Sparkles, Search,
+} from 'lucide-react';
+
+interface Props {
+  trackId: string;
+}
+
+interface DatamuseHit {
+  word: string;
+  score?: number;
+  numSyllables?: number;
+}
+
+interface DefMeaning {
+  partOfSpeech: string;
+  definitions: { definition: string; example: string | null }[];
+  synonyms: string[];
+  antonyms: string[];
+}
+
+interface DefEntry {
+  word: string;
+  phonetic: string | null;
+  audio: string | null;
+  meanings: DefMeaning[];
+}
+
+type LookupKind = 'rhymes' | 'near-rhymes' | 'synonyms' | 'antonyms' | 'related';
+
+interface HistoryEntry { at: string; content: string }
+
+const SAVE_DEBOUNCE_MS = 1200;
+
+/** Cheap English syllable estimator. Good enough for an inline counter. */
+function countSyllables(word: string): number {
+  const w = word.toLowerCase().replace(/[^a-z]/g, '');
+  if (!w) return 0;
+  if (w.length <= 3) return 1;
+  const trimmed = w
+    .replace(/(?:[^laeiouy]|ed|[^laeiouy]e)$/, '')
+    .replace(/^y/, '');
+  const matches = trimmed.match(/[aeiouy]{1,2}/g);
+  return Math.max(1, matches?.length ?? 1);
+}
+
+function lineSyllables(line: string): number {
+  return line
+    .split(/\s+/)
+    .filter(Boolean)
+    .reduce((sum, w) => sum + countSyllables(w), 0);
+}
+
+export function LyricsStudio({ trackId }: Props) {
+  const [content, setContent] = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyPreview, setHistoryPreview] = useState<HistoryEntry | null>(null);
+
+  // Word tools state
+  const [lookupWord, setLookupWord] = useState<string>('');
+  const [lookupKind, setLookupKind] = useState<LookupKind>('rhymes');
+  const [hits, setHits] = useState<DatamuseHit[]>([]);
+  const [hitsLoading, setHitsLoading] = useState(false);
+  const [defEntries, setDefEntries] = useState<DefEntry[] | null>(null);
+  const [defLoading, setDefLoading] = useState(false);
+  const [sylFilter, setSylFilter] = useState<number | null>(null);
+  const [resultLimit, setResultLimit] = useState<number>(40);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLoadedRef = useRef(false);
+
+  /* ─────── load existing lyrics + history ─────── */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/tracks/${trackId}/lyrics`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (cancelled) return;
+        setContent(j.lyrics || '');
+        setSavedContent(j.lyrics || '');
+        setHistory(j.history || []);
+        initialLoadedRef.current = true;
+      } catch (err) {
+        console.warn('Lyrics fetch failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [trackId]);
+
+  /* ─────── debounced auto-save ─────── */
+  const persist = useCallback(async (next: string, snapshot = false) => {
+    setStatus('saving');
+    setError(null);
+    try {
+      const r = await fetch(`/api/tracks/${trackId}/lyrics`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: next, snapshot }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'save failed');
+      setSavedContent(next);
+      setHistory(j.history || []);
+      setStatus('saved');
+      setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch (err: any) {
+      setStatus('error');
+      setError(err.message || 'Save failed');
+    }
+  }, [trackId]);
+
+  useEffect(() => {
+    if (!initialLoadedRef.current) return;
+    if (content === savedContent) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => persist(content, false), SAVE_DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [content, savedContent, persist]);
+
+  // Save on blur immediately to avoid losing work on tab close
+  const handleBlur = () => {
+    if (content !== savedContent) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      persist(content, false);
+    }
+  };
+
+  /* ─────── word lookups ─────── */
+  const runLookup = useCallback(async (word: string, kind: LookupKind) => {
+    if (!word) {
+      setHits([]);
+      return;
+    }
+    setHitsLoading(true);
+    try {
+      const r = await fetch(`/api/words?kind=${kind}&word=${encodeURIComponent(word)}`);
+      const j = await r.json();
+      setHits(Array.isArray(j.results) ? j.results : []);
+    } catch {
+      setHits([]);
+    } finally {
+      setHitsLoading(false);
+    }
+  }, []);
+
+  const runDefine = useCallback(async (word: string) => {
+    if (!word) {
+      setDefEntries(null);
+      return;
+    }
+    setDefLoading(true);
+    try {
+      const r = await fetch(`/api/words?kind=define&word=${encodeURIComponent(word)}`);
+      const j = await r.json();
+      setDefEntries(Array.isArray(j.entries) ? j.entries : []);
+    } catch {
+      setDefEntries([]);
+    } finally {
+      setDefLoading(false);
+    }
+  }, []);
+
+  // Re-run when word or kind changes
+  useEffect(() => {
+    if (!lookupWord) return;
+    runLookup(lookupWord, lookupKind);
+    runDefine(lookupWord);
+    // Reset filter + pagination when the query changes
+    setSylFilter(null);
+    setResultLimit(40);
+  }, [lookupWord, lookupKind, runLookup, runDefine]);
+
+  /* ─────── derived: filtered + sorted hits, syllable histogram ─────── */
+  const sortedHits = useMemo(
+    () => [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    [hits],
+  );
+
+  const sylBuckets = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const h of sortedHits) {
+      const s = h.numSyllables ?? countSyllables(h.word);
+      m.set(s, (m.get(s) || 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => a[0] - b[0]);
+  }, [sortedHits]);
+
+  const visibleHits = useMemo(() => {
+    const filtered = sylFilter == null
+      ? sortedHits
+      : sortedHits.filter((h) => (h.numSyllables ?? countSyllables(h.word)) === sylFilter);
+    return filtered;
+  }, [sortedHits, sylFilter]);
+
+  const wordAtCaret = (): string => {
+    const ta = textareaRef.current;
+    if (!ta) return '';
+    const pos = ta.selectionStart;
+    const text = ta.value;
+    let start = pos;
+    let end = pos;
+    while (start > 0 && /[A-Za-z'-]/.test(text[start - 1])) start--;
+    while (end < text.length && /[A-Za-z'-]/.test(text[end])) end++;
+    return text.slice(start, end);
+  };
+
+  const replaceWordAtCaret = (replacement: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const text = ta.value;
+    let start = pos;
+    let end = pos;
+    while (start > 0 && /[A-Za-z'-]/.test(text[start - 1])) start--;
+    while (end < text.length && /[A-Za-z'-]/.test(text[end])) end++;
+
+    const isInWord = end > start;
+    const newText = isInWord
+      ? text.slice(0, start) + replacement + text.slice(end)
+      : text.slice(0, pos) + replacement + text.slice(pos);
+    setContent(newText);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const newCaret = (isInWord ? start : pos) + replacement.length;
+      ta.setSelectionRange(newCaret, newCaret);
+    });
+  };
+
+  const insertAtCaret = (str: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const text = ta.value;
+    setContent(text.slice(0, pos) + str + text.slice(pos));
+    requestAnimationFrame(() => {
+      ta.focus();
+      const newCaret = pos + str.length;
+      ta.setSelectionRange(newCaret, newCaret);
+    });
+  };
+
+  const onTextareaSelect = () => {
+    const w = wordAtCaret();
+    if (w && w.toLowerCase() !== lookupWord) setLookupWord(w.toLowerCase());
+  };
+
+  /* ─────── stats ─────── */
+  const stats = useMemo(() => {
+    const lines = content.split('\n');
+    const lineSyl = lines.map(lineSyllables);
+    const words = content.match(/\b[A-Za-z']+\b/g) || [];
+    const totalSyl = lineSyl.reduce((s, n) => s + n, 0);
+    return {
+      words: words.length,
+      lines: lines.length,
+      syllables: totalSyl,
+      lineSyl,
+    };
+  }, [content]);
+
+  /* ─────── history actions ─────── */
+  const restoreEntry = (entry: HistoryEntry) => {
+    setContent(entry.content);
+    setHistoryPreview(null);
+    setShowHistory(false);
+    // Force snapshot of current first
+    persist(entry.content, true);
+  };
+
+  const saveSnapshot = () => persist(content, true);
+
+  /* ─────── UI ─────── */
+  return (
+    <div className="border border-[#1a160f] rounded-lg bg-[#0a0907] overflow-hidden">
+      {/* toolbar */}
+      <div className="flex items-center gap-3 px-4 h-10 border-b border-[#16130e] bg-[#0a0907]">
+        <Music2 size={12} className="text-[#E8D8B8]" />
+        <span className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">Lyrics</span>
+        <span className="text-[10px] font-mono text-[#3a3328]">·</span>
+        <span className="text-[10px] font-mono text-[#5a5142]">
+          {stats.words}w · {stats.lines}L · {stats.syllables} syl
+        </span>
+        <div className="flex-1" />
+        <SaveBadge status={status} error={error} />
+        <button
+          onClick={saveSnapshot}
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620] flex items-center gap-1"
+          title="Save a version snapshot"
+        >
+          <Save size={10} /> Version
+        </button>
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border flex items-center gap-1 ${
+            showHistory
+              ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
+              : 'border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620]'
+          }`}
+        >
+          <History size={10} /> {history.length}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-[1fr_320px] min-h-[420px]">
+        {/* editor */}
+        <div className="relative border-r border-[#16130e]">
+          <div className="absolute inset-0 grid grid-cols-[44px_1fr] overflow-hidden">
+            {/* per-line syllable gutter */}
+            <div className="bg-[#0a0907] border-r border-[#16130e] py-3 overflow-hidden pointer-events-none">
+              {stats.lineSyl.map((n, i) => (
+                <div
+                  key={i}
+                  className="text-right pr-2 text-[10px] font-mono text-[#3a3328] leading-[1.6]"
+                >
+                  {n || ''}
+                </div>
+              ))}
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onBlur={handleBlur}
+              onSelect={onTextareaSelect}
+              onClick={onTextareaSelect}
+              onKeyUp={onTextareaSelect}
+              placeholder={`Drop lyrics here…
+Click a word to look up rhymes, synonyms, definitions.
+Auto-saves every ${SAVE_DEBOUNCE_MS / 1000}s.`}
+              spellCheck
+              className="w-full h-full bg-transparent text-[14px] leading-[1.6] text-[#E8DCC8] placeholder:text-[#3a3328] px-4 py-3 resize-none focus:outline-none font-mono"
+            />
+          </div>
+        </div>
+
+        {/* word tools */}
+        <div className="flex flex-col">
+          <div className="px-3 py-3 border-b border-[#16130e]">
+            <div className="flex items-center gap-2 mb-2">
+              <Search size={11} className="text-[#4a4338]" />
+              <input
+                value={lookupWord}
+                onChange={(e) => setLookupWord(e.target.value.trim().toLowerCase())}
+                placeholder="word"
+                className="flex-1 bg-transparent text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none border-b border-[#1a160f] focus:border-[#2d2620] py-1"
+              />
+              {lookupWord && (
+                <button onClick={() => setLookupWord('')} className="text-[#5a5142] hover:text-white">
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 flex-wrap">
+              {(['rhymes', 'near-rhymes', 'synonyms', 'antonyms', 'related'] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setLookupKind(k)}
+                  className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border transition-colors ${
+                    lookupKind === k
+                      ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
+                      : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                  }`}
+                >
+                  {k.replace('-', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {/* Tool results */}
+            <div className="px-3 py-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338] flex items-center gap-1.5">
+                  <Sparkles size={9} /> {lookupKind.replace('-', ' ')}
+                  {sortedHits.length > 0 && (
+                    <span className="text-[#6a5d4a]">· {visibleHits.length}/{sortedHits.length}</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Syllable filter chips — only show when we have multiple buckets */}
+              {sylBuckets.length > 1 && (
+                <div className="flex items-center gap-1 flex-wrap mb-2">
+                  <button
+                    onClick={() => setSylFilter(null)}
+                    className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
+                      sylFilter == null
+                        ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
+                        : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                    }`}
+                  >
+                    all
+                  </button>
+                  {sylBuckets.map(([n, count]) => (
+                    <button
+                      key={n}
+                      onClick={() => setSylFilter(n)}
+                      title={`${count} ${n}-syllable result${count === 1 ? '' : 's'}`}
+                      className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
+                        sylFilter === n
+                          ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
+                          : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                      }`}
+                    >
+                      {n} syl <span className="text-[#4a4338]">·{count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {hitsLoading ? (
+                <Loader2 size={12} className="animate-spin text-[#4a4338]" />
+              ) : !lookupWord ? (
+                <p className="text-[10px] text-[#4a4338] italic">Click a word in the editor or type one above.</p>
+              ) : visibleHits.length === 0 ? (
+                <p className="text-[10px] text-[#5a5142]">
+                  {sylFilter != null ? `No ${sylFilter}-syllable results.` : 'No results.'}
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1">
+                    {visibleHits.slice(0, resultLimit).map((h) => {
+                      const syl = h.numSyllables ?? countSyllables(h.word);
+                      return (
+                        <button
+                          key={h.word + (h.score ?? '')}
+                          onClick={() => replaceWordAtCaret(h.word)}
+                          title={`${syl} syl${h.score ? ` · score ${h.score}` : ''}`}
+                          className="text-[10px] px-2 py-0.5 rounded-md border border-[#1a160f] bg-[#14110d] text-[#E8DCC8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/40 hover:text-[#E8D8B8] transition-colors"
+                        >
+                          {h.word}
+                          <span className="ml-1 text-[#4a4338]">·{syl}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {visibleHits.length > resultLimit && (
+                    <button
+                      onClick={() => setResultLimit((n) => n + 40)}
+                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8D8B8] border border-[#1a160f] hover:border-[#8A7A5C]/40 rounded px-2 py-1"
+                    >
+                      Show more · {visibleHits.length - resultLimit} hidden
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Definition */}
+            <div className="px-3 py-2 border-t border-[#16130e]">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338] mb-2 flex items-center gap-1.5">
+                <BookOpen size={9} /> definition
+              </p>
+              {defLoading ? (
+                <Loader2 size={12} className="animate-spin text-[#4a4338]" />
+              ) : !lookupWord ? (
+                <p className="text-[10px] text-[#4a4338] italic">—</p>
+              ) : !defEntries || defEntries.length === 0 ? (
+                <p className="text-[10px] text-[#5a5142]">No definition found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {defEntries.slice(0, 1).map((e, i) => (
+                    <div key={i}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] text-[#E8DCC8]">{e.word}</span>
+                        {e.phonetic && (
+                          <span className="text-[10px] font-mono text-[#6a5d4a]">{e.phonetic}</span>
+                        )}
+                        {e.audio && (
+                          <button
+                            className="text-[#6a5d4a] hover:text-[#E8D8B8]"
+                            onClick={() => new Audio(e.audio!).play().catch(() => {})}
+                            title="Pronounce"
+                          >
+                            <Volume2 size={10} />
+                          </button>
+                        )}
+                      </div>
+                      {e.meanings.slice(0, 2).map((m, j) => (
+                        <div key={j} className="mb-1">
+                          <p className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-0.5">
+                            {m.partOfSpeech}
+                          </p>
+                          {m.definitions.slice(0, 2).map((d, k) => (
+                            <p key={k} className="text-[10px] text-[#a08a6a] mb-1 leading-snug">
+                              {d.definition}
+                              {d.example && (
+                                <span className="block text-[#5a5142] italic">“{d.example}”</span>
+                              )}
+                            </p>
+                          ))}
+                          {m.synonyms.length > 0 && (
+                            <p className="text-[9px] text-[#4a4338]">
+                              <span className="text-[#6a5d4a] mr-1">syn:</span>
+                              {m.synonyms.slice(0, 6).map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => replaceWordAtCaret(s)}
+                                  className="text-[#a08a6a] hover:text-[#E8D8B8] mr-1"
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* History */}
+      {showHistory && (
+        <div className="border-t border-[#16130e] bg-[#0a0907]">
+          <div className="flex items-center justify-between px-4 h-9 border-b border-[#16130e]">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#a08a6a]">
+              Version history · {history.length}
+            </span>
+            <button onClick={() => setShowHistory(false)} className="text-[#5a5142] hover:text-white">
+              <X size={11} />
+            </button>
+          </div>
+          <div className="max-h-[200px] overflow-y-auto">
+            {history.length === 0 ? (
+              <p className="text-[10px] text-[#5a5142] px-4 py-3">No prior versions yet.</p>
+            ) : (
+              history.map((h, i) => {
+                const isPreview = historyPreview === h;
+                return (
+                  <div
+                    key={i}
+                    className={`px-4 py-2 border-b border-[#161310] last:border-b-0 flex items-start gap-3 ${
+                      isPreview ? 'bg-[#0e0c08]' : ''
+                    }`}
+                  >
+                    <Hash size={9} className="text-[#3a3328] mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-mono text-[#a08a6a]">
+                        {new Date(h.at).toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-[#5a5142] truncate font-mono">
+                        {h.content.split('\n').slice(0, 1).join(' ')}
+                        <span className="text-[#4a4338]"> · {h.content.length} chars</span>
+                      </p>
+                      {isPreview && (
+                        <pre className="mt-2 text-[10px] text-[#a08a6a] whitespace-pre-wrap font-mono max-h-[120px] overflow-y-auto bg-[#0a0907] border border-[#1a160f] rounded p-2">
+                          {h.content}
+                        </pre>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setHistoryPreview(isPreview ? null : h)}
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620]"
+                      >
+                        {isPreview ? 'Hide' : 'Preview'}
+                      </button>
+                      <button
+                        onClick={() => restoreEntry(h)}
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#1a160f] text-[#E8D8B8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/40 flex items-center gap-1"
+                      >
+                        <RefreshCw size={9} /> Restore
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SaveBadge({ status, error }: { status: string; error: string | null }) {
+  if (status === 'saving') {
+    return (
+      <span className="text-[10px] font-mono text-[#a08a6a] flex items-center gap-1">
+        <Loader2 size={9} className="animate-spin" /> saving
+      </span>
+    );
+  }
+  if (status === 'saved') {
+    return <span className="text-[10px] font-mono text-green-400">saved</span>;
+  }
+  if (status === 'error') {
+    return (
+      <span className="text-[10px] font-mono text-red-400" title={error || ''}>
+        save failed
+      </span>
+    );
+  }
+  return <span className="text-[10px] font-mono text-[#3a3328]">·</span>;
+}

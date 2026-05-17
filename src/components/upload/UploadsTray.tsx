@@ -1,0 +1,278 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Upload, X, Pause, Play, RefreshCw, AlertTriangle, CheckCircle2,
+  ChevronDown, ChevronUp, Loader2, FileAudio,
+} from 'lucide-react';
+import {
+  useUploadManager,
+  formatBytes, formatSpeed, formatEta,
+  type UploadItem,
+} from '@/lib/upload/manager';
+
+/**
+ * Persistent tray of in-flight uploads. Mounted globally in the dashboard
+ * layout so uploads survive page navigation. On reload, "interrupted" rows
+ * surface a "Resume" button that re-prompts for the same file.
+ */
+export function UploadsTray() {
+  const order = useUploadManager((s) => s.order);
+  const uploads = useUploadManager((s) => s.uploads);
+  const hydrate = useUploadManager((s) => s.hydrate);
+  const [expanded, setExpanded] = useState(true);
+
+  // Hydrate persisted sessions once on mount
+  useEffect(() => { hydrate(); }, [hydrate]);
+
+  // Block accidental reload while uploads are running
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const active = Object.values(uploads).some(
+        (u) => u.status === 'uploading' || u.status === 'preparing' || u.status === 'finalizing'
+      );
+      if (active) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [uploads]);
+
+  const items = useMemo(() => order.map((id) => uploads[id]).filter(Boolean), [order, uploads]);
+  const visible = items.filter((u) => u.status !== 'aborted');
+
+  if (visible.length === 0) return null;
+
+  const active = visible.filter(
+    (u) => u.status === 'uploading' || u.status === 'preparing' || u.status === 'finalizing' || u.status === 'queued'
+  ).length;
+  const errored = visible.filter((u) => u.status === 'error' || u.status === 'interrupted').length;
+  const done = visible.filter((u) => u.status === 'success').length;
+
+  return (
+    <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
+      <div className="bg-[#0a0907] border border-[#1a160f] rounded-lg shadow-2xl overflow-hidden">
+        <button
+          onClick={() => setExpanded((x) => !x)}
+          className="w-full flex items-center gap-2 px-3 h-10 border-b border-[#16130e] hover:bg-[#14110d] transition-colors"
+        >
+          <Upload size={12} className="text-[#E8D8B8]" />
+          <span className="text-[11px] font-medium text-white">
+            Uploads
+            <span className="text-[#5a5142] font-normal ml-1.5">
+              {active > 0 && `${active} running`}
+              {active > 0 && (errored > 0 || done > 0) && ' · '}
+              {errored > 0 && <span className="text-red-400">{errored} failed</span>}
+              {errored > 0 && done > 0 && ' · '}
+              {done > 0 && <span className="text-green-400">{done} done</span>}
+            </span>
+          </span>
+          <div className="flex-1" />
+          {expanded ? (
+            <ChevronDown size={12} className="text-[#5a5142]" />
+          ) : (
+            <ChevronUp size={12} className="text-[#5a5142]" />
+          )}
+        </button>
+
+        {expanded && (
+          <div className="max-h-[60vh] overflow-y-auto">
+            {visible.map((u) => (
+              <UploadRow key={u.id} u={u} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UploadRow({ u }: { u: UploadItem }) {
+  const pause = useUploadManager((s) => s.pause);
+  const retry = useUploadManager((s) => s.retry);
+  const abort = useUploadManager((s) => s.abort);
+  const remove = useUploadManager((s) => s.remove);
+  const resume = useUploadManager((s) => s.resume);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pct = u.fileSize > 0 ? Math.min(100, (u.bytesUploaded / u.fileSize) * 100) : 0;
+  const isActive = u.status === 'uploading' || u.status === 'preparing' || u.status === 'finalizing';
+
+  const onResumePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) resume(u.id, f);
+  };
+
+  return (
+    <div className="px-3 py-2.5 border-b border-[#161310] last:border-b-0">
+      {/* row 1: name + actions */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <FileAudio size={11} className="text-[#4a4338] shrink-0" />
+        <span className="text-[11px] text-[#E8DCC8] truncate flex-1" title={u.fileName}>
+          {u.fileName}
+        </span>
+        <span className="text-[9px] font-mono text-[#5a5142] shrink-0">
+          {formatBytes(u.fileSize)}
+        </span>
+        <RowActions
+          u={u}
+          isActive={isActive}
+          onPause={() => pause(u.id)}
+          onRetry={() => retry(u.id)}
+          onAbort={() => abort(u.id)}
+          onRemove={() => remove(u.id)}
+          onPickResume={() => fileRef.current?.click()}
+        />
+        <input
+          ref={fileRef} type="file"
+          accept=".csv,.mp3,.wav,.flac,.aiff,.aif,.m4a,.ogg"
+          onChange={onResumePick}
+          className="hidden"
+        />
+      </div>
+
+      {/* row 2: progress bar */}
+      <div className="h-1 bg-[#16130e] rounded-full overflow-hidden mb-1.5">
+        <div
+          className={`h-full transition-all duration-200 ${
+            u.status === 'success'
+              ? 'bg-green-500'
+              : u.status === 'error' || u.status === 'interrupted'
+              ? 'bg-red-500'
+              : u.status === 'paused'
+              ? 'bg-[#a08a6a]'
+              : 'bg-gradient-to-r from-[#D4BFA0] to-[#8A7A5C]'
+          }`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* row 3: status line */}
+      <div className="flex items-center gap-2 text-[10px] font-mono">
+        <StatusBadge u={u} pct={pct} />
+        <div className="flex-1" />
+        {isActive && (
+          <>
+            <span className="text-[#6a5d4a]">{formatSpeed(u.speedBps)}</span>
+            <span className="text-[#3a3328]">·</span>
+            <span className="text-[#6a5d4a]">ETA {formatEta(u.etaSec)}</span>
+          </>
+        )}
+        {u.status === 'paused' && (
+          <span className="text-[#6a5d4a]">{Math.round(pct)}% · paused</span>
+        )}
+      </div>
+
+      {/* error/info detail */}
+      {u.error && u.status !== 'success' && (
+        <p className="mt-1 text-[10px] text-red-400 flex items-start gap-1">
+          <AlertTriangle size={9} className="mt-0.5 shrink-0" />
+          <span className="break-words">{u.error}</span>
+        </p>
+      )}
+      {u.status === 'interrupted' && !u.error && (
+        <p className="mt-1 text-[10px] text-[#E2C16D]">
+          Upload interrupted. Re-pick the same file to resume from {Math.round(pct)}%.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
+  switch (u.status) {
+    case 'queued':
+      return <span className="text-[#6a5d4a]">queued</span>;
+    case 'preparing':
+      return (
+        <span className="text-[#E8D8B8] flex items-center gap-1">
+          <Loader2 size={9} className="animate-spin" /> preparing
+        </span>
+      );
+    case 'uploading':
+      return (
+        <span className="text-[#E8D8B8]">
+          {Math.round(pct)}%
+          {u.totalParts > 0 && (
+            <span className="text-[#4a4338] ml-1">
+              · {u.completedPartNumbers.size}/{u.totalParts}
+            </span>
+          )}
+        </span>
+      );
+    case 'finalizing':
+      return (
+        <span className="text-[#E8D8B8] flex items-center gap-1">
+          <Loader2 size={9} className="animate-spin" /> finalizing · analyzing
+        </span>
+      );
+    case 'success':
+      return (
+        <span className="text-green-400 flex items-center gap-1">
+          <CheckCircle2 size={9} /> done
+        </span>
+      );
+    case 'error':
+      return (
+        <span className="text-red-400 flex items-center gap-1">
+          <AlertTriangle size={9} /> failed
+        </span>
+      );
+    case 'interrupted':
+      return <span className="text-[#E2C16D]">interrupted</span>;
+    case 'paused':
+      return <span className="text-[#a08a6a]">paused</span>;
+    default:
+      return null;
+  }
+}
+
+function RowActions({
+  u, isActive, onPause, onRetry, onAbort, onRemove, onPickResume,
+}: {
+  u: UploadItem;
+  isActive: boolean;
+  onPause: () => void;
+  onRetry: () => void;
+  onAbort: () => void;
+  onRemove: () => void;
+  onPickResume: () => void;
+}) {
+  const btn = 'w-5 h-5 rounded flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-[#1a160f]';
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      {isActive && (
+        <button onClick={onPause} className={btn} title="Pause">
+          <Pause size={10} />
+        </button>
+      )}
+      {u.status === 'paused' && (
+        <button onClick={onRetry} className={btn} title="Resume">
+          <Play size={10} />
+        </button>
+      )}
+      {u.status === 'error' && (
+        <button onClick={onRetry} className={btn} title="Retry">
+          <RefreshCw size={10} />
+        </button>
+      )}
+      {u.status === 'interrupted' && (
+        <button onClick={onPickResume} className={`${btn} text-[#E2C16D] hover:text-[#E2C16D]`} title="Re-pick file to resume">
+          <Upload size={10} />
+        </button>
+      )}
+      {(isActive || u.status === 'paused' || u.status === 'queued') && (
+        <button onClick={onAbort} className={`${btn} hover:text-red-400`} title="Cancel">
+          <X size={10} />
+        </button>
+      )}
+      {(u.status === 'success' || u.status === 'error' || u.status === 'interrupted') && (
+        <button onClick={onRemove} className={btn} title="Dismiss">
+          <X size={10} />
+        </button>
+      )}
+    </div>
+  );
+}

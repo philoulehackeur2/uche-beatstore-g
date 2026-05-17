@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Brand mark icon used by the PWA manifest. Square canvas at the
+       same dark warm bg as the app's --bg-page token; the centered
+       "AG" runs in the cream-bone --text-primary tone so the badge
+       reads as a continuation of the in-app branding. -->
+  <rect width="512" height="512" rx="112" fill="#0a0907"/>
+  <text x="256" y="318" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif"
+        font-weight="900" font-size="160" letter-spacing="-8" fill="#E8DCC8">U2C</text>
+</svg>

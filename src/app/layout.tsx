@@ -1,0 +1,88 @@
+import type { Metadata, Viewport } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { QueryProvider } from '@/components/providers/QueryProvider';
+import { Toaster } from '@/components/ui/Toaster';
+import { CommandPalette } from '@/components/nav/CommandPalette';
+
+// Geist is Vercel's open-source variable font — geometric sans with the
+// "clean, AI-ish" feel the brief called for. We expose both Geist (UI)
+// and Geist Mono (monospace BPM / time / tag strings) as CSS variables
+// so component-level `font-mono` Tailwind classes resolve to Geist Mono
+// instead of the platform fallback.
+// Variable names match the CSS custom properties already referenced
+// in globals.css (`--font-geist-sans`, `--font-geist-mono`) so the
+// existing @theme bindings start resolving to Geist immediately.
+const geist = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+});
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+});
+
+// PWA + mobile metadata. Next splits the modern metadata API across
+// `metadata` (head tags) and `viewport` (theme-color, viewport, color-
+// scheme) — separate exports so server components can statically emit
+// each set. Together they give the app:
+//   • "Add to Home Screen" install prompts on iOS / Android (manifest)
+//   • Branded splash screen + chrome on standalone launch (apple meta)
+//   • A theme-color matching the page bg so the iOS notch / Android
+//     status-bar blend in instead of stripping cold-black
+//   • Apple touch icon for the home-screen tile
+export const metadata: Metadata = {
+  title: "U2C Beatstore",
+  description: "U2C's beat library, projects, sends, and studio — all in one place.",
+  applicationName: "U2C Beatstore",
+  manifest: '/manifest.json',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/icon.svg' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Beatstore',
+    statusBarStyle: 'black-translucent',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0a0907',
+  colorScheme: 'dark',
+  // `viewportFit: cover` lets the page paint under the iOS notch /
+  // home-indicator. We pair this with safe-area-inset padding on the
+  // PlayerBar pill (already accounted for via bottom-3 spacing) so
+  // controls never sit under the indicator.
+  viewportFit: 'cover',
+  width: 'device-width',
+  initialScale: 1,
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    // suppressHydrationWarning on <html>/<body> because browser extensions
+    // (Night Eye, Foxified, ColorZilla, dark-mode helpers, etc.) inject
+    // attributes — `nighteye`, `foxified`, `cz-shortcut-listen`, extra
+    // class tokens like `mdl-js` — into these tags before React hydrates.
+    // The mismatch is noise from the extension, not a real SSR bug. The
+    // suppression is scoped to the *top-level* attributes; mismatches in
+    // children still throw normally.
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body
+        suppressHydrationWarning
+        className={`${geist.variable} ${geistMono.variable} font-sans bg-[#0a0907] text-[#E8DCC8] min-h-screen selection:bg-[#D4BFA0] selection:text-white`}
+      >
+        <QueryProvider>
+          {children}
+          <CommandPalette />
+          <Toaster />
+        </QueryProvider>
+      </body>
+    </html>
+  );
+}

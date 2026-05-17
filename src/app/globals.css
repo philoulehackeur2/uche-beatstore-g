@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/* Design tokens — first pass against the moodboard (Soutter / Bacon /
+ * warm-aubergine family). The earlier violet accent (#D4BFA0) was
+ * fighting the brief; the new accent is a burnt amber drawn from the
+ * Soutter "Le H Ros" column. Neutrals shift slightly warm so the
+ * page reads as ink-on-bone rather than cold-OLED.
+ *
+ * Component code should reference these vars and never hardcode the
+ * hex — but the legacy violet values still live in many files; a
+ * follow-up sweep replaces them in place. */
+:root {
+  /* Page surfaces — black, but warm. The brief said "white in the
+   * moodboard becomes black in the app" — the moodboard's bone/cream
+   * inverts to this warm near-black instead of pure #000. */
+  --bg-page: #0a0907;
+  --bg-card: #14110d;
+  --bg-hover: #1a160f;
+  --text-primary: #E8DCC8;
+  --text-secondary: #6a5d4a;
+  --text-tertiary: #3a3328;
+  /* Accent — burnt amber + two adjacents (lighter for hover/active,
+   * dimmer for pressed/borders). Star stays gold; close enough to
+   * the new family that it doesn't need updating. */
+  --accent: #D4BFA0;
+  --accent-light: #E8D8B8;
+  --accent-dim: #8A7A5C;
+  --accent-tint: #2A2418;
+  --star: #c8a84b;
+  --border: #1f1a13;
+  --border-hover: #2d2620;
+}
+
+@theme inline {
+  --color-background: var(--bg-page);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-geist-sans);
+  /* Geist Mono is now the canonical mono. Falls through to system mono
+     stacks if the variable isn't bound (e.g. during dev hot-reload). */
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+.font-mono, .mono {
+  font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* Uppercase small label helper - untitled-style meta labels */
+.label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Utility for horizontally-scrolling chip strips and tag rows — hides
+   the scrollbar without disabling scroll. */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Vinyl spin — slow continuous rotation used on share-page cover art.
+   8 seconds per turn ≈ 7.5 RPM, which reads as steady motion without
+   being so fast it looks like a wheel of fortune. The caller toggles
+   `animationPlayState: 'running' | 'paused'` inline to sync the spin
+   with audio playback. `prefers-reduced-motion` users still see a
+   static cover. */
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-vinyl {
+  animation: vinylSpin 8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-vinyl {
+    animation: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f1a13;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2d2620;
+}
+
+/* Wavesurfer overrides */
+wave {
+  overflow: hidden !important;
+}
+
+/* Hide native number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Range slider untitled style */
+input[type=range] {
+  -webkit-appearance: none;
+  background: transparent;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: #1f1a13;
+  border-radius: 1px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #E8DCC8;
+  margin-top: -4px;
+  cursor: pointer;
+}
