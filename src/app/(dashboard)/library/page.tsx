@@ -17,6 +17,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { listCached } from '@/lib/offline/audio-cache';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -60,6 +61,22 @@ export default function LibraryPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'beat' | 'instrumental' | 'song' | 'remix'>('all');
+  const [offlineOnly, setOfflineOnly] = useState(false);
+  const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
+
+  const refreshOfflineList = async () => {
+    try {
+      const list = await listCached();
+      setCachedIds(new Set(list.map((item) => item.id)));
+    } catch (err) {
+      console.error('Failed to list cached tracks:', err);
+    }
+  };
+
+  useEffect(() => {
+    refreshOfflineList();
+  }, [tracks]);
+
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   // Batch-select state for delete. Same UX as the playlists page —
   // a "Select" toggle near the bulk-analyze button activates select
@@ -68,7 +85,7 @@ export default function LibraryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
-  const { setTrack, setQueue } = usePlayer();
+  const { setTrack, setQueue, currentTrack } = usePlayer();
 
   const fetchTracks = async () => {
     setLoading(true);
@@ -108,6 +125,7 @@ export default function LibraryPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const matched = tracks.filter((t) => {
+      if (offlineOnly && !cachedIds.has(t.id)) return false;
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
       if (!q) return true;
       // Match against title, key (e.g. "C minor", "Am"), and BPM
@@ -146,7 +164,10 @@ export default function LibraryPage() {
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     }
     return sorted;
-  }, [tracks, search, typeFilter, sortMode]);
+  }, [tracks, search, typeFilter, offlineOnly, cachedIds, sortMode]);
+
+  const currentHeroTrack = currentTrack || filtered[0] || null;
+  const heroCoverUrl = currentHeroTrack?.cover_url || null;
 
   // Total library duration shown in the hero. Format follows the
   // "N hr N min" pattern when over an hour, "N min" otherwise — same
@@ -271,18 +292,58 @@ export default function LibraryPage() {
             cover, only flatter and wider. Filter chips and the secondary
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
-        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/30 via-[#2A2418]/20 to-[#0a0907] p-7">
+        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/35 via-[#2A2418]/25 to-[#0c0c0c] p-7 transition-all duration-700">
+          {/* Dynamic Image Background */}
           <div
-            className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-30"
-            style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+            className="absolute inset-0 z-0 bg-cover bg-center opacity-25 mix-blend-overlay blur-[2px] transition-all duration-700"
+            style={{ backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')" }}
+          />
+          <div
+            className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-25 z-0 transition-all duration-700"
+            style={{ background: heroCoverUrl ? 'none' : 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
           />
           <div className="relative z-10 flex items-end gap-7">
-            <div className="w-[140px] h-[140px] rounded-xl bg-gradient-to-br from-[#D4BFA0] to-[#3a2a8a] flex items-center justify-center shadow-[0_12px_36px_rgba(0,0,0,0.5)] shrink-0">
-              <Disc3 size={56} className="text-white/85" strokeWidth={1.2} />
+            {/* Dynamic Miniature Vinyl Record Card */}
+            <div className="relative w-[140px] h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
+              {heroCoverUrl ? (
+                <>
+                  <img
+                    src={heroCoverUrl}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none"
+                  />
+                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
+                    {/* Vinyl grooves */}
+                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
+                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
+                    <div className="absolute inset-5 rounded-full border border-white/[0.01]" />
+                    <div className="absolute inset-7 rounded-full border border-white/[0.01]" />
+                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#0a0907] relative animate-[spin_10s_linear_infinite]">
+                      <img
+                        src={heroCoverUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40 shadow-inner" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-[#D4BFA0]/20 to-[#3a2a8a]/20 flex items-center justify-center relative">
+                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
+                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
+                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#D4BFA0]/25 to-[#3a2a8a]/25 flex items-center justify-center text-white relative">
+                      <Disc3 size={24} className="text-white/80 animate-[spin_8s_linear_infinite]" strokeWidth={1.2} />
+                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E8D8B8] mb-2">Vault</p>
-              <h1 className="text-[56px] font-bold tracking-tight text-white leading-none mb-3">Library</h1>
+              <h1 className="text-[56px] font-bold tracking-tight text-white leading-none mb-3 font-heading">Library</h1>
               <p className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">
                 {tracks.length} track{tracks.length !== 1 ? 's' : ''}
                 {totalDurationLabel && <> · {totalDurationLabel}</>}
@@ -346,14 +407,38 @@ export default function LibraryPage() {
           {(['all', 'beat', 'instrumental', 'song', 'remix'] as const).map((t) => (
             <button
               key={t}
-              onClick={() => setTypeFilter(t)}
+              onClick={() => {
+                setOfflineOnly(false);
+                setTypeFilter(t);
+              }}
               className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors ${
-                typeFilter === t
+                typeFilter === t && !offlineOnly
                   ? 'bg-white text-black'
                   : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
               }`}
             >{t === 'all' ? 'All' : t}</button>
           ))}
+          
+          <button
+            onClick={() => {
+              setOfflineOnly(true);
+              refreshOfflineList();
+            }}
+            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
+              offlineOnly
+                ? 'bg-[#7F77DD] text-white border border-[#7F77DD]/40 shadow-[0_0_8px_rgba(127,119,221,0.4)]'
+                : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+            }`}
+          >
+            <span>Offline</span>
+            {cachedIds.size > 0 && (
+              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                offlineOnly ? 'bg-white text-[#7F77DD]' : 'bg-[#7F77DD]/20 text-[#AFA9EC]'
+              }`}>
+                {cachedIds.size}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Secondary toolbar — search on the left, sort dropdown on the
@@ -419,14 +504,43 @@ export default function LibraryPage() {
           </div>
         ) : (
           <div className="border-t border-[#161310] border-b mb-32">
-            <div className="grid grid-cols-[32px_32px_1fr_80px_100px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
-              <span className="text-center">#</span>
+            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+              <span className="text-center flex items-center justify-center">
+                {selectMode ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allSelected = filtered.every((t: any) => selectedIds.has(t.id));
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (allSelected) {
+                          filtered.forEach((t: any) => next.delete(t.id));
+                        } else {
+                          filtered.forEach((t: any) => next.add(t.id));
+                        }
+                        return next;
+                      });
+                    }}
+                    className={`w-4 h-4 rounded flex items-center justify-center transition-colors cursor-pointer border ${
+                      filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id))
+                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
+                        : 'border-[#2d2620] hover:border-[#4a4338]'
+                    }`}
+                  >
+                    {filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id)) && (
+                      <span className="text-white text-[9px] leading-none">✓</span>
+                    )}
+                  </button>
+                ) : (
+                  '#'
+                )}
+              </span>
               <span />
               <span>Title</span>
-              <span>Type</span>
+              <span className="hidden sm:block">Type</span>
               <span>BPM · Key</span>
               <span className="hidden md:block">Added</span>
-              <span className="text-right">Rating</span>
+              <span className="text-right hidden sm:block">Rating</span>
               <span />
             </div>
             {filtered.map((t: any, i: number) => (

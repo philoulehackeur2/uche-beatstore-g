@@ -12,6 +12,9 @@ import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
+import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
+import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
+import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 
 interface ShareInfo {
   token: string;
@@ -109,6 +112,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [stems, setStems] = useState<any[]>([]);
 
   // We keep the unlocked password in memory so subsequent fetches
   // (comments etc.) don't re-prompt.
@@ -209,6 +213,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       setProject(data.project);
       setShare(data.share);
       setTracks(data.tracks ?? []);
+      setStems(data.stems ?? []);
       // Creator profile is optional — the API only returns it when the
       // owner has filled out their settings form. Client variant
       // degrades section-by-section when fields are missing.
@@ -221,7 +226,33 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     setLoading(false);
   }, [token]);
 
-  useEffect(() => { fetchShare(); }, [fetchShare]);
+  useEffect(() => {
+    fetchShare();
+  }, [fetchShare]);
+
+  // Log real-time listener playhead coordinates (heatmap)
+  useEffect(() => {
+    if (!isPlaying || !activeTrack?.id) return;
+    
+    const sendPing = async () => {
+      try {
+        await fetch(`/api/tracks/${activeTrack.id}/heatmap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position_seconds: currentTime,
+            share_token: token,
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to send playhead coordinate ping:', err);
+      }
+    };
+
+    // Ping every 3 seconds of active play
+    const interval = setInterval(sendPing, 3000);
+    return () => clearInterval(interval);
+  }, [isPlaying, activeTrack?.id, currentTime, token]);
 
   // Keep the description draft in sync with the latest server value when
   // editing mode is OFF; once they start typing we don't clobber.
@@ -383,6 +414,40 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     }
   };
 
+  const handleAddCommentFromCanvas = async (body: string, start: number | null, end: number | null) => {
+    if (!authorName.trim()) {
+      toast.error('Name required', 'Please set your display name in the comments sidebar before leaving a comment.');
+      return;
+    }
+    if (!body.trim()) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/projects/share/${token}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(passwordRef.current ? { 'x-share-password': passwordRef.current } : {}),
+        },
+        body: JSON.stringify({
+          author_name: authorName.trim(),
+          body: body.trim(),
+          track_id: activeTrack?.id ?? null,
+          region_start: start,
+          region_end: end,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error('Couldn’t post comment', data.error);
+        return;
+      }
+      fetchComments();
+      toast.success('Comment pinned to waveform!');
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const fmt = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';
     return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
@@ -451,10 +516,76 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         playingId={activeTrack?.id ?? null}
         isPlaying={isPlaying}
         onPlay={(t) => {
-          // Find the requested track's index, switch the player to
-          // it, and start playback. The same useWaveSurfer instance
-          // that the legacy layout drives still runs underneath via
-          // `activeTrack` — the variant is just chrome.
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) {
+            if (idx === activeIndex) {
+              setIsPlaying((p) => !p);
+            } else {
+              setActiveIndex(idx);
+              setIsPlaying(true);
+            }
+          }
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'producer' && project) {
+    return (
+      <ProducerShareVariant
+        project={project}
+        tracks={tracks}
+        creator={creator}
+        stems={stems}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) {
+            if (idx === activeIndex) {
+              setIsPlaying((p) => !p);
+            } else {
+              setActiveIndex(idx);
+              setIsPlaying(true);
+            }
+          }
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'rapper' && project) {
+    return (
+      <RapperShareVariant
+        project={project}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) {
+            if (idx === activeIndex) {
+              setIsPlaying((p) => !p);
+            } else {
+              setActiveIndex(idx);
+              setIsPlaying(true);
+            }
+          }
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'friend' && project) {
+    return (
+      <FriendShareVariant
+        project={project}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
           const idx = tracks.findIndex((x) => x.id === t.id);
           if (idx >= 0) {
             if (idx === activeIndex) {
@@ -600,6 +731,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   setPinnedRegion(last ? { start: last.start, end: last.end } : null);
                 }}
                 seekRequest={seekRequest}
+                comments={comments.filter((c) => c.track_id === activeTrack.id)}
+                onAddComment={handleAddCommentFromCanvas}
+                canComment={canComment}
               />
             ) : (
               <div ref={waveRef} className="w-full" style={{ minHeight: 56 }} />

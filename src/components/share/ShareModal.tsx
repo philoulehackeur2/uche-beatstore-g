@@ -3,6 +3,7 @@
 import { X, Lock, Link2, Download, Calendar, Check, Copy, Loader2, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { Dropdown } from '@/components/ui/Dropdown';
 
 interface ShareModalProps {
   onClose: () => void;
@@ -23,6 +24,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
 
   const generateLink = async () => {
     if (!trackIds.length) {
@@ -44,6 +46,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
           allow_downloads: allowDownloads,
           expires_days: expiryEnabled ? expiryDays : 0,
           password: passwordProtect && password ? password : null,
+          recipient_kind: recipientKind,
         }),
       });
       const data = await res.json();
@@ -97,6 +100,22 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
         {/* Body */}
         {!shareUrl ? (
           <div className="p-8 space-y-6">
+            {/* Audience Variant */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] block">Audience Variant</label>
+              <Dropdown
+                value={recipientKind}
+                onChange={(val) => setRecipientKind(val as any)}
+                options={[
+                  { value: 'client', label: 'Client Variant (Bio / Placements / Pricing)' },
+                  { value: 'producer', label: 'Producer Variant (Stems Mixer & Tech Specs)' },
+                  { value: 'rapper', label: 'Rapper Variant (Vocal Sheet / Lyrics Scroll)' },
+                  { value: 'friend', label: 'Friend Variant (Standard Simple Player)' }
+                ]}
+                className="w-full bg-[#16130e] border border-[#1f1a13] rounded-lg py-3 px-4 text-xs text-white focus:outline-none focus:border-[#D4BFA0] transition-colors"
+              />
+            </div>
+
             {/* Allow Downloads */}
             <label className="flex items-center justify-between cursor-pointer group">
               <div className="flex items-center gap-3">

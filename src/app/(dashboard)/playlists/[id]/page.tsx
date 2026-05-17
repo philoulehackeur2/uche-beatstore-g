@@ -237,7 +237,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">
-                  <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate">{playlist?.name}</h1>
+                  <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{playlist?.name}</h1>
                   <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#5a5142] hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
@@ -280,14 +280,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
         {/* Track list */}
         <div className="border-t border-[#161310] border-b pb-1 mb-32">
-          <div className="grid grid-cols-[32px_32px_1fr_80px_100px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+          <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
             <span className="text-center">#</span>
             <span />
             <span>Title</span>
-            <span>Type</span>
+            <span className="hidden sm:block">Type</span>
             <span>BPM · Key</span>
             <span className="hidden md:block">Added</span>
-            <span className="text-right">Rating</span>
+            <span className="text-right hidden sm:block">Rating</span>
             <span />
           </div>
 
@@ -416,8 +416,34 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   })
               )}
             </div>
-            <div className="p-4 border-t border-[#1f1a13] flex items-center justify-between bg-[#0a0907]">
-              <span className="text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">{selected.size} selected</span>
+             <div className="p-4 border-t border-[#1f1a13] flex items-center justify-between bg-[#0a0907]">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">{selected.size} selected</span>
+                {vaultTracks.length > 0 && (
+                  <>
+                    <span className="text-[#1a160f] font-mono">·</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const visibleTracks = vaultTracks.filter((t) => !vaultSearch || t.title?.toLowerCase().includes(vaultSearch.toLowerCase()));
+                        const allSelected = visibleTracks.every((t) => selected.has(t.id));
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          if (allSelected) {
+                            visibleTracks.forEach((t) => next.delete(t.id));
+                          } else {
+                            visibleTracks.forEach((t) => next.add(t.id));
+                          }
+                          return next;
+                        });
+                      }}
+                      className="text-[10px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-[#E8D8B8] cursor-pointer transition-colors"
+                    >
+                      {vaultTracks.filter((t) => !vaultSearch || t.title?.toLowerCase().includes(vaultSearch.toLowerCase())).every((t) => selected.has(t.id)) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </>
+                )}
+              </div>
               <button
                 onClick={submitAddTracks}
                 disabled={!selected.size || adding}

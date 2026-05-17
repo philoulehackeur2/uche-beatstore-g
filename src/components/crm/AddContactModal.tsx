@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, User, Mail, Globe, Tag, Loader2, Phone, FileText } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { Dropdown } from '@/components/ui/Dropdown';
 
 const CONTACT_CATEGORIES = [
   '', 'artist', 'producer', 'manager', 'label', 'a&r',
@@ -145,15 +146,15 @@ export function AddContactModal({ onClose, onSuccess }: AddContactModalProps) {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Category</label>
-              <select
+              <Dropdown
+                value={formData.category || 'none'}
+                onChange={(val) => setFormData({ ...formData, category: val === 'none' ? '' : val })}
+                options={CONTACT_CATEGORIES.map((c) => ({
+                  value: c || 'none',
+                  label: c ? c.toUpperCase() : 'NONE',
+                }))}
                 className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              >
-                {CONTACT_CATEGORIES.map((c) => (
-                  <option key={c || 'none'} value={c}>{c || '—'}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 

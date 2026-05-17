@@ -8,6 +8,10 @@ import { Track } from '@/lib/types';
 import type WaveSurferType from 'wavesurfer.js';
 import React from 'react';
 import { audioSrc } from '@/lib/audio/url';
+import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
+import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
+import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
+import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 
 export default function PublicSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);
@@ -21,6 +25,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [share, setShare] = useState<any | null>(null);
+  const [creator, setCreator] = useState<any | null>(null);
+  const [stems, setStems] = useState<any[]>([]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -60,6 +67,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       setTracks(list);
       tracksRef.current = list;
       setShareTitle(data.share?.title || 'Shared tracks');
+      setShare(data.share || null);
+      setCreator(data.creator || null);
+      setStems(data.stems || []);
       setAllowDownloads(data.share?.allow_downloads !== false);
       setRequiresPassword(false);
     } catch {
@@ -69,6 +79,30 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }, [params.token]);
 
   useEffect(() => { fetchShare(); }, [fetchShare]);
+
+  // Log real-time listener playhead coordinates (heatmap)
+  useEffect(() => {
+    if (!isPlaying || !activeTrack?.id) return;
+    
+    const sendPing = async () => {
+      try {
+        await fetch(`/api/tracks/${activeTrack.id}/heatmap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position_seconds: currentTime,
+            share_token: params.token,
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to send playhead coordinate ping:', err);
+      }
+    };
+
+    // Ping every 3 seconds of active play
+    const interval = setInterval(sendPing, 3000);
+    return () => clearInterval(interval);
+  }, [isPlaying, activeTrack?.id, currentTime, params.token]);
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,8 +257,80 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     </div>
   );
 
+  const projectMock = {
+    id: 'flat-share',
+    name: shareTitle,
+    cover_url: activeTrack?.cover_url || null,
+    description: null,
+  };
+
+  if (share?.recipient_kind === 'client') {
+    return (
+      <ClientShareVariant
+        project={projectMock}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) selectTrack(idx);
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'producer') {
+    return (
+      <ProducerShareVariant
+        project={projectMock}
+        tracks={tracks}
+        creator={creator}
+        stems={stems}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) selectTrack(idx);
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'rapper') {
+    return (
+      <RapperShareVariant
+        project={projectMock}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) selectTrack(idx);
+        }}
+      />
+    );
+  }
+
+  if (share?.recipient_kind === 'friend') {
+    return (
+      <FriendShareVariant
+        project={projectMock}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) selectTrack(idx);
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col">
+    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col font-sans">
       {/* Header */}
       <header className="px-8 py-5 border-b border-[#16130e] flex items-center justify-between">
         <div className="flex items-center gap-2.5">

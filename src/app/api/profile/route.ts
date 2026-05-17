@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
+  const result = await getCreatorProfile();
+  if (result.error) {
+    const status = result.error === 'Not authenticated' ? 401 : 500;
+    return NextResponse.json({ error: result.error }, { status });
+  }
+  return NextResponse.json({ profile: result.profile });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    
+    // Whitelist profile fields
+    const {
+      display_name,
+      bio,
+      hero_image_url,
+      credits,
+      license_lease_price_usd,
+      license_exclusive_price_usd,
+      license_notes,
+      instagram_handle,
+      twitter_handle,
+      spotify_url,
+      soundcloud_url,
+      website_url,
+      contact_email,
+    } = body;
+
+    const payload = {
+      display_name: display_name || null,
+      bio: bio || null,
+      hero_image_url: hero_image_url || null,
+      credits: credits || null,
+      license_lease_price_usd: license_lease_price_usd ? parseFloat(license_lease_price_usd) : null,
+      license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(license_exclusive_price_usd) : null,
+      license_notes: license_notes || null,
+      instagram_handle: instagram_handle || null,
+      twitter_handle: twitter_handle || null,
+      spotify_url: spotify_url || null,
+      soundcloud_url: soundcloud_url || null,
+      website_url: website_url || null,
+      contact_email: contact_email || null,
+    };
+
+    const result = await updateCreatorProfile(payload);
+    if (result.error) {
+      const status = result.error === 'Not authenticated' ? 401 : 500;
+      return NextResponse.json({ error: result.error }, { status });
+    }
+    return NextResponse.json({ profile: result.profile });
+  } catch (error: any) {
+    console.error('Profile POST API error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  return POST(req);
+}

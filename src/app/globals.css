@@ -1,5 +1,88 @@
 @import "tailwindcss";
 
+/* ── Custom Fonts ──────────────────────────────────────────────────── */
+
+/* Akira Expanded — main body font for the entire app. Bold, geometric,
+ * expanded letterforms that give the UI its "producer studio" identity.
+ * Replaces Geist Sans as the primary typeface. */
+@font-face {
+  font-family: 'Akira Expanded';
+  src: url('/fonts/AkiraExpanded.otf') format('opentype');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Synkopy — heading / nav font. Used for page titles (Library,
+ * Projects, Calendar…), sidebar nav labels, and brand identity.
+ * Two weights: Regular and Flipside (the alternate/inverse cut). */
+@font-face {
+  font-family: 'Synkopy';
+  src: url('/fonts/Synkopy-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Synkopy';
+  src: url('/fonts/Synkopy-Flipside.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Panchang — versatile modern font for metadata, track types, and mono-replacements */
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Extralight.otf') format('opentype');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Extrabold.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Design tokens — first pass against the moodboard (Soutter / Bacon /
  * warm-aubergine family). The earlier violet accent (#D4BFA0) was
  * fighting the brief; the new accent is a burnt amber drawn from the
@@ -10,22 +93,33 @@
  * hex — but the legacy violet values still live in many files; a
  * follow-up sweep replaces them in place. */
 :root {
+  /* HSL base values for high-fidelity dynamic opacity blending */
+  --bg-page-hsl: 30 15% 4%;
+  --bg-card-hsl: 27 23% 7%;
+  --bg-hover-hsl: 27 20% 8%;
+  --text-primary-hsl: 38 41% 85%;
+  --text-secondary-hsl: 36 17% 35%;
+  --accent-hsl: 35 39% 73%;
+  --accent-light-hsl: 39 49% 82%;
+  --accent-dim-hsl: 39 20% 45%;
+  --accent-tint-hsl: 35 20% 13%;
+
   /* Page surfaces — black, but warm. The brief said "white in the
    * moodboard becomes black in the app" — the moodboard's bone/cream
    * inverts to this warm near-black instead of pure #000. */
-  --bg-page: #0a0907;
-  --bg-card: #14110d;
-  --bg-hover: #1a160f;
-  --text-primary: #E8DCC8;
-  --text-secondary: #6a5d4a;
+  --bg-page: hsl(var(--bg-page-hsl));
+  --bg-card: hsl(var(--bg-card-hsl));
+  --bg-hover: hsl(var(--bg-hover-hsl));
+  --text-primary: hsl(var(--text-primary-hsl));
+  --text-secondary: hsl(var(--text-secondary-hsl));
   --text-tertiary: #3a3328;
   /* Accent — burnt amber + two adjacents (lighter for hover/active,
    * dimmer for pressed/borders). Star stays gold; close enough to
    * the new family that it doesn't need updating. */
-  --accent: #D4BFA0;
-  --accent-light: #E8D8B8;
-  --accent-dim: #8A7A5C;
-  --accent-tint: #2A2418;
+  --accent: hsl(var(--accent-hsl));
+  --accent-light: hsl(var(--accent-light-hsl));
+  --accent-dim: hsl(var(--accent-dim-hsl));
+  --accent-tint: hsl(var(--accent-tint-hsl));
   --star: #c8a84b;
   --border: #1f1a13;
   --border-hover: #2d2620;
@@ -34,10 +128,10 @@
 @theme inline {
   --color-background: var(--bg-page);
   --color-foreground: var(--text-primary);
-  --font-sans: var(--font-geist-sans);
-  /* Geist Mono is now the canonical mono. Falls through to system mono
-     stacks if the variable isn't bound (e.g. during dev hot-reload). */
-  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Akira Expanded';
+  --font-heading: 'Synkopy';
+  /* Panchang replaces monospace and other utility fonts across the app */
+  --font-mono: 'Panchang';
 }
 
 * {
@@ -54,13 +148,23 @@ body {
 body {
   background: var(--bg-page);
   color: var(--text-primary);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-family: 'Akira Expanded';
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'ss01', 'cv11';
 }
 
 .font-mono, .mono {
-  font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: 'Panchang';
+}
+
+/* Heading font — Synkopy. Applied to page titles, nav labels, brand. */
+.font-heading {
+  font-family: 'Synkopy';
+}
+
+/* Track Type font — Panchang. Applied to Beat/Instrumental badges. */
+.font-panchang {
+  font-family: 'Panchang';
 }
 
 /* Uppercase small label helper - untitled-style meta labels */

@@ -37,6 +37,9 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
           const status = getStatusConfig(send.status);
           const Icon = status.icon;
           
+          const daysDiff = (Date.now() - Date.parse(send.sent_at)) / 86_400_000;
+          const needsNudge = send.status === 'sent' && daysDiff > 5;
+
           return (
             <div key={send.id} className="flex items-center justify-between px-6 py-4 hover:bg-[#16130e] transition-colors">
               <div className="flex items-center gap-4">
@@ -44,9 +47,16 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
                   <Icon size={16} className={status.color} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-[#E8DCC8] tracking-tight">
-                    {contactById.get(send.contact_id)?.name ?? `Contact ${send.contact_id.slice(0, 6)}`}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-[#E8DCC8] tracking-tight">
+                      {contactById.get(send.contact_id)?.name ?? `Contact ${send.contact_id.slice(0, 6)}`}
+                    </h4>
+                    {needsNudge && (
+                      <span className="bg-amber-500/15 border border-amber-500/40 text-amber-400 text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded animate-pulse">
+                        Needs Nudge
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-[#a08a6a] mt-1 line-clamp-1">{send.message || 'No message provided'}</p>
                 </div>
               </div>

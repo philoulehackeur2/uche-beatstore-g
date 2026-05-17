@@ -48,14 +48,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!owner.ok) return owner.res;
       const { data, error } = await owner.admin
         .from('project_shares')
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at')
+        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at, recipient_kind')
         .eq('project_id', id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return NextResponse.json({ shares: data ?? [] });
     }
 
-    const shares = (query('project_shares', (s) => (s as ShareRow).project_id === id) as ShareRow[])
+    const shares = (query('project_shares', (s) => (s as any).project_id === id) as any[])
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return NextResponse.json({ shares });
   } catch (error) {
@@ -75,6 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const password = body.password ?? null;
   const invitedEmail = body.invited_email?.trim() || null;
   const label = body.label?.trim() || null;
+  const recipientKind = body.recipient_kind || 'client';
 
   const token = nanoid(12);
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
@@ -102,8 +103,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           invited_email: invitedEmail,
           label,
           created_by: owner.userId,
+          recipient_kind: recipientKind,
         })
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at')
+        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind')
         .single();
       if (error) throw error;
       return NextResponse.json({ share: data, url });
@@ -120,6 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       label,
       plays: 0,
       created_by: null,
+      recipient_kind: recipientKind,
     });
     return NextResponse.json({ share, url });
   } catch (error) {

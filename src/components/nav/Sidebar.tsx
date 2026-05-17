@@ -104,7 +104,7 @@ export function Sidebar() {
           <div className="w-6 h-6 rounded-[6px] bg-[#E8DCC8] flex items-center justify-center shrink-0">
             <span className="text-[10px] font-black text-black tracking-tighter">AG</span>
           </div>
-          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white truncate">
+          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white truncate font-heading">
             antigravity
           </span>
         </Link>
@@ -147,7 +147,7 @@ export function Sidebar() {
               }`}
             >
               <Icon size={14} strokeWidth={1.75} className={active ? 'text-white' : ''} />
-              <span className="font-medium tracking-tight">{item.label}</span>
+              <span className="font-medium tracking-tight font-heading">{item.label}</span>
             </Link>
           );
         })}

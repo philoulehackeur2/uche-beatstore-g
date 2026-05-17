@@ -113,6 +113,7 @@ export const ProjectShareCreateBodySchema = z.object({
   password: z.string().min(1).max(200).optional().nullable(),
   invited_email: z.string().email().optional().nullable(),
   label: z.string().max(200).optional().nullable(),
+  recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
 });
 export type ProjectShareCreateBody = z.infer<typeof ProjectShareCreateBodySchema>;
 

@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   X, Send, Loader2, Search, Check, Music, Layers, Eye, Pencil,
-  Lock, Calendar, MessageSquare, Download, Disc3, Tag as TagIcon, Users,
+  Lock, Calendar, MessageSquare, Download, Disc3, Tag as TagIcon, Users, Sparkles,
 } from 'lucide-react';
 import { Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
+import { Dropdown } from '@/components/ui/Dropdown';
 
 interface Project {
   id: string;
@@ -166,6 +167,26 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
         : 'project',
     };
   }, [mode, selectedTracks, selectedProject, selectedProjectId]);
+
+  const baselineTrack = useMemo(() => {
+    if (selectedTrackIds.length === 0) return null;
+    return tracks.find((t) => t.id === selectedTrackIds[0]) ?? null;
+  }, [tracks, selectedTrackIds]);
+
+  const suggestedTracks = useMemo(() => {
+    if (!baselineTrack) return [];
+    return tracks.filter((t) => {
+      if (t.id === baselineTrack.id) return false;
+      const withinBpm = baselineTrack.bpm && t.bpm ? Math.abs(t.bpm - baselineTrack.bpm) <= 5 : false;
+      
+      const baselineTags = new Set(
+        ((baselineTrack as any).track_tags ?? []).map((r: any) => r.tag)
+      );
+      const sharesTag = ((t as any).track_tags ?? []).some((r: any) => r.tag && baselineTags.has(r.tag));
+      
+      return withinBpm || sharesTag;
+    });
+  }, [tracks, baselineTrack]);
 
   const filteredTracks = useMemo(() => {
     let pool = tracks;
@@ -416,38 +437,91 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               {/* Tag + project filters — tracks mode only */}
               {mode === 'tracks' && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1.5 flex-1">
-                    <TagIcon size={10} className="text-[#5a5142]" />
-                    <select
-                      value={tagFilter}
-                      onChange={(e) => setTagFilter(e.target.value)}
-                      className="bg-transparent text-[10px] text-[#bbb] focus:outline-none cursor-pointer w-full"
+                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
+                    <TagIcon size={10} className="text-[#5a5142] shrink-0" />
+                    <Dropdown
+                      value={tagFilter || 'none'}
+                      onChange={(val) => setTagFilter(val === 'none' ? '' : val)}
                       disabled={allTags.length === 0}
-                    >
-                      <option value="">{allTags.length === 0 ? 'No tags' : 'Any tag'}</option>
-                      {allTags.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: 'none', label: allTags.length === 0 ? 'No tags' : 'Any tag' },
+                        ...allTags.map((t) => ({ value: t, label: t.toUpperCase() }))
+                      ]}
+                      className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 w-full flex-1 h-6"
+                    />
                   </div>
-                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1.5 flex-1">
-                    <Layers size={10} className="text-[#5a5142]" />
-                    <select
-                      value={projectScopeId}
-                      onChange={(e) => setProjectScopeId(e.target.value)}
-                      className="bg-transparent text-[10px] text-[#bbb] focus:outline-none cursor-pointer w-full"
-                    >
-                      <option value="">Any project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
+                    <Layers size={10} className="text-[#5a5142] shrink-0" />
+                    <Dropdown
+                      value={projectScopeId || 'none'}
+                      onChange={(val) => setProjectScopeId(val === 'none' ? '' : val)}
+                      options={[
+                        { value: 'none', label: 'Any project' },
+                        ...projects.map((p) => ({ value: p.id, label: p.name.toUpperCase() }))
+                      ]}
+                      className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 w-full flex-1 h-6"
+                    />
                   </div>
                 </div>
               )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
+              {/* Similar Beats AI Suggestions Strip */}
+              {mode === 'tracks' && baselineTrack && suggestedTracks.length > 0 && (
+                <div className="mb-4 p-3 rounded-lg border border-[#7F77DD]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[#AFA9EC]">
+                      <Sparkles size={11} className="animate-pulse text-[#7F77DD]" />
+                      <span className="text-[9px] font-bold uppercase tracking-widest font-akira">
+                        AI SUGGESTIONS FOR {baselineTrack.title.toUpperCase()}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const idsToSelect = suggestedTracks.map((t) => t.id);
+                        setSelectedTrackIds((prev) => Array.from(new Set([...prev, ...idsToSelect])));
+                        toast.success(`Selected ${suggestedTracks.length} similar beats!`);
+                      }}
+                      className="text-[8px] font-panchang font-bold uppercase tracking-wider text-[#AFA9EC] hover:text-white px-2 py-0.5 border border-[#7F77DD]/35 hover:border-[#7F77DD] rounded transition-colors"
+                    >
+                      SELECT ALL
+                    </button>
+                  </div>
+                  
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    {suggestedTracks.map((t) => {
+                      const selected = selectedTrackIds.includes(t.id);
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => toggleTrack(t.id)}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded border shrink-0 cursor-pointer transition-all ${
+                            selected
+                              ? 'bg-[#7F77DD]/20 border-[#7F77DD] text-[#AFA9EC]'
+                              : 'bg-white/[0.02] border-white/[0.06] text-[#888] hover:text-[#e8e8e8] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="w-5 h-5 bg-[#101010] rounded overflow-hidden shrink-0">
+                            {t.cover_url ? (
+                              <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[#444]"><Music size={8} /></div>
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <p className="text-[10px] font-medium truncate max-w-[100px]">{t.title}</p>
+                            <p className="text-[7px] font-mono uppercase tracking-wider text-[#555]">
+                              {t.bpm ? `${t.bpm} BPM` : ''}{t.key ? ` · ${t.key}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#4a4338]" size={16} /></div>
               ) : mode === 'tracks' ? (
@@ -592,18 +666,20 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     />
                   )}
                   <div className="col-span-2 flex items-center gap-2 bg-[#16130e] border border-[#1f1a13] rounded-md px-3 py-2">
-                    <Calendar size={11} className="text-[#6a5d4a]" />
+                    <Calendar size={11} className="text-[#6a5d4a] shrink-0" />
                     <span className="text-[10px] text-[#a08a6a] uppercase tracking-wider">Expires</span>
-                    <select
-                      value={expiresDays} onChange={(e) => setExpiresDays(Number(e.target.value))}
-                      className="ml-auto bg-transparent text-[11px] text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value={7}>7 days</option>
-                      <option value={14}>14 days</option>
-                      <option value={30}>30 days</option>
-                      <option value={90}>90 days</option>
-                      <option value={0}>Never</option>
-                    </select>
+                    <Dropdown
+                      value={String(expiresDays)}
+                      onChange={(val) => setExpiresDays(Number(val))}
+                      options={[
+                        { value: '7', label: '7 days' },
+                        { value: '14', label: '14 days' },
+                        { value: '30', label: '30 days' },
+                        { value: '90', label: '90 days' },
+                        { value: '0', label: 'Never' }
+                      ]}
+                      className="ml-auto bg-transparent border-none text-[11px] text-[#E8DCC8] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
+                    />
                   </div>
                 </div>
               </div>

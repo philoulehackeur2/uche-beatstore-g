@@ -1,26 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { Toaster } from '@/components/ui/Toaster';
 import { CommandPalette } from '@/components/nav/CommandPalette';
 
-// Geist is Vercel's open-source variable font — geometric sans with the
-// "clean, AI-ish" feel the brief called for. We expose both Geist (UI)
-// and Geist Mono (monospace BPM / time / tag strings) as CSS variables
-// so component-level `font-mono` Tailwind classes resolve to Geist Mono
-// instead of the platform fallback.
-// Variable names match the CSS custom properties already referenced
-// in globals.css (`--font-geist-sans`, `--font-geist-mono`) so the
-// existing @theme bindings start resolving to Geist immediately.
-const geist = Geist({
-  subsets: ['latin'],
-  variable: '--font-geist-sans',
-});
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-geist-mono',
-});
+// Akira Expanded, Synkopy, and Panchang are the primary UI fonts, loaded via @font-face in globals.css.
 
 // PWA + mobile metadata. Next splits the modern metadata API across
 // `metadata` (head tags) and `viewport` (theme-color, viewport, color-
@@ -75,7 +59,7 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geist.variable} ${geistMono.variable} font-sans bg-[#0a0907] text-[#E8DCC8] min-h-screen selection:bg-[#D4BFA0] selection:text-white`}
+        className="font-sans bg-[#0a0907] text-[#E8DCC8] min-h-screen selection:bg-[#D4BFA0] selection:text-white"
       >
         <QueryProvider>
           {children}

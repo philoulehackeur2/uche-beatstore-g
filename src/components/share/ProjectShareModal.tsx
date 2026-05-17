@@ -4,6 +4,7 @@ import {
   X, Lock, Link2, Download, Calendar, Check, Copy, Loader2,
   Eye, MessageSquare, Edit3, Mail, Trash2, Send,
 } from 'lucide-react';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -313,17 +314,18 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                 onToggle={() => setExpiryEnabled((v) => !v)}
               />
               {expiryEnabled && (
-                <select
-                  value={expiryDays}
-                  onChange={(e) => setExpiryDays(Number(e.target.value))}
-                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-[12px] text-white focus:outline-none focus:border-[#8A7A5C]"
-                >
-                  <option value={1}>1 day</option>
-                  <option value={3}>3 days</option>
-                  <option value={7}>7 days</option>
-                  <option value={14}>14 days</option>
-                  <option value={30}>30 days</option>
-                </select>
+                <Dropdown
+                  value={String(expiryDays)}
+                  onChange={(val) => setExpiryDays(Number(val))}
+                  options={[
+                    { value: '1', label: '1 day' },
+                    { value: '3', label: '3 days' },
+                    { value: '7', label: '7 days' },
+                    { value: '14', label: '14 days' },
+                    { value: '30', label: '30 days' }
+                  ]}
+                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A7A5C]"
+                />
               )}
             </div>
 

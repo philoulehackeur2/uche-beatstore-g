@@ -45,10 +45,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         }
       }
 
-      const { data: tracks } = await supabaseAdmin
-        .from('tracks')
-        .select('*')
-        .in('id', share.track_ids);
+      const [tracksRes, stemsRes] = await Promise.all([
+        supabaseAdmin
+          .from('tracks')
+          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
+          .in('id', share.track_ids),
+        supabaseAdmin
+          .from('stems')
+          .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
+          .in('track_id', share.track_ids)
+      ]);
+      const tracks = tracksRes.data || [];
+      const stems = stemsRes.data || [];
+
+      let creator: any = null;
+      if (share.user_id) {
+        const { data: profile } = await supabaseAdmin
+          .from('creator_profiles')
+          .select('display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email')
+          .eq('user_id', share.user_id)
+          .maybeSingle();
+        creator = profile || null;
+      }
 
       await supabaseAdmin
         .from('share_links')
@@ -68,7 +86,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
 
       const { password_hash, ...safeShare } = share;
-      return NextResponse.json({ share: safeShare, tracks: tracks || [] });
+      return NextResponse.json({ share: safeShare, tracks, creator, stems });
     }
 
     // Local fallback
@@ -100,6 +118,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       .map((id: string) => allTracks.find((t: any) => t.id === id))
       .filter(Boolean);
 
+    // Fetch mock stems
+    const allStems = getAll('stems' as any) || [];
+    const stems = allStems.filter((s: any) => trackIdSet.has(s.track_id));
+
+    // Fetch mock creator profile
+    const allProfiles = getAll('creator_profiles' as any) || [];
+    const creator = allProfiles.find((p: any) => p.user_id === 'local-user') || null;
+
     update('share_links', share.id, { plays: (share.plays || 0) + 1 });
 
     try {
@@ -114,7 +140,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const { password_hash, ...safeShare } = share;
-    return NextResponse.json({ share: safeShare, tracks });
+    return NextResponse.json({ share: safeShare, tracks, creator, stems });
   } catch (error) {
     log.error('share GET failed', { token, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });

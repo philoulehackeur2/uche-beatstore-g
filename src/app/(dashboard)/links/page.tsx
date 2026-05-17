@@ -100,15 +100,20 @@ export default function LinksPage() {
     <DashboardLayout>
       <div className="max-w-[1200px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-8 pb-6 border-b border-[#16130e]">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Sharing</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Links</h1>
-            <p className="text-[11px] text-[#6a5d4a] mt-2">Every share you&apos;ve sent. Tap a card to open and copy.</p>
+        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+          {/* Abstract Image Background */}
+          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-2.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Sharing</p>
+              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Links</h1>
+              <p className="text-[11px] text-[#a08a6a] max-w-md">Every share you&apos;ve sent. Tap a card to open and copy.</p>
+            </div>
+            <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider mb-1">
+              {links.length} link{links.length !== 1 ? 's' : ''}
+            </span>
           </div>
-          <span className="text-[11px] font-mono text-[#6a5d4a] uppercase tracking-wider">
-            {links.length} link{links.length !== 1 ? 's' : ''}
-          </span>
         </div>
 
         {loading ? (

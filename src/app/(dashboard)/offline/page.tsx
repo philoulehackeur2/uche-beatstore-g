@@ -44,7 +44,7 @@ export default function OfflinePage() {
         <div className="flex items-end justify-between mb-8 pb-6 border-b border-[#16130e]">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Available offline</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Offline</h1>
+            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none font-heading">Offline</h1>
           </div>
           <div className="flex items-center gap-3">
             <div

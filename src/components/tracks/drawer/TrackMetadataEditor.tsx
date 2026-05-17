@@ -45,7 +45,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
           // updates when the parent's track prop changes after PATCH.
           value={track.type}
           onChange={(e) => onPatch({ type: e.target.value })}
-          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0]"
+          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-panchang uppercase tracking-widest text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0]"
         >
           {TYPE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value} className="bg-[#0a0907]">{o.label}</option>

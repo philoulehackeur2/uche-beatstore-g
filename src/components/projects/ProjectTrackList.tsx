@@ -63,14 +63,14 @@ export function ProjectTrackList({
 
       {/* Track list */}
       <div className="border-t border-[#161310] border-b pb-1 mb-32">
-        <div className="grid grid-cols-[32px_32px_1fr_80px_100px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+        <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
           <span className="text-center">#</span>
           <span />
           <span>Title</span>
-          <span>Type</span>
+          <span className="hidden sm:block">Type</span>
           <span>BPM · Key</span>
           <span className="hidden md:block">Added</span>
-          <span className="text-right">Rating</span>
+          <span className="text-right hidden sm:block">Rating</span>
           <span />
         </div>
 

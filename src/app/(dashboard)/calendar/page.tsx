@@ -127,43 +127,46 @@ export default function CalendarPage() {
   return (
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10 flex flex-col" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        {/* Header — kicker / title / helper line, then a pill row with
-            month nav (glass segmented control) + Add Event (white pill).
-            Same warm-token language as the rest of the redesigned app. */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6 pb-6 border-b border-[#16130e]">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Schedule</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Calendar</h1>
-            <p className="text-[11px] text-[#6a5d4a] mt-2">Releases, sessions, sends. Tap any day to see what you did.</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Month nav — glass pill with the month-year label between
-                two chevrons. Backdrop-blur so it lifts off the page. */}
-            <div className="inline-flex items-center bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-full overflow-hidden">
-              <button onClick={prevMonth} className="px-3 py-2 hover:bg-white/[0.04] text-[#6a5d4a] hover:text-white transition-colors" aria-label="Previous month">
-                <ChevronLeft size={13} />
+        {/* Header */}
+        <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+          {/* Abstract Image Background */}
+          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-1.png')] bg-cover bg-center opacity-20 mix-blend-overlay" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Schedule</p>
+              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Calendar</h1>
+              <p className="text-[11px] text-[#a08a6a] max-w-md">Releases, sessions, sends. Tap any day to see what you did.</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Month nav — glass pill with the month-year label between
+                  two chevrons. Backdrop-blur so it lifts off the page. */}
+              <div className="inline-flex items-center bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-full overflow-hidden">
+                <button onClick={prevMonth} className="px-3 py-2 hover:bg-white/[0.08] text-[#a08a6a] hover:text-white transition-colors" aria-label="Previous month">
+                  <ChevronLeft size={13} />
+                </button>
+                <span className="px-3 text-[12px] font-medium text-[#E8DCC8] min-w-[150px] text-center tabular-nums">
+                  {monthName}
+                </span>
+                <button onClick={nextMonth} className="px-3 py-2 hover:bg-white/[0.08] text-[#a08a6a] hover:text-white transition-colors" aria-label="Next month">
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+              <button
+                onClick={() => { setSelectedDay(new Date()); setCurrentDate(new Date()); }}
+                className="px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#E8D8B8] hover:text-white hover:bg-white/[0.08] text-[11px] font-medium transition-colors"
+                title="Jump to today"
+              >
+                Today
               </button>
-              <span className="px-3 text-[12px] font-medium text-[#E8DCC8] min-w-[150px] text-center tabular-nums">
-                {monthName}
-              </span>
-              <button onClick={nextMonth} className="px-3 py-2 hover:bg-white/[0.04] text-[#6a5d4a] hover:text-white transition-colors" aria-label="Next month">
-                <ChevronRight size={13} />
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-black hover:bg-[#E8DCC8] active:scale-[0.98] text-[12px] font-medium transition-all"
+              >
+                <Plus size={14} />
+                Add event
               </button>
             </div>
-            <button
-              onClick={() => { setSelectedDay(new Date()); setCurrentDate(new Date()); }}
-              className="px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08] text-[11px] font-medium transition-colors"
-              title="Jump to today"
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] active:scale-[0.98] text-[11px] font-medium transition-all"
-            >
-              <Plus size={13} />
-              Add event
-            </button>
           </div>
         </div>
 

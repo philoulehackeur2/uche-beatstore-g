@@ -104,11 +104,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     const trackIds = (junction ?? []).map((j: any) => j.track_id);
     let tracks: any[] = [];
+    let stems: any[] = [];
     if (trackIds.length) {
-      const { data: trackRows } = await admin
-        .from('tracks')
-        .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale')
-        .in('id', trackIds);
+      const [tracksRes, stemsRes] = await Promise.all([
+        admin
+          .from('tracks')
+          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
+          .in('id', trackIds),
+        admin
+          .from('stems')
+          .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
+          .in('track_id', trackIds)
+      ]);
+      const trackRows = tracksRes.data ?? [];
+      stems = stemsRes.data ?? [];
+      
       // Re-order by junction position so the share respects the project sequence.
       const byId = new Map((trackRows ?? []).map((t: any) => [t.id, t]));
       tracks = (junction ?? [])
@@ -139,6 +149,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       project: projectPublic,
       tracks,
       creator,
+      stems,
     });
   } catch (error: any) {
     console.error('Project share read error:', error);

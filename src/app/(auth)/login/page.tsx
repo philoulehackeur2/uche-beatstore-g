@@ -184,6 +184,16 @@ export default function LoginPage() {
             {errors.password && (
               <p id="password-error" className="mt-1 text-xs text-red-500/90">{errors.password.message}</p>
             )}
+            {!isSignUp && (
+              <div className="mt-1.5 text-right">
+                <a
+                  href="/reset-password"
+                  className="text-xs text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+                >
+                  Forgot password?
+                </a>
+              </div>
+            )}
           </div>
 
           {isSignUp && (

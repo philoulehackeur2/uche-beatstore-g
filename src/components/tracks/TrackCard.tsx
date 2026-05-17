@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info } from 'lucide-react';
+import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
+import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
+import { toast } from '@/hooks/useToast';
 
 interface TrackCardProps {
   track: Track;
@@ -41,6 +43,55 @@ export function TrackCard({
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Offline Caching integration
+  const [isCached, setIsCached] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const meta = await getCachedMeta(track.id);
+        setIsCached(!!meta);
+      } catch (err) {
+        console.error('IndexedDB read failed:', err);
+      }
+    })();
+  }, [track.id]);
+
+  const handleSync = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!track.audio_url) return;
+    setSyncProgress(0);
+    try {
+      const url = track.audio_url.startsWith('http')
+        ? track.audio_url
+        : `${window.location.origin}${track.audio_url}`;
+
+      await cacheTrack(track.id, url, track.title, (loaded, total) => {
+        setSyncProgress(loaded / total);
+      });
+      setIsCached(true);
+      toast.success(`"${track.title.toUpperCase()}" cached for offline playback!`);
+    } catch (err) {
+      console.error('Offline caching failed:', err);
+      toast.error('Sync failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSyncProgress(null);
+    }
+  };
+
+  const handleRemoveSync = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await removeCached(track.id);
+      setIsCached(false);
+      toast.success(`"${track.title.toUpperCase()}" removed from local storage.`);
+    } catch (err) {
+      console.error('Failed to remove cache:', err);
+      toast.error('Failed to delete cache');
+    }
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -94,7 +145,7 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group grid grid-cols-[32px_32px_1fr_80px_100px_120px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
+      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
         isCurrent ? 'bg-[#0e0c08]' : ''
       } ${selected ? 'bg-[#15132a]' : ''}`}
     >
@@ -139,14 +190,19 @@ export function TrackCard({
       </div>
 
       {/* Title */}
-      <div className="min-w-0 flex items-center gap-3">
+      <div className="min-w-0 flex items-center gap-2">
         <h4 className={`text-[13px] font-medium truncate ${isCurrent ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>
           {track.title}
         </h4>
+        {isCached && (
+          <span className="text-[8px] font-bold text-[#AFA9EC] bg-[#1a1833] border border-[#534AB7] rounded px-1.5 py-0.5 uppercase tracking-wider font-mono shrink-0">
+            Offline
+          </span>
+        )}
       </div>
 
       {/* Type */}
-      <div className={`text-[10px] font-mono uppercase tracking-wider ${typeColor[track.type] || 'text-[#6a5d4a]'}`}>
+      <div className={`text-[10px] font-panchang uppercase tracking-wider hidden sm:block ${typeColor[track.type] || 'text-[#6a5d4a]'}`}>
         {track.type}
       </div>
 
@@ -160,7 +216,7 @@ export function TrackCard({
       <div className="text-[11px] text-[#5a5142] font-mono hidden md:block">{uploadDate}</div>
 
       {/* Rating stars */}
-      <div className="flex items-center gap-0.5 justify-end" onClick={(e) => e.stopPropagation()}>
+      <div className="hidden sm:flex items-center gap-0.5 justify-end" onClick={(e) => e.stopPropagation()}>
         {[1, 2, 3, 4, 5].map((star) => (
           <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
             <Star
@@ -192,6 +248,33 @@ export function TrackCard({
                 className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
               >
                 <Info size={12} className="text-[#D4BFA0]" /> View details
+              </button>
+            )}
+            
+            {isCached ? (
+              <button
+                onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#16130e]"
+              >
+                <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
+              </button>
+            ) : (
+              <button
+                onClick={(e) => { handleSync(e); }}
+                disabled={syncProgress !== null}
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e] disabled:opacity-50"
+              >
+                {syncProgress !== null ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin text-[#7F77DD] shrink-0" />
+                    <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={12} className="text-[#7F77DD] shrink-0" />
+                    <span>Sync to device</span>
+                  </>
+                )}
               </button>
             )}
             {onRemoveFromContext && (

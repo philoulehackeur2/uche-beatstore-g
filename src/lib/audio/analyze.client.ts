@@ -60,52 +60,150 @@ export async function analyzeAudioFromUrl(rawUrl: string): Promise<AudioFeatures
 }
 
 async function runEssentia(buffer: ArrayBuffer): Promise<AudioFeatures> {
+  let ctx: AudioContext | null = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { EssentiaWASM } = (await import('essentia.js')) as any;
-    const factory = EssentiaWASM.EssentiaWASM ?? EssentiaWASM;
-    const essentia = await factory();
-
-    const ctx = new AudioContext();
+    ctx = new AudioContext();
     const decoded = await ctx.decodeAudioData(buffer.slice(0));
-    const signal = essentia.arrayToVector(decoded.getChannelData(0));
-
-    // RhythmExtractor2013 is Essentia's most reliable BPM detector — same
-    // algorithm Spotify et al use for tempo. KeyExtractor handles both
-    // key (C, D#, etc.) and scale (major/minor).
-    const rhythm = essentia.RhythmExtractor2013(signal);
-    const keyData = essentia.KeyExtractor(signal);
-
-    let loudness: number | null = null;
-    try {
-      const l = essentia.LoudnessEBUR128(signal, signal);
-      loudness = +l.integratedLoudness.toFixed(1);
-    } catch {
-      // LoudnessEBUR128 may not be available in all builds; non-fatal.
-    }
-
-    essentia.delete();
+    const channelData = decoded.getChannelData(0); // Float32Array
+    const duration = Math.round(decoded.duration);
     await ctx.close();
+    ctx = null;
+
+    // Offload heavy Essentia.js calculations to a Web Worker so we don't lock the UI main thread!
+    const workerResult = await runEssentiaInWorker(channelData);
 
     return {
-      bpm: Math.round(rhythm.bpm),
-      key: keyData.key || null,
-      scale: keyData.scale || null,
-      loudness,
-      duration: Math.round(decoded.duration),
+      bpm: workerResult.bpm,
+      key: workerResult.key,
+      scale: workerResult.scale,
+      loudness: workerResult.loudness,
+      duration,
     };
   } catch (err) {
-    console.warn('Essentia.js analysis failed:', err);
-    // Even if Essentia fails, try to at least return duration so the
-    // server has something to merge instead of throwing 422.
+    console.warn('Offloaded Essentia.js worker failed, trying local fallback:', err);
+    if (ctx) {
+      try { await ctx.close(); } catch {}
+    }
+    
+    // Fallback: local direct main-thread analysis so it NEVER breaks
     try {
-      const ctx = new AudioContext();
-      const decoded = await ctx.decodeAudioData(buffer.slice(0));
-      const duration = Math.round(decoded.duration);
-      await ctx.close();
-      return { bpm: null, key: null, scale: null, loudness: null, duration };
-    } catch {
-      return { ...EMPTY };
+      const { EssentiaWASM } = (await import('essentia.js')) as any;
+      const factory = EssentiaWASM.EssentiaWASM ?? EssentiaWASM;
+      const essentia = await factory();
+
+      const fallbackCtx = new AudioContext();
+      const decoded = await fallbackCtx.decodeAudioData(buffer.slice(0));
+      const signal = essentia.arrayToVector(decoded.getChannelData(0));
+
+      const rhythm = essentia.RhythmExtractor2013(signal);
+      const keyData = essentia.KeyExtractor(signal);
+
+      let loudness: number | null = null;
+      try {
+        const l = essentia.LoudnessEBUR128(signal, signal);
+        loudness = +l.integratedLoudness.toFixed(1);
+      } catch {}
+
+      essentia.delete();
+      await fallbackCtx.close();
+
+      return {
+        bpm: Math.round(rhythm.bpm),
+        key: keyData.key || null,
+        scale: keyData.scale || null,
+        loudness,
+        duration: Math.round(decoded.duration),
+      };
+    } catch (fallbackErr) {
+      console.warn('Essentia fallback failed too:', fallbackErr);
+      // Try to at least return duration
+      try {
+        const fallbackCtx = new AudioContext();
+        const decoded = await fallbackCtx.decodeAudioData(buffer.slice(0));
+        const duration = Math.round(decoded.duration);
+        await fallbackCtx.close();
+        return { bpm: null, key: null, scale: null, loudness: null, duration };
+      } catch {
+        return { ...EMPTY };
+      }
     }
   }
+}
+
+interface WorkerResult {
+  bpm: number | null;
+  key: string | null;
+  scale: string | null;
+  loudness: number | null;
+}
+
+function runEssentiaInWorker(channelData: Float32Array): Promise<WorkerResult> {
+  return new Promise((resolve, reject) => {
+    // Generate inline worker script code
+    const workerCode = `
+      self.onmessage = async (e) => {
+        try {
+          const { channelData, essentiaUrl } = e.data;
+          self.importScripts(essentiaUrl);
+          
+          const factory = self.EssentiaWASM.EssentiaWASM ?? self.EssentiaWASM;
+          const essentia = await factory();
+          
+          const signal = essentia.arrayToVector(channelData);
+          
+          const rhythm = essentia.RhythmExtractor2013(signal);
+          const keyData = essentia.KeyExtractor(signal);
+          
+          let loudness = null;
+          try {
+            const l = essentia.LoudnessEBUR128(signal, signal);
+            loudness = +l.integratedLoudness.toFixed(1);
+          } catch (lErr) {}
+          
+          essentia.delete();
+          
+          self.postMessage({
+            success: true,
+            bpm: Math.round(rhythm.bpm),
+            key: keyData.key || null,
+            scale: keyData.scale || null,
+            loudness
+          });
+        } catch (err) {
+          self.postMessage({ success: false, error: err.message });
+        }
+      };
+    `;
+
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+    const worker = new Worker(workerUrl);
+
+    // Using CDN essentia-core bundle
+    const essentiaUrl = 'https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js';
+
+    worker.onmessage = (e) => {
+      URL.revokeObjectURL(workerUrl);
+      worker.terminate();
+      if (e.data.success) {
+        resolve({
+          bpm: e.data.bpm,
+          key: e.data.key,
+          scale: e.data.scale,
+          loudness: e.data.loudness,
+        });
+      } else {
+        reject(new Error(e.data.error || 'Worker execution failed'));
+      }
+    };
+
+    worker.onerror = (err) => {
+      URL.revokeObjectURL(workerUrl);
+      worker.terminate();
+      reject(err);
+    };
+
+    // Pass as Transferable Object to avoid copying large array buffers!
+    worker.postMessage({ channelData, essentiaUrl }, [channelData.buffer]);
+  });
 }

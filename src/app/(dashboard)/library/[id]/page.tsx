@@ -23,6 +23,7 @@ import { toast } from '@/hooks/useToast';
 import { LibraryMetadataGrid } from '@/components/library/LibraryMetadataGrid';
 import { LibraryVersionHistory, type TrackVersion } from '@/components/library/LibraryVersionHistory';
 import { StemUploader } from '@/components/tracks/StemUploader';
+import { TrackHeatmap } from '@/components/tracks/TrackHeatmap';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -347,7 +348,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">
-                  <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate">{track.title}</h1>
+                  <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{track.title}</h1>
                   <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#5a5142] hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
@@ -428,6 +429,11 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
             {/* Metadata — extracted to components/library/LibraryMetadataGrid. */}
             <LibraryMetadataGrid track={track} />
+
+            {/* Audience Waveform retention analytics */}
+            <div className="mb-10">
+              <TrackHeatmap trackId={track.id} durationSeconds={track.duration_seconds || 0} />
+            </div>
 
             {/* Stems — manual upload UI. Producer / engineer flow:
                 attach your already-exported stems (vocals / drums /

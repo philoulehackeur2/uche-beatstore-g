@@ -8,6 +8,7 @@ import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { BeatLog } from '@/components/crm/BeatLog';
 import { ImportContactsModal } from '@/components/crm/ImportContactsModal';
 import { ContactHistoryDrawer } from '@/components/crm/ContactHistoryDrawer';
+import { NudgeModal } from '@/components/crm/NudgeModal';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 import Link from 'next/link';
@@ -62,11 +63,36 @@ export function ContactsView({
   // SendBeatModal with both the recipient and the track already
   // selected. The modal supports `prefilledTrackIds` for this.
   const [prefilledTrackIds, setPrefilledTrackIds] = useState<string[] | null>(null);
+  const [nudgeContact, setNudgeContact] = useState<{ contact: Contact; latestSend: any } | null>(null);
 
   const handleDropOnContact = (contact: Contact, payload: TrackDragPayload) => {
     setPrefilledTrackIds([payload.id]);
     setSendQueue([contact]);
     setDropHoverId(null);
+  };
+
+  const handleChangeCategory = async (contactId: string, newCategory: string | null) => {
+    // Optimistic UI update
+    setContacts((prev) =>
+      prev.map((c) => (c.id === contactId ? { ...c, category: newCategory || null } : c))
+    );
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newCategory || null }),
+      });
+      if (!res.ok) {
+        toast.error('Failed to change category');
+        refetch();
+      } else {
+        toast.success('Category updated successfully');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to change category');
+      refetch();
+    }
   };
 
   const refetch = async () => {
@@ -193,7 +219,19 @@ export function ContactsView({
       return last != null && last >= thirtyDaysAgo;
     };
     const matched = contacts.filter((c) => {
-      if (categoryFilter !== 'all' && c.category !== categoryFilter) return false;
+      if (categoryFilter !== 'all') {
+        const cat = c.category?.toLowerCase() || '';
+        const role = c.role?.toLowerCase() || '';
+        if (categoryFilter === 'producers') {
+          if (cat !== 'producer' && !role.includes('producer')) return false;
+        } else if (categoryFilter === 'rappers') {
+          if (cat !== 'rapper' && !role.includes('rapper') && !role.includes('artist') && !role.includes('singer')) return false;
+        } else if (categoryFilter === 'a&r') {
+          if (cat !== 'a&r' && cat !== 'label' && !role.includes('a&r') && !role.includes('label')) return false;
+        } else if (categoryFilter === 'friends') {
+          if (cat !== 'friend' && !role.includes('friend')) return false;
+        }
+      }
       // Engagement filter — checks against the same statusFor() tiers.
       if (statusFilter !== 'all') {
         const last = lastSentByContact.get(c.id);
@@ -254,12 +292,16 @@ export function ContactsView({
     <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
       {/* Header — title + action row, then stats strip underneath. */}
       <div className="mb-6 pb-6 border-b border-[#16130e]">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CRM</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Contacts</h1>
-            <p className="text-[11px] text-[#6a5d4a] mt-2">Your network. Sends, statuses, history — all in one place.</p>
-          </div>
+        <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+          {/* Abstract Image Background */}
+          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-3.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CRM</p>
+              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Contacts</h1>
+              <p className="text-[11px] text-[#a08a6a] max-w-md">Your network. Sends, statuses, history — all in one place.</p>
+            </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center bg-[#14110d] border border-[#1f1a13] rounded-full p-0.5">
               {(['network', 'activity'] as const).map((t) => (
@@ -290,6 +332,7 @@ export function ContactsView({
             </button>
           </div>
         </div>
+        </div>
 
         {/* Stats strip — four KPIs as quiet cards. Numbers are big and
             cream; labels are tiny and warm-muted. Stacks 2×2 on mobile,
@@ -305,37 +348,38 @@ export function ContactsView({
 
       {activeTab === 'network' ? (
         <>
-          {/* Category chip strip — visible only when the user has
-              actual categories on their contacts. Replaces the previous
-              dropdown so "show me all the producers" is one tap, not
-              two. Horizontal-scrolls on narrow screens. */}
-          {availableCategories.length > 0 && (
-            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-              <button
-                onClick={() => setCategoryFilter('all')}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
-                  categoryFilter === 'all'
-                    ? 'bg-white text-black'
-                    : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-white hover:bg-[#1a160f]'
-                }`}
-              >
-                All
-              </button>
-              {availableCategories.map((c) => (
+          {/* Five legendary CRM segment chips */}
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+            {(['all', 'rappers', 'producers', 'a&r', 'friends'] as const).map((segment) => {
+              const count = contacts.filter((c) => {
+                if (segment === 'all') return true;
+                const cat = c.category?.toLowerCase() || '';
+                const role = c.role?.toLowerCase() || '';
+                if (segment === 'producers') return cat === 'producer' || role.includes('producer');
+                if (segment === 'rappers') return cat === 'rapper' || role.includes('rapper') || role.includes('artist') || role.includes('singer');
+                if (segment === 'a&r') return cat === 'a&r' || cat === 'label' || role.includes('a&r') || role.includes('label');
+                if (segment === 'friends') return cat === 'friend' || role.includes('friend');
+                return false;
+              }).length;
+              
+              return (
                 <button
-                  key={c}
-                  onClick={() => setCategoryFilter(c)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
-                    categoryFilter === c
-                      ? 'bg-white text-black'
-                      : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-white hover:bg-[#1a160f]'
+                  key={segment}
+                  onClick={() => setCategoryFilter(segment)}
+                  className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                    categoryFilter === segment
+                      ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/15'
+                      : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#1a160f]'
                   }`}
                 >
-                  {c}
+                  {segment}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                    categoryFilter === segment ? 'bg-black/10 text-black' : 'bg-white/5 text-[#5a5142]'
+                  }`}>{count}</span>
                 </button>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
 
           {/* Toolbar — search on the left, sort on the right. Refresh
               spinner overlays the search input when a refetch is in
@@ -432,49 +476,97 @@ export function ContactsView({
               })()}
             </div>
           ) : (
-            <div className="border border-[#16130e] rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[28px_40px_1fr_1fr_110px_120px_160px_160px_150px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
-                <input
-                  type="checkbox"
-                  // Header checkbox toggles the entire filtered set —
-                  // useful pattern for "select all visible after a search."
-                  checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                  onChange={toggleSelectAll}
-                  className="accent-[#D4BFA0] cursor-pointer"
-                  aria-label="Select all visible contacts"
-                />
-                <span />
-                <span>Name</span>
-                <span>Role / Label</span>
-                <span>Status</span>
-                <span>Pipeline</span>
-                <span>Email</span>
-                <span>Instagram</span>
-                <span className="text-right">Actions</span>
-              </div>
+            <div className="border border-[#16130e] rounded-lg overflow-hidden overflow-x-auto w-full custom-scrollbar">
+              <div className="min-w-[1200px]">
+                {/* Dynamic Grid Headers based on active segment */}
+                {categoryFilter === 'producers' ? (
+                  <div className="grid grid-cols-[28px_40px_1.5fr_1fr_100px_110px_90px_1.2fr_1.2fr_130px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="accent-[#D4BFA0] cursor-pointer"
+                    aria-label="Select all visible contacts"
+                  />
+                  <span />
+                  <span>Name</span>
+                  <span>Role / Label</span>
+                  <span>Status</span>
+                  <span>Pipeline</span>
+                  <span>Stems</span>
+                  <span>Email</span>
+                  <span>Instagram</span>
+                  <span className="text-right">Actions</span>
+                </div>
+              ) : categoryFilter === 'a&r' ? (
+                <div className="grid grid-cols-[28px_40px_1.5fr_1fr_1fr_100px_110px_1.2fr_1.2fr_130px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="accent-[#D4BFA0] cursor-pointer"
+                    aria-label="Select all visible contacts"
+                  />
+                  <span />
+                  <span>Name</span>
+                  <span>Role</span>
+                  <span>Company / Label</span>
+                  <span>Status</span>
+                  <span>Pipeline</span>
+                  <span>Email</span>
+                  <span>Instagram</span>
+                  <span className="text-right">Actions</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-[28px_40px_1.5fr_1fr_110px_120px_160px_160px_150px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="accent-[#D4BFA0] cursor-pointer"
+                    aria-label="Select all visible contacts"
+                  />
+                  <span />
+                  <span>Name</span>
+                  <span>Role / Label</span>
+                  <span>Status</span>
+                  <span>Pipeline</span>
+                  <span>Email</span>
+                  <span>Instagram</span>
+                  <span className="text-right">Actions</span>
+                </div>
+              )}
               {filtered.map((contact) => {
                 const isSelected = selectedIds.has(contact.id);
                 const isDropTarget = dropHoverId === contact.id;
                 const sendCount = sendCountByContact.get(contact.id) ?? 0;
+                
+                // Smart Follow-up nudge calculation
+                const latestSend = beatSends.find(s => s.contact_id === contact.id);
+                const daysDiff = latestSend ? (Date.now() - Date.parse(latestSend.sent_at)) / 86_400_000 : 0;
+                const contactNeedsNudge = latestSend?.status === 'sent' && daysDiff > 5;
+
+                // Mock stems check for Producer view
+                const isProducer = contact.category?.toLowerCase() === 'producer' || contact.role?.toLowerCase().includes('producer');
+                const hasStems = isProducer && sendCount > 0;
+
+                const gridRowClass = 
+                  categoryFilter === 'producers'
+                    ? 'grid grid-cols-[28px_40px_1.5fr_1fr_100px_110px_90px_1.2fr_1.2fr_130px]'
+                    : categoryFilter === 'a&r'
+                      ? 'grid grid-cols-[28px_40px_1.5fr_1fr_1fr_100px_110px_1.2fr_1.2fr_130px]'
+                      : 'grid grid-cols-[28px_40px_1.5fr_1fr_110px_120px_160px_160px_150px]';
+
                 return (
                   <div
                     key={contact.id}
                     onDragOver={(e) => {
-                      // preventDefault makes us a valid drop target —
-                      // browser cursors only show the copy icon for
-                      // elements that opt in here. We also gate on the
-                      // custom MIME type to avoid lighting up for
-                      // arbitrary text / file drags.
                       if (!isTrackDrag(e)) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'copy';
                       if (dropHoverId !== contact.id) setDropHoverId(contact.id);
                     }}
                     onDragLeave={(e) => {
-                      // The row's children fire dragenter/leave too, so
-                      // only clear when the mouse leaves the row's outer
-                      // bounding box. relatedTarget = null means it left
-                      // the page entirely (Firefox quirk).
                       const next = e.relatedTarget as Node | null;
                       if (!next || !(e.currentTarget as Node).contains(next)) {
                         setDropHoverId((cur) => (cur === contact.id ? null : cur));
@@ -489,7 +581,7 @@ export function ContactsView({
                       e.preventDefault();
                       handleDropOnContact(contact, payload);
                     }}
-                    className={`grid grid-cols-[28px_40px_1fr_1fr_110px_120px_160px_160px_150px] items-center gap-4 px-4 h-14 border-b border-[#1f1a13] transition-colors last:border-b-0 ${
+                    className={`${gridRowClass} items-center gap-4 px-4 h-14 border-b border-[#1f1a13] transition-colors last:border-b-0 ${
                       isDropTarget
                         ? 'bg-[#2A2418] ring-2 ring-[#D4BFA0]/60 ring-inset'
                         : isSelected
@@ -508,30 +600,89 @@ export function ContactsView({
                       {contact.name[0]?.toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <Link
-                        href={`/contacts/${contact.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-[13px] font-medium text-[#E8DCC8] truncate hover:text-[#E8D8B8] transition-colors block"
-                      >
-                        {contact.name}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/contacts/${contact.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[13px] font-medium text-[#E8DCC8] truncate hover:text-[#E8D8B8] transition-colors block"
+                        >
+                          {contact.name}
+                        </Link>
+                        {contactNeedsNudge && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (latestSend) {
+                                setNudgeContact({ contact, latestSend });
+                              }
+                            }}
+                            className="bg-amber-500/15 border border-amber-500/40 text-[#D4BFA0] hover:bg-amber-500/35 hover:border-amber-500/80 text-[7px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded animate-pulse shrink-0 cursor-pointer transition-all"
+                            title="Click to trigger a polite follow-up email nudge"
+                          >
+                            Nudge
+                          </button>
+                        )}
+                      </div>
                       <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
                         {new Date(contact.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[12px] text-[#a08a6a] truncate">{contact.role || '—'}</p>
-                      {contact.label && (
-                        <p className="text-[10px] text-[#6a5d4a] truncate flex items-center gap-1 mt-0.5">
-                          <Tag size={9} />
-                          {contact.label}
-                        </p>
-                      )}
-                    </div>
-                    {/* Engagement pill — derived from last-send recency.
-                        Clickable: tapping a pill sets the page's
-                        statusFilter to that tone; tapping the same
-                        tone again toggles the filter off. */}
+
+                    {categoryFilter === 'a&r' ? (
+                      <>
+                        <div className="min-w-0">
+                          <p className="text-[12px] text-[#a08a6a] truncate">{contact.role || '—'}</p>
+                          <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                            <Dropdown
+                              value={contact.category || 'none'}
+                              onChange={(val) => {
+                                const finalVal = val === 'none' ? null : val;
+                                handleChangeCategory(contact.id, finalVal);
+                              }}
+                              options={[
+                                { value: 'none', label: 'Move...' },
+                                { value: 'rapper', label: 'Rapper' },
+                                { value: 'producer', label: 'Producer' },
+                                { value: 'a&r', label: 'A&R / Label' },
+                                { value: 'friend', label: 'Friend' }
+                              ]}
+                              className="bg-[#0c0a08] border border-[#1f1a13] hover:border-[#D4BFA0]/50 text-[#6a5d4a] hover:text-[#E8DCC8] rounded py-1 px-2.5 text-[9px] font-mono uppercase tracking-wider focus:outline-none cursor-pointer transition-all h-7 w-28"
+                            />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[12px] text-[#E8DCC8] truncate font-medium">{contact.label || '—'}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="min-w-0">
+                        <p className="text-[12px] text-[#a08a6a] truncate">{contact.role || '—'}</p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                          <Dropdown
+                            value={contact.category || 'none'}
+                            onChange={(val) => {
+                              const finalVal = val === 'none' ? null : val;
+                              handleChangeCategory(contact.id, finalVal);
+                            }}
+                            options={[
+                              { value: 'none', label: 'Move...' },
+                              { value: 'rapper', label: 'Rapper' },
+                              { value: 'producer', label: 'Producer' },
+                              { value: 'a&r', label: 'A&R / Label' },
+                              { value: 'friend', label: 'Friend' }
+                            ]}
+                            className="bg-[#0c0a08] border border-[#1f1a13] hover:border-[#D4BFA0]/50 text-[#6a5d4a] hover:text-[#E8DCC8] rounded py-1 px-2.5 text-[9px] font-mono uppercase tracking-wider focus:outline-none cursor-pointer transition-all h-7 w-28"
+                          />
+                          {contact.label && (
+                            <p className="text-[10px] text-[#6a5d4a] truncate flex items-center gap-1">
+                              <Tag size={9} />
+                              {contact.label}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {(() => {
                       const s = statusFor(contact.id);
                       return (
@@ -543,13 +694,22 @@ export function ContactsView({
                         />
                       );
                     })()}
-                    {/* Pipeline stage — sent / opened / interested /
-                        negotiating / placed / pass. Pulled from the
-                        latest beat_send for this contact. "—" when
-                        nothing's been sent yet. Status changes happen
-                        in the history drawer (already wired); this
-                        view just reflects the current stage. */}
+                    
                     <PipelinePill status={latestStatusByContact.get(contact.id) ?? null} />
+                    
+                    {/* Producers View Stems Indicator column */}
+                    {categoryFilter === 'producers' && (
+                      <div>
+                        {hasStems ? (
+                          <span className="bg-green-500/10 border border-green-500/30 text-green-400 text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">
+                            Attached
+                          </span>
+                        ) : (
+                          <span className="text-[#3a3328] font-mono text-[10px]">None</span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-1.5 text-[11px] text-[#a08a6a] truncate">
                       {contact.email ? (
                         <>
@@ -571,12 +731,6 @@ export function ContactsView({
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 justify-end">
-                      {/* History badge — was a tiny icon-only chip. Now a
-                          two-line affordance: top line "N sent", bottom
-                          line "Xd ago" (or "—" for never). Click opens
-                          the per-contact send history drawer. Hidden
-                          via opacity when zero so cold contacts don't
-                          show stale zeros. */}
                       <button
                         onClick={() => setHistoryContact(contact)}
                         className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[10px] font-medium transition-colors ${
@@ -610,6 +764,7 @@ export function ContactsView({
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
         </>
@@ -708,6 +863,15 @@ export function ContactsView({
           },
         ]}
       />
+
+      {nudgeContact && (
+        <NudgeModal
+          contact={nudgeContact.contact}
+          latestSend={nudgeContact.latestSend}
+          onClose={() => setNudgeContact(null)}
+          onSuccess={refetch}
+        />
+      )}
     </div>
   );
 }

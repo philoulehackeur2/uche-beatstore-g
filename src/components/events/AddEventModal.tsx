@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X, Calendar, Clock, Tag, Loader2, Music } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { Dropdown } from '@/components/ui/Dropdown';
 
 interface AddEventModalProps {
   onClose: () => void;
@@ -75,16 +76,17 @@ export function AddEventModal({ onClose, onSuccess, initialDate }: AddEventModal
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Category</label>
-              <select
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors appearance-none cursor-pointer"
+              <Dropdown
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              >
-                <option value="release">Release</option>
-                <option value="studio">Studio Session</option>
-                <option value="meeting">Meeting</option>
-                <option value="other">Other</option>
-              </select>
+                onChange={(val) => setFormData({ ...formData, type: val })}
+                options={[
+                  { value: 'release', label: 'Release' },
+                  { value: 'studio', label: 'Studio Session' },
+                  { value: 'meeting', label: 'Meeting' },
+                  { value: 'other', label: 'Other' }
+                ]}
+                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs text-white focus:outline-none focus:border-[#D4BFA0] transition-colors"
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Date</label>

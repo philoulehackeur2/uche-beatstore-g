@@ -404,6 +404,14 @@ export function useWaveSurfer({
         try {
           w.unAll();
           w.pause();
+
+          // Release underlying media element to prevent mobile browser memory leaks
+          const media = (w as any).mediaElement ?? (w as any).audio;
+          if (media) {
+            media.removeAttribute('src');
+            media.load();
+          }
+
           w.destroy();
         } catch {
           // Destroy can throw if WaveSurfer is still initializing; ignore.

@@ -196,9 +196,35 @@ export function AddFromLibraryModal({
         </div>
 
         <div className="px-6 h-14 border-t border-[#16130e] flex items-center justify-between">
-          <p className="text-[10px] text-[#5a5142] font-mono uppercase tracking-widest">
-            {selected.size > 0 ? `${selected.size} ready to attach` : 'Select tracks to attach'}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-[10px] text-[#5a5142] font-mono uppercase tracking-widest">
+              {selected.size > 0 ? `${selected.size} ready to attach` : 'Select tracks to attach'}
+            </p>
+            {filtered.length > 0 && (
+              <>
+                <span className="text-[#16130e] font-mono">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nonExcludedFiltered = filtered.filter((t) => !excluded.has(t.id));
+                    const allSelected = nonExcludedFiltered.every((t) => selected.has(t.id));
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (allSelected) {
+                        nonExcludedFiltered.forEach((t) => next.delete(t.id));
+                      } else {
+                        nonExcludedFiltered.forEach((t) => next.add(t.id));
+                      }
+                      return next;
+                    });
+                  }}
+                  className="text-[10px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-[#E8D8B8] cursor-pointer transition-colors"
+                >
+                  {filtered.filter((t) => !excluded.has(t.id)).every((t) => selected.has(t.id)) ? 'Deselect All' : 'Select All'}
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}

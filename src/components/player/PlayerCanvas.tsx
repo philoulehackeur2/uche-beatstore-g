@@ -21,8 +21,18 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   ZoomIn, ZoomOut, Repeat, Square as StopIcon, Activity,
+  MessageSquare, Send, X as CloseIcon, User, Plus,
 } from 'lucide-react';
 import { useWaveSurfer, type RegionInfo } from '@/hooks/useWaveSurfer';
+
+export interface WaveComment {
+  id: string;
+  author_name: string;
+  body: string;
+  region_start: number | null;
+  region_end: number | null;
+  created_at?: string;
+}
 
 interface PlayerCanvasProps {
   url: string;
@@ -66,6 +76,11 @@ interface PlayerCanvasProps {
   hideControls?: boolean;
   /** Override the region toolbar visibility. */
   hideRegionToolbar?: boolean;
+  
+  // Comments integrations
+  comments?: WaveComment[];
+  onAddComment?: (body: string, start: number | null, end: number | null) => Promise<void>;
+  canComment?: boolean;
 }
 
 const ZOOM_STEP = 30; // px-per-second per zoom-in/out click
@@ -93,6 +108,9 @@ export function PlayerCanvas({
   showSpectrogramToggle = true,
   hideControls = false,
   hideRegionToolbar = false,
+  comments = [],
+  onAddComment,
+  canComment = true,
 }: PlayerCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -100,6 +118,11 @@ export function PlayerCanvas({
   // Default off because the FFT pass is expensive; flipping this triggers
   // a clean useWaveSurfer rebuild (playback position resets, ~1s redraw).
   const [showSpectrogram, setShowSpectrogram] = useState(false);
+
+  // Comments integration states
+  const [showComposer, setShowComposer] = useState(false);
+  const [composerText, setComposerText] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
 
   const {
     ready, currentTime, duration, failed,
@@ -120,6 +143,27 @@ export function PlayerCanvas({
     timeline: showTimeline,
     spectrogram: showSpectrogram,
   });
+
+  const handlePostComment = async () => {
+    if (!composerText.trim() || !onAddComment) return;
+    setPostingComment(true);
+    try {
+      // Pick up active selection range if there is a drawn region
+      const lastRegion = regions[regions.length - 1];
+      const start = lastRegion ? lastRegion.start : currentTime;
+      // Database CHECK requires end > start, so if it's a point comment, end = start + 1
+      const end = lastRegion ? lastRegion.end : currentTime + 1;
+      
+      await onAddComment(composerText.trim(), start, end);
+      setComposerText('');
+      setShowComposer(false);
+      clearRegions();
+    } catch (err) {
+      console.error('Error posting comment from canvas:', err);
+    } finally {
+      setPostingComment(false);
+    }
+  };
 
   // External seek-and-play requests (e.g. clicking a timecode pill on a
   // comment). We watch the nonce so the same time can be requested twice
@@ -177,8 +221,43 @@ export function PlayerCanvas({
     <div className="w-full space-y-3">
       {/* Waveform canvas — horizontal scroll appears automatically when
           zoom exceeds the container width. */}
-      <div className="relative w-full overflow-x-auto bg-[#0a0907] border border-[#1a160f] rounded-md">
-        <div ref={containerRef} className="w-full" style={{ minHeight: height }} />
+      <div className="relative w-full overflow-x-auto bg-[#0a0907] border border-[#1a160f] rounded-md scrollbar-hide">
+        <div className="relative w-full">
+          <div ref={containerRef} className="w-full relative z-0" style={{ minHeight: height }} />
+          
+          {/* Visual Comment Pins Overlay */}
+          {comments && comments.length > 0 && duration > 0 && ready && (
+            <div className="absolute inset-0 pointer-events-none z-10">
+              {comments.map((c) => {
+                if (c.region_start === null) return null;
+                const pct = (Number(c.region_start) / duration) * 100;
+                return (
+                  <div
+                    key={c.id}
+                    style={{ left: `${pct}%` }}
+                    className="absolute bottom-1 -translate-x-1/2 pointer-events-auto cursor-pointer group/pin"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      seek(Number(c.region_start));
+                      play();
+                    }}
+                  >
+                    {/* Glowing Dot Pin */}
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#7F77DD] border border-white/20 shadow-[0_0_8px_#7F77DD] hover:scale-125 transition-transform" />
+                    
+                    {/* Premium Floating Tooltip */}
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover/pin:block w-48 p-2.5 rounded-md border border-[#8A7A5C]/30 bg-[#0c0a08]/95 backdrop-blur-md shadow-xl text-left pointer-events-none z-50">
+                      <p className="text-[9px] font-bold text-[#E8D8B8] truncate">{c.author_name}</p>
+                      <p className="text-[10px] text-[#bbb] mt-0.5 line-clamp-3 leading-snug">{c.body}</p>
+                      <p className="text-[8px] font-mono text-[#5a5142] mt-1">{fmt(Number(c.region_start))}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {!ready && !failed && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-[10px] font-mono uppercase tracking-widest text-[#5a5142]">
@@ -195,7 +274,7 @@ export function PlayerCanvas({
 
       {/* Controls bar */}
       {!hideControls && (
-        <div className="flex items-center gap-3 px-1">
+        <div className="flex items-center gap-3 px-1 flex-wrap sm:flex-nowrap">
           {/* Transport */}
           <div className="flex items-center gap-2">
             <button
@@ -242,6 +321,22 @@ export function PlayerCanvas({
             <span className="text-[#4a4338]">/</span>
             <span>{fmt(duration)}</span>
           </div>
+
+          {/* Add Comment Button */}
+          {canComment && onAddComment && (
+            <button
+              onClick={() => setShowComposer((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                showComposer
+                  ? 'bg-[#7F77DD]/20 border-[#7F77DD] text-[#AFA9EC]'
+                  : 'border-[#1f1a13] text-[#a08a6a] hover:text-white hover:border-[#8A7A5C]'
+              }`}
+              title="Add comment at current timestamp"
+            >
+              <MessageSquare size={10} />
+              <span>Comment</span>
+            </button>
+          )}
 
           {/* Spectrogram toggle + Zoom */}
           <div className="flex items-center gap-1 ml-auto">
@@ -307,6 +402,57 @@ export function PlayerCanvas({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Inline Comment Composer */}
+      {showComposer && (
+        <div className="p-4 rounded-lg border border-[#8A7A5C]/25 bg-[#0c0a08]/90 backdrop-blur-md space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E8D8B8]">
+              Add pinned comment at <span className="font-mono text-[#D4BFA0]">{fmt(currentTime)}</span>
+            </h4>
+            <button
+              onClick={() => setShowComposer(false)}
+              className="text-[#6a5d4a] hover:text-white transition-colors"
+            >
+              <CloseIcon size={12} />
+            </button>
+          </div>
+          
+          <textarea
+            value={composerText}
+            onChange={(e) => setComposerText(e.target.value)}
+            placeholder="Type your feedback here..."
+            rows={2}
+            className="w-full bg-[#0a0907] border border-[#1a160f] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#7F77DD] resize-none"
+          />
+          
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[9px] text-[#5a5142]">
+              Picks up active selection range if dragged on waveform.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowComposer(false)}
+                className="px-3.5 py-1.5 border border-[#1f1a13] hover:border-[#2d2620] rounded text-[10px] font-bold uppercase tracking-wider text-[#6a5d4a] hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePostComment}
+                disabled={postingComment || !composerText.trim()}
+                className="flex items-center gap-1.5 bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded transition-colors"
+              >
+                {postingComment ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <Send size={10} />
+                )}
+                Post Note
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

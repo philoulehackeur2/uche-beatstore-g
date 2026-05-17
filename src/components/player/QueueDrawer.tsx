@@ -274,7 +274,7 @@ function Row({
         }`}>
           {track.title}
         </h4>
-        <p className="text-[9px] text-[#5a5142] uppercase font-mono tracking-widest mt-0.5">{track.type}</p>
+        <p className="text-[9px] text-[#5a5142] uppercase font-panchang tracking-widest mt-0.5">{track.type}</p>
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

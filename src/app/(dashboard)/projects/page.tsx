@@ -129,24 +129,35 @@ export default function ProjectsPage() {
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto px-10 pt-10">
         {/* Header */}
-        <div className="flex items-end justify-between mb-8 pb-6 border-b border-[#16130e]">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Work in progress</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Projects</h1>
-            <p className="text-[11px] text-[#5a5142] mt-2">Active production. Tracks you&apos;re still working on — with stems, versions, and references.</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">
-              {filtered.length} project{filtered.length !== 1 ? 's' : ''}
-            </span>
-            <button
-              onClick={createProject}
-              disabled={creating}
-              className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-3 py-1.5 rounded-md text-[11px] font-medium hover:border-[#2d2620] disabled:opacity-40 transition-colors"
-            >
-              {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-              New project
-            </button>
+        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#2A2418]/30 via-[#1a160f]/20 to-[#0a0907] p-8">
+          {/* Abstract Image Background */}
+          <div
+            className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-2.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay"
+          />
+          <div
+            className="absolute -top-32 -right-32 w-80 h-80 rounded-full pointer-events-none opacity-20 z-0"
+            style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+          />
+          
+          <div className="relative z-10 flex items-end justify-between">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Work in progress</p>
+              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Projects</h1>
+              <p className="text-[11px] text-[#a08a6a] max-w-md">Active production. Tracks you&apos;re still working on — with stems, versions, and references.</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
+                {filtered.length} project{filtered.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={createProject}
+                disabled={creating}
+                className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                New project
+              </button>
+            </div>
           </div>
         </div>
 

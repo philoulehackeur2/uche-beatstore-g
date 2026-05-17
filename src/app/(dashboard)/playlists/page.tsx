@@ -77,38 +77,62 @@ export default function PlaylistsPage() {
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto px-10 pt-10">
         {/* Header */}
-        <div className="flex items-end justify-between mb-10 pb-6 border-b border-[#16130e]">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">For listening</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Playlists</h1>
-            <p className="text-[11px] text-[#5a5142] mt-2">Curated sets for sharing. Order tracks, generate links, send to people to play.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">
-              {playlists.length} playlist{playlists.length !== 1 ? 's' : ''}
-            </span>
-            {/* Select-mode toggle. Activating it converts cards from
-                "click → open" to "click → toggle selected", which
-                surfaces the floating BatchActionBar at the bottom. */}
-            <button
-              onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-              className={cn(
-                'text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md border transition-colors',
-                selectMode
-                  ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
-                  : 'bg-[#14110d] border-[#1a160f] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]',
+        <div className="relative mb-10 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+          {/* Abstract Image Background */}
+          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-4.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">For listening</p>
+              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Playlists</h1>
+              <p className="text-[11px] text-[#a08a6a] max-w-md">Curated sets for sharing. Order tracks, generate links, send to people to play.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
+                {playlists.length} playlist{playlists.length !== 1 ? 's' : ''}
+              </span>
+              {/* Select-mode toggle. Activating it converts cards from
+                  "click → open" to "click → toggle selected", which
+                  surfaces the floating BatchActionBar at the bottom. */}
+              <button
+                onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+                className={cn(
+                  'text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md border transition-colors',
+                  selectMode
+                    ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
+                    : 'bg-[#14110d] border-[#1a160f] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]',
+                )}
+              >
+                {selectMode ? 'Done' : 'Select'}
+              </button>
+              {selectMode && playlists.length > 0 && (
+                <button
+                  onClick={() => {
+                    const allSelected = playlists.every((p) => selectedIds.has(p.id));
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (allSelected) {
+                        playlists.forEach((p) => next.delete(p.id));
+                      } else {
+                        playlists.forEach((p) => next.add(p.id));
+                      }
+                      return next;
+                    });
+                  }}
+                  className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md border bg-[#14110d] border-[#1a160f] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-colors"
+                >
+                  {playlists.every((p) => selectedIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+                </button>
               )}
-            >
-              {selectMode ? 'Done' : 'Select'}
-            </button>
-            <button
-              onClick={createPlaylist}
-              disabled={creating}
-              className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-3 py-1.5 rounded-md text-[11px] font-medium hover:border-[#2d2620] disabled:opacity-40 transition-colors"
-            >
-              {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-              New playlist
-            </button>
+              <button
+                onClick={createPlaylist}
+                disabled={creating}
+                className="flex items-center gap-2 bg-white text-black hover:bg-[#E8DCC8] px-4 py-2 rounded-full text-[12px] font-medium transition-colors active:scale-[0.98] disabled:opacity-40"
+              >
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                New playlist
+              </button>
+            </div>
           </div>
         </div>
 

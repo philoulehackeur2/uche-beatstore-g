@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       allow_downloads,
       expires_days,
       password,
+      recipient_kind,
     } = body;
 
     if (!track_ids || !Array.isArray(track_ids) || track_ids.length === 0) {
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       expires_at,
       password_hash,
       plays: 0,
+      recipient_kind: recipient_kind || 'client',
     };
 
     if (isSupabaseConfigured()) {
