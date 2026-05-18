@@ -72,27 +72,67 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       return NextResponse.json({ error: 'Share has no owner' }, { status: 400 });
     }
 
+    // Profile-level defaults — used as the fallback when a track
+    // hasn't set its own override.
     const { data: profile } = await admin
       .from('creator_profiles')
       .select('license_lease_price_usd, license_exclusive_price_usd, display_name')
       .eq('user_id', sellerUserId)
       .maybeSingle();
 
-    const price = licenseType === 'lease'
+    const profileDefault = licenseType === 'lease'
       ? profile?.license_lease_price_usd
       : profile?.license_exclusive_price_usd;
-    if (price == null || Number(price) <= 0) {
-      return NextResponse.json({ error: `Owner hasn't set a ${licenseType} price` }, { status: 400 });
-    }
 
-    // Resolve track titles for the line-item description. Best-effort —
-    // if the titles fetch fails we still create the session with a
-    // generic description rather than blocking the sale.
+    // Pull all selected tracks WITH their per-track price columns so
+    // we can build one Stripe line item per track. Per-track listing
+    // (migration 021) lets a flagship beat cost more than the rest of
+    // the catalog; the profile default kicks in only for tracks that
+    // didn't set their own price.
     const { data: tracks } = await admin
       .from('tracks')
-      .select('id, title')
+      .select('id, title, lease_price_usd, exclusive_price_usd')
       .in('id', trackIds);
-    const titleSummary = (tracks ?? []).map((t: any) => t.title).join(' · ') || 'Selected tracks';
+
+    if (!tracks || tracks.length === 0) {
+      return NextResponse.json({ error: 'No matching tracks found' }, { status: 400 });
+    }
+
+    // Resolve effective price per track. If a track has no override
+    // and the profile default is also unset/zero, the producer hasn't
+    // priced this track — we refuse rather than silently charging $0.
+    const lineItems: any[] = [];
+    const unpriced: string[] = [];
+    for (const t of tracks) {
+      const override = licenseType === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+      const effective = override != null && Number(override) > 0
+        ? Number(override)
+        : (profileDefault != null && Number(profileDefault) > 0 ? Number(profileDefault) : null);
+      if (effective == null) {
+        unpriced.push(t.title);
+        continue;
+      }
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.round(effective * 100),
+          product_data: {
+            name: `${licenseType === 'exclusive' ? 'Exclusive' : 'Lease'} — ${t.title}`,
+            // Description gets the project context so the Stripe
+            // receipt has enough info to be self-explanatory.
+            description: projectName ? projectName.slice(0, 220) : undefined,
+          },
+        },
+        quantity: 1,
+      });
+    }
+
+    if (unpriced.length) {
+      return NextResponse.json(
+        { error: `No ${licenseType} price set for: ${unpriced.join(', ')}. Set per-track prices on the library detail page or a profile default in /settings.` },
+        { status: 400 },
+      );
+    }
 
     const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://uche-beatstore-g.vercel.app';
     const stripe = getStripe();
@@ -101,21 +141,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       mode: 'payment',
       payment_method_types: ['card'],
       customer_email: buyerEmail,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            unit_amount: Math.round(Number(price) * 100),
-            product_data: {
-              name: licenseType === 'exclusive'
-                ? `Exclusive license — ${projectName ?? titleSummary}`
-                : `Lease license — ${projectName ?? titleSummary}`,
-              description: titleSummary.slice(0, 220),
-            },
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       // Stash everything the webhook needs in metadata so we don't
       // have to re-resolve from the database. Stripe metadata values
       // are strings — we JSON.stringify arrays.
