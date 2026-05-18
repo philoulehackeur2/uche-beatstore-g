@@ -238,9 +238,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
 }
 
 function redactShare(s: any) {
-  // Never echo password_hash or created_by — recipients have no business
-  // seeing either. `recipient_kind` is the new audience tag that drives
-  // the share page's variant: client / producer / rapper / friend.
+  // Never echo password_hash or created_by — recipients have no
+  // business seeing either. `recipient_kind` drives the share page
+  // variant; `sales_enabled` gates whether the license card renders
+  // Buy buttons (Stripe Checkout).
   return {
     token: s.token,
     role: s.role,
@@ -248,6 +249,7 @@ function redactShare(s: any) {
     expires_at: s.expires_at,
     label: s.label,
     recipient_kind: s.recipient_kind ?? 'client',
+    sales_enabled: s.sales_enabled === true,
   };
 }
 

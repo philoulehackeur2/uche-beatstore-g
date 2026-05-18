@@ -114,6 +114,10 @@ export const ProjectShareCreateBodySchema = z.object({
   invited_email: z.string().email().optional().nullable(),
   label: z.string().max(200).optional().nullable(),
   recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+  // When true the share page renders Buy buttons on the license
+  // card (Stripe Checkout). Off by default so a producer doesn't
+  // accidentally turn a casual send into a storefront.
+  sales_enabled: z.boolean().optional(),
 });
 export type ProjectShareCreateBody = z.infer<typeof ProjectShareCreateBodySchema>;
 
