@@ -166,10 +166,12 @@ export function ContactsView({
     return map;
   }, [beatSends]);
 
-  // Whole most-recent BeatSend row per contact — used by the bulk
-  // Nudge action so it can grab `track_ids` + `share_token` without
-  // a second pass over beatSends. Indexed by contact_id, sorted by
-  // sent_at lexicographically (ISO).
+  // Most recent beat_send object per contact — used by both the
+  // Needs-Nudge filter chip AND the bulk-nudge action. We keep the
+  // whole row (not just the timestamp) so callers can grab
+  // `track_ids` / `share_token` and pre-fill modals without a
+  // second pass over beatSends.
+
   const latestSendByContact = useMemo(() => {
     const map = new Map<string, BeatSend>();
     for (const s of beatSends) {
@@ -179,10 +181,12 @@ export function ContactsView({
     return map;
   }, [beatSends]);
 
-  // Shared predicate: "this contact's most recent send is stale and
-  // still in the `sent` stage." Used by the bulk-nudge action and
-  // (eventually) the Needs-Nudge segment chip. Five days = default
-  // cadence; campaigns can override per-target later.
+  // Predicate shared by the row-level Nudge badge, the Needs-Nudge
+  // filter chip, and the bulk-Nudge action. A contact needs a nudge
+  // when their most recent send is still in the `sent` stage (not
+  // opened / interested / placed / pass) and has aged past the
+  // 5-day default cadence. Campaigns may override per-target later.
+
   const NUDGE_AFTER_DAYS = 5;
   const needsNudge = (contactId: string): boolean => {
     const latest = latestSendByContact.get(contactId);
@@ -259,6 +263,11 @@ export function ContactsView({
           if (cat !== 'a&r' && cat !== 'label' && !role.includes('a&r') && !role.includes('label')) return false;
         } else if (categoryFilter === 'friends') {
           if (cat !== 'friend' && !role.includes('friend')) return false;
+        } else if (categoryFilter === 'nudge') {
+          // Virtual segment — orthogonal to category. Surfaces only
+          // contacts whose most recent send has gone cold and needs a
+          // follow-up.
+          if (!needsNudge(c.id)) return false;
         }
       }
       // Engagement filter — checks against the same statusFor() tiers.
@@ -379,9 +388,10 @@ export function ContactsView({
         <>
           {/* Five legendary CRM segment chips */}
           <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-            {(['all', 'rappers', 'producers', 'a&r', 'friends'] as const).map((segment) => {
+            {(['all', 'rappers', 'producers', 'a&r', 'friends', 'nudge'] as const).map((segment) => {
               const count = contacts.filter((c) => {
                 if (segment === 'all') return true;
+                if (segment === 'nudge') return needsNudge(c.id);
                 const cat = c.category?.toLowerCase() || '';
                 const role = c.role?.toLowerCase() || '';
                 if (segment === 'producers') return cat === 'producer' || role.includes('producer');
@@ -391,17 +401,27 @@ export function ContactsView({
                 return false;
               }).length;
               
+              // The "nudge" chip gets an amber tone so it reads as a
+              // to-do rather than a taxonomy filter. When count is 0
+              // we dim it — nothing actionable, no visual noise.
+              const isNudge = segment === 'nudge';
+              const nudgeHot = isNudge && count > 0;
+              const label = isNudge ? `needs nudge` : segment;
               return (
                 <button
                   key={segment}
                   onClick={() => setCategoryFilter(segment)}
                   className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
                     categoryFilter === segment
-                      ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/15'
-                      : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#1a160f]'
+                      ? isNudge
+                        ? 'bg-amber-500/90 text-black shadow-lg shadow-amber-500/20'
+                        : 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/15'
+                      : nudgeHot
+                        ? 'bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+                        : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#1a160f]'
                   }`}
                 >
-                  {segment}
+                  {label}
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
                     categoryFilter === segment ? 'bg-black/10 text-black' : 'bg-white/5 text-[#5a5142]'
                   }`}>{count}</span>
