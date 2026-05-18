@@ -75,6 +75,11 @@ interface Track {
   duration_seconds?: number | null;
   bpm?: number | null;
   key?: string | null;
+  // Per-track listing (migration 021). NULL on either field
+  // means "inherit profile default" for the display logic below.
+  description?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
 }
 
 interface Project {
@@ -262,8 +267,37 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
                           {t.bpm ? ` · ${t.bpm} bpm` : ''}
                           {t.key ? ` · ${t.key}` : ''}
                         </p>
+                        {/* Per-track blurb. Producer fills this in the
+                            library detail page; preserves line breaks
+                            so multi-line descriptions read clean. */}
+                        {t.description && (
+                          <p className="text-[12px] text-[#a08a6a] mt-1.5 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                            {t.description}
+                          </p>
+                        )}
                       </div>
-                      <ChevronRight size={14} className="text-[#3a3328] shrink-0 group-hover:text-[#E8DCC8] transition-colors" />
+                      {/* Right rail: per-track price chip if either
+                          override is set, otherwise the chevron. The
+                          chip shows the lower (lease) price as the
+                          headline number; clients shopping for
+                          exclusives will read the full pricing on
+                          the license card below. */}
+                      {(t.lease_price_usd != null || t.exclusive_price_usd != null) ? (
+                        <div className="shrink-0 flex flex-col items-end gap-0.5">
+                          {t.lease_price_usd != null && (
+                            <span className="text-[11px] font-mono font-bold text-[#E8D8B8] tabular-nums">
+                              ${Number(t.lease_price_usd).toLocaleString()}
+                            </span>
+                          )}
+                          {t.exclusive_price_usd != null && (
+                            <span className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider tabular-nums">
+                              ${Number(t.exclusive_price_usd).toLocaleString()} excl.
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <ChevronRight size={14} className="text-[#3a3328] shrink-0 group-hover:text-[#E8DCC8] transition-colors" />
+                      )}
                     </button>
                   </li>
                 );

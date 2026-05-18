@@ -61,6 +61,11 @@ export const TrackPatchBodySchema = z.object({
   danceability: z.number().nullable().optional(),
   valence: z.number().nullable().optional(),
   acousticness: z.number().nullable().optional(),
+  // Per-track listing fields (migration 021). NULL on either price
+  // inherits the producer's profile default.
+  description: z.string().max(5000).nullable().optional(),
+  lease_price_usd: z.number().nonnegative().nullable().optional(),
+  exclusive_price_usd: z.number().nonnegative().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 

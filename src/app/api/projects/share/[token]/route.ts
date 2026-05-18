@@ -109,7 +109,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const [tracksRes, stemsRes] = await Promise.all([
         admin
           .from('tracks')
-          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
+          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd')
           .in('id', trackIds),
         admin
           .from('stems')
