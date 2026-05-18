@@ -52,6 +52,10 @@ export function ContactsView({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'engaged' | 'cold'>('all');
   const [sortMode, setSortMode] = useState<'recent' | 'name' | 'category'>('recent');
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Bulk-nudge spinner state — separate flag so the delete + nudge
+  // buttons can each show their own loading state if both happen
+  // back-to-back.
+  const [bulkNudging, setBulkNudging] = useState(false);
   // Multi-select state for bulk operations. We keep a Set in state so
   // toggling stays O(1) regardless of contact-count.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -161,6 +165,31 @@ export function ContactsView({
     }
     return map;
   }, [beatSends]);
+
+  // Whole most-recent BeatSend row per contact — used by the bulk
+  // Nudge action so it can grab `track_ids` + `share_token` without
+  // a second pass over beatSends. Indexed by contact_id, sorted by
+  // sent_at lexicographically (ISO).
+  const latestSendByContact = useMemo(() => {
+    const map = new Map<string, BeatSend>();
+    for (const s of beatSends) {
+      const cur = map.get(s.contact_id);
+      if (!cur || s.sent_at > cur.sent_at) map.set(s.contact_id, s);
+    }
+    return map;
+  }, [beatSends]);
+
+  // Shared predicate: "this contact's most recent send is stale and
+  // still in the `sent` stage." Used by the bulk-nudge action and
+  // (eventually) the Needs-Nudge segment chip. Five days = default
+  // cadence; campaigns can override per-target later.
+  const NUDGE_AFTER_DAYS = 5;
+  const needsNudge = (contactId: string): boolean => {
+    const latest = latestSendByContact.get(contactId);
+    if (!latest || latest.status !== 'sent') return false;
+    const days = (Date.now() - Date.parse(latest.sent_at)) / 86_400_000;
+    return days > NUDGE_AFTER_DAYS;
+  };
 
   // Latest send STATUS per contact — drives the new pipeline-stage
   // column. Status updates happen in ContactHistoryDrawer (already
@@ -819,7 +848,7 @@ export function ContactsView({
         count={selectedIds.size}
         noun={['contact', 'contacts']}
         onClear={() => setSelectedIds(new Set())}
-        busy={bulkDeleting}
+        busy={bulkDeleting || bulkNudging}
         actions={[
           {
             label: `Send to ${selectedIds.size}`,
@@ -827,6 +856,72 @@ export function ContactsView({
             intent: 'primary',
             onClick: () => setSendQueue(selectedContacts),
           },
+          // Bulk Nudge — surfaces only when at least one selected
+          // contact has a stale `sent` beat older than the nudge
+          // cadence. Click fires a follow-up email per stale contact
+          // and bumps each underlying beat_send to `negotiating`.
+          // Skips selected contacts that don't need a nudge so the
+          // user can lasso a category chip without worrying about
+          // hitting fresh recipients.
+          ...(() => {
+            const stale = selectedContacts.filter((c) => needsNudge(c.id) && c.email);
+            if (stale.length === 0) return [];
+            return [{
+              label: `Nudge ${stale.length}`,
+              icon: <Mail size={11} />,
+              onClick: async () => {
+                const ok = await confirmToast(
+                  `Nudge ${stale.length} stale contact${stale.length === 1 ? '' : 's'}?`,
+                  'Sends a polite follow-up email and bumps each one to "negotiating". Contacts without email are skipped.',
+                  { confirmLabel: 'Send nudges', cancelLabel: 'Cancel' },
+                );
+                if (!ok) return;
+                setBulkNudging(true);
+                const results = await Promise.allSettled(
+                  stale.map(async (c) => {
+                    const latest = latestSendByContact.get(c.id);
+                    if (!latest) throw new Error('no send');
+                    // Generic but polite follow-up. The single-contact
+                    // NudgeModal lets the user customize per send; the
+                    // bulk version trades editability for throughput.
+                    const message =
+                      `Hi ${c.name},\n\nJust circling back on what I sent over recently — wanted to make sure it didn't get buried. Let me know if any of it caught your ear, or if you'd like to hear something in a different lane.\n\nBest,`;
+                    const emailRes = await fetch('/api/email', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        contactId: c.id,
+                        email: c.email,
+                        trackIds: latest.track_ids,
+                        shareToken: latest.share_token,
+                        message,
+                      }),
+                    });
+                    if (!emailRes.ok) throw new Error(`email ${emailRes.status}`);
+                    // Move pipeline forward so the contact drops off
+                    // the Needs-Nudge chip immediately.
+                    await fetch(`/api/beat_sends/${latest.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'negotiating' }),
+                    });
+                  }),
+                );
+                const failed = results.filter((r) => r.status === 'rejected').length;
+                setBulkNudging(false);
+                setSelectedIds(new Set());
+                await refetch();
+                if (failed === 0) {
+                  toast.success(`Nudged ${stale.length} contact${stale.length === 1 ? '' : 's'}`);
+                } else {
+                  toast.warning(
+                    `Nudged ${stale.length - failed}, ${failed} failed`,
+                    'Failed sends kept in the list — try again or check the network tab.',
+                  );
+                }
+              },
+            }];
+          })(),
           {
             label: 'Delete',
             icon: <DeleteIcon size={11} />,
