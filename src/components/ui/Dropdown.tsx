@@ -70,15 +70,25 @@ export function Dropdown<T extends string = string>({
   const display = selected?.label ?? placeholder;
 
   // Recompute position whenever opened. Anchored to the trigger's
-  // bounding rect so the menu sits flush underneath, no matter what
-  // scrolling / overflow / stacking context the trigger lives in.
+  // bounding rect. The menu is `position: fixed` — viewport-relative —
+  // so we use the rect coordinates directly. Adding window.scrollY
+  // (the old bug) shifted the menu down by the scroll offset, making
+  // it drift away from its trigger on any scrolled page.
+  //
+  // We also flip up when there's more room above than below, so on
+  // a sticky toolbar near the bottom of the viewport the menu opens
+  // upward instead of getting clipped.
   const reposition = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const menuHeight = menuRef.current?.offsetHeight ?? 240;
+    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceAbove = r.top;
+    const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
     setCoords({
-      top: r.bottom + window.scrollY + 4,
-      left: align === 'right' ? r.right - (menuWidth ?? r.width) + window.scrollX : r.left + window.scrollX,
+      top: openUp ? r.top - menuHeight - 4 : r.bottom + 4,
+      left: align === 'right' ? r.right - (menuWidth ?? r.width) : r.left,
       width: menuWidth ?? r.width,
     });
   }, [align, menuWidth]);
