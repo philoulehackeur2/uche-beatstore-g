@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { WavePlayer } from './WavePlayer';
 import { QueueDrawer } from './QueueDrawer';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,14 +22,29 @@ import { cn } from '@/lib/utils';
  * layer changed. Queue, volume, transport all behave the same.
  */
 export function PlayerBar() {
-  const { currentTrack, isPlaying, togglePlay, next, prev, volume, setVolume, progress, queue } = usePlayer();
-  const [muted, setMuted] = useState(false);
+  const {
+    currentTrack, isPlaying, togglePlay, next, prev,
+    volume, setVolume, progress, queue,
+    // Pulled from the store now, not local useState — local state
+    // was decorative; the playback engine in usePlayer reads these
+    // values to decide auto-advance / shuffle order.
+    shuffle, toggleShuffle, repeat, cycleRepeat,
+  } = usePlayer();
+  // Mute is implemented by setting engine volume to 0 and stashing
+  // the previous level so we can restore it on unmute. Without this,
+  // clicking mute just flipped a local boolean — the audio kept
+  // playing at the previous volume.
+  const muted = volume === 0;
+  const prevVolumeRef = useRef(volume || 0.8);
+  const toggleMute = () => {
+    if (volume > 0) {
+      prevVolumeRef.current = volume;
+      setVolume(0);
+    } else {
+      setVolume(prevVolumeRef.current || 0.8);
+    }
+  };
   const [queueOpen, setQueueOpen] = useState(false);
-  // Shuffle / repeat are visual-only for now (toggles UI state).
-  // Wiring them to the player engine is a separate change — but the
-  // controls live here per the new spec.
-  const [shuffle, setShuffle] = useState(false);
-  const [repeatOn, setRepeatOn] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -133,26 +148,37 @@ export function PlayerBar() {
                 pill is already cramped with transport + cover. Volume
                 stays hidden until md per its hover-slider design. */}
             <button
-              onClick={() => setShuffle((v) => !v)}
+              onClick={toggleShuffle}
               className={cn(
                 'hidden sm:flex w-7 h-7 items-center justify-center transition-colors rounded-full',
                 shuffle ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white',
               )}
               aria-label="Shuffle"
               aria-pressed={shuffle}
+              title={shuffle ? 'Shuffle on' : 'Shuffle off'}
             >
               <Shuffle size={12} />
             </button>
+            {/* Three-state repeat: off → all → one → off. The Repeat icon
+                gets a tiny "1" badge in `one` mode so the user can tell
+                the two on-states apart at a glance — same convention
+                Apple / Spotify use. */}
             <button
-              onClick={() => setRepeatOn((v) => !v)}
+              onClick={cycleRepeat}
               className={cn(
-                'hidden sm:flex w-7 h-7 items-center justify-center transition-colors rounded-full',
-                repeatOn ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white',
+                'hidden sm:flex relative w-7 h-7 items-center justify-center transition-colors rounded-full',
+                repeat !== 'off' ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white',
               )}
-              aria-label="Repeat"
-              aria-pressed={repeatOn}
+              aria-label={`Repeat ${repeat}`}
+              title={
+                repeat === 'off' ? 'Repeat off' :
+                repeat === 'all' ? 'Repeat all' : 'Repeat one'
+              }
             >
               <Repeat size={12} />
+              {repeat === 'one' && (
+                <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none">1</span>
+              )}
             </button>
             <button
               onClick={() => setQueueOpen(true)}
@@ -171,11 +197,12 @@ export function PlayerBar() {
                 touch-only screens where hover isn't a thing anyway. */}
             <div className="hidden md:flex group relative items-center">
               <button
-                onClick={() => setMuted((v) => !v)}
+                onClick={toggleMute}
                 className="w-7 h-7 flex items-center justify-center text-[#6a5d4a] hover:text-white transition-colors rounded-full"
                 aria-label={muted ? 'Unmute' : 'Mute'}
+                title={muted ? 'Unmute' : 'Mute'}
               >
-                {muted || volume === 0 ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
               </button>
               <div className="w-0 group-hover:w-20 overflow-hidden transition-[width] duration-200 flex items-center">
                 <input
@@ -183,8 +210,8 @@ export function PlayerBar() {
                   min="0"
                   max="1"
                   step="0.01"
-                  value={muted ? 0 : volume}
-                  onChange={(e) => { setMuted(false); setVolume(parseFloat(e.target.value)); }}
+                  value={volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="w-full h-1 cursor-pointer accent-white"
                   aria-label="Volume"
                 />
