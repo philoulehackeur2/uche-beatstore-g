@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import {
   Music, Mail, Globe, ExternalLink,
   Play, Pause, ChevronRight, Mic2, Loader2, ShoppingCart,
@@ -10,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import { ShareTrackDetailsDrawer } from '@/components/share/ShareTrackDetailsDrawer';
 
 // lucide-react removed brand icons in recent versions.
 // Small inline SVGs keep the social-pill row working.
@@ -107,9 +107,28 @@ interface Props {
   /** Currently-playing track id, used to flip the play/pause icon. */
   playingId?: string | null;
   isPlaying?: boolean;
+  // Parent player state synchronization
+  currentTime: number;
+  duration: number;
+  progressPct: number;
+  waveRef: React.RefObject<HTMLDivElement | null>;
+  onSeek: (seconds: number) => void;
 }
 
-export function ClientShareVariant({ project, tracks, creator, shareToken, onPlay, playingId, isPlaying }: Props) {
+export function ClientShareVariant({
+  project,
+  tracks,
+  creator,
+  shareToken,
+  onPlay,
+  playingId,
+  isPlaying,
+  currentTime,
+  duration,
+  progressPct,
+  waveRef,
+  onSeek,
+}: Props) {
   // Purchase-return banner. Stripe's success_url + cancel_url both
   // land back on this page with a ?purchase= param. We surface a
   // dismissible toast-row at the top so the buyer knows their
@@ -118,6 +137,10 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
   const router = useRouter();
   const purchaseStatus = searchParams?.get('purchase');
   const [bannerOpen, setBannerOpen] = useState(false);
+
+  // Drawer state for individual track details/checkout
+  const [selectedTrackForDetails, setSelectedTrackForDetails] = useState<Track | null>(null);
+
   useEffect(() => {
     setBannerOpen(purchaseStatus === 'success' || purchaseStatus === 'cancelled');
   }, [purchaseStatus]);
@@ -173,7 +196,8 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
   const hasHero = !!creator?.hero_image_url;
   const hasLicense = creator?.license_lease_price_usd != null
                   || creator?.license_exclusive_price_usd != null
-                  || !!creator?.license_notes?.trim();
+                  || !!creator?.license_notes?.trim()
+                  || !!shareToken;
   const hasContact = !!creator?.contact_email
                   || !!creator?.instagram_handle
                   || !!creator?.twitter_handle
@@ -226,13 +250,11 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
           full-viewport so the track list peeks above the fold. */}
       <div className="relative w-full h-[55vh] md:h-[65vh] overflow-hidden">
         {heroImage ? (
-          <Image
+          <img
             src={heroImage}
             alt=""
-            fill
-            sizes="100vw"
-            className="object-cover"
-            priority
+            className="absolute inset-0 w-full h-full object-cover animate-fade-in"
+            loading="eager"
           />
         ) : (
           // Fallback gradient when no photo at all — uses the same
@@ -273,6 +295,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
               playingId={playingId ?? null}
               onTogglePlay={onPlay}
               size="large"
+              waveRef={waveRef}
             />
           </section>
         )}
@@ -306,53 +329,60 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
               tracks.map((t, i) => {
                 const isCurrent = playingId === t.id;
                 return (
-                  <li key={t.id}>
+                  <li key={t.id} className="flex items-center gap-4 px-4 md:px-5 py-4 hover:bg-white/[0.02] transition-colors group">
+                    
+                    {/* Cover Art Trigger for Play/Pause */}
                     <button
-                      onClick={() => onPlay(t)}
-                      className="group w-full flex items-center gap-4 px-4 md:px-5 py-4 hover:bg-white/[0.02] transition-colors text-left"
+                      onClick={(e) => { e.stopPropagation(); onPlay(t); }}
+                      className="relative w-12 h-12 md:w-14 md:h-14 rounded-lg overflow-hidden bg-[#14110d] border border-[#1f1a13] shrink-0 cursor-pointer focus:outline-none"
                     >
-                      <div className="relative w-12 h-12 md:w-14 md:h-14 rounded-lg overflow-hidden bg-[#14110d] border border-[#1f1a13] shrink-0">
-                        {t.cover_url ? (
-                          <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
-                            <Music size={18} />
-                          </div>
-                        )}
-                        {/* Play/pause icon overlay — visible on hover or
-                            when this track is the active one. */}
-                        <div className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity ${
-                          isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        }`}>
-                          {isCurrent && isPlaying ? <Pause size={18} className="text-white" fill="currentColor" /> : <Play size={18} className="text-white ml-0.5" fill="currentColor" />}
+                      {t.cover_url ? (
+                        <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                          <Music size={18} />
                         </div>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[14px] md:text-[15px] font-medium text-white truncate">
-                          {String(i + 1).padStart(2, '0')} · {t.title}
-                        </p>
-                        <p className="text-[11px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5">
-                          {t.type}
-                          {t.bpm ? ` · ${t.bpm} bpm` : ''}
-                          {t.key ? ` · ${t.key}` : ''}
-                        </p>
-                        {/* Per-track blurb. Producer fills this in the
-                            library detail page; preserves line breaks
-                            so multi-line descriptions read clean. */}
-                        {t.description && (
-                          <p className="text-[12px] text-[#a08a6a] mt-1.5 leading-relaxed whitespace-pre-wrap line-clamp-3">
-                            {t.description}
-                          </p>
+                      )}
+                      
+                      {/* Play/pause icon overlay */}
+                      <div className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity ${
+                        isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}>
+                        {isCurrent && isPlaying ? (
+                          <Pause size={18} className="text-white" fill="currentColor" />
+                        ) : (
+                          <Play size={18} className="text-white ml-0.5" fill="currentColor" />
                         )}
                       </div>
-                      {/* Right rail: per-track price chip if either
-                          override is set, otherwise the chevron. The
-                          chip shows the lower (lease) price as the
-                          headline number; clients shopping for
-                          exclusives will read the full pricing on
-                          the license card below. */}
+                    </button>
+
+                    {/* Metadata Trigger for Drawer Details */}
+                    <button
+                      onClick={() => setSelectedTrackForDetails(t)}
+                      className="min-w-0 flex-1 text-left cursor-pointer focus:outline-none"
+                    >
+                      <p className="text-[14px] md:text-[15px] font-medium text-white truncate group-hover:text-[#D4BFA0] transition-colors">
+                        {String(i + 1).padStart(2, '0')} · {t.title}
+                      </p>
+                      <p className="text-[11px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5">
+                        {t.type}
+                        {t.bpm ? ` · ${t.bpm} bpm` : ''}
+                        {t.key ? ` · ${t.key}` : ''}
+                      </p>
+                      {t.description && (
+                        <p className="text-[12px] text-[#a08a6a] mt-1.5 leading-relaxed whitespace-pre-wrap line-clamp-2">
+                          {t.description}
+                        </p>
+                      )}
+                    </button>
+
+                    {/* Pricing/Chevron Trigger for Drawer Details */}
+                    <button
+                      onClick={() => setSelectedTrackForDetails(t)}
+                      className="shrink-0 flex items-center gap-2 cursor-pointer focus:outline-none"
+                    >
                       {(t.lease_price_usd != null || t.exclusive_price_usd != null) ? (
-                        <div className="shrink-0 flex flex-col items-end gap-0.5">
+                        <div className="flex flex-col items-end gap-0.5">
                           {t.lease_price_usd != null && (
                             <span className="text-[11px] font-mono font-bold text-[#E8D8B8] tabular-nums">
                               ${Number(t.lease_price_usd).toLocaleString()}
@@ -365,7 +395,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
                           )}
                         </div>
                       ) : (
-                        <ChevronRight size={14} className="text-[#3a3328] shrink-0 group-hover:text-[#E8DCC8] transition-colors" />
+                        <ChevronRight size={14} className="text-[#3a3328] group-hover:text-[#E8DCC8] transition-colors" />
                       )}
                     </button>
                   </li>
@@ -396,7 +426,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
         {hasLicense && (
           <section className="mb-16">
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-3">
-              Licensing
+              Licensing (Full Project Collection)
             </p>
             <div className="rounded-2xl border border-[#1f1a13] bg-gradient-to-br from-[#14110d] to-[#0a0907] p-6 md:p-8 relative overflow-hidden">
               <div
@@ -406,7 +436,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
               <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {creator?.license_lease_price_usd != null && (
                   <div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Lease</p>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Lease Bundle</p>
                     <p className="text-3xl font-medium text-white">
                       ${creator.license_lease_price_usd.toLocaleString()}
                     </p>
@@ -418,14 +448,14 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
                         className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:border-white/[0.15] text-[11px] font-bold uppercase tracking-widest text-[#E8DCC8] transition-colors disabled:opacity-40"
                       >
                         {checkoutLoading === 'lease' ? <Loader2 size={12} className="animate-spin" /> : <ShoppingCart size={12} />}
-                        Buy lease
+                        Buy bundle lease
                       </button>
                     )}
                   </div>
                 )}
                 {creator?.license_exclusive_price_usd != null && (
                   <div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Exclusive</p>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">Exclusive Bundle</p>
                     <p className="text-3xl font-medium text-[#E8D8B8]">
                       ${creator.license_exclusive_price_usd.toLocaleString()}
                     </p>
@@ -437,7 +467,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
                         className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] text-[11px] font-bold uppercase tracking-widest transition-colors disabled:opacity-40"
                       >
                         {checkoutLoading === 'exclusive' ? <Loader2 size={12} className="animate-spin text-black" /> : <ShoppingCart size={12} />}
-                        Buy exclusive
+                        Buy bundle exclusive
                       </button>
                     )}
                   </div>
@@ -505,6 +535,24 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
           </section>
         )}
       </div>
+
+      {/* Slide-over details & checkout drawer for individual track selections */}
+      {selectedTrackForDetails && (
+        <ShareTrackDetailsDrawer
+          track={selectedTrackForDetails}
+          projectCover={project.cover_url}
+          creator={creator}
+          shareToken={shareToken}
+          onClose={() => setSelectedTrackForDetails(null)}
+          onPlay={onPlay}
+          isPlaying={isPlaying ?? false}
+          playingId={playingId ?? null}
+          currentTime={currentTime}
+          duration={duration}
+          progressPct={progressPct}
+          onSeek={onSeek}
+        />
+      )}
     </div>
   );
 }

@@ -154,6 +154,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     play: wsPlay,
     pause: wsPause,
     setVolume: wsSetVolume,
+    seek,
   } = useWaveSurfer({
     container: waveRef,
     url: (activeTrack && !useDawCanvas) ? audioSrc(activeTrack.audio_url) : null,
@@ -513,25 +514,33 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // the default for now; we'll specialise each variant in follow-ups).
   if (share?.recipient_kind === 'client' && project) {
     return (
-      <ClientShareVariant
-        project={project}
-        tracks={tracks}
-        creator={creator}
-        shareToken={share.sales_enabled ? token : undefined}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) {
-            if (idx === activeIndex) {
-              setIsPlaying((p) => !p);
-            } else {
-              setActiveIndex(idx);
-              setIsPlaying(true);
+      <>
+        <div ref={waveRef} className="hidden" />
+        <ClientShareVariant
+          project={project}
+          tracks={tracks}
+          creator={creator}
+          shareToken={share.sales_enabled ? token : undefined}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) {
+              if (idx === activeIndex) {
+                setIsPlaying((p) => !p);
+              } else {
+                setActiveIndex(idx);
+                setIsPlaying(true);
+              }
             }
-          }
-        }}
-      />
+          }}
+          currentTime={currentTime}
+          duration={duration}
+          progressPct={progressPct}
+          waveRef={waveRef}
+          onSeek={(seconds) => seek(seconds)}
+        />
+      </>
     );
   }
 
