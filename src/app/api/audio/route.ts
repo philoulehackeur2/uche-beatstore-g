@@ -70,7 +70,15 @@ export async function GET(req: NextRequest) {
   headers.set('access-control-allow-methods', 'GET, HEAD, OPTIONS');
   headers.set('access-control-allow-headers', 'Range, Content-Type');
   headers.set('access-control-expose-headers', 'Content-Length, Content-Range, Accept-Ranges');
-  headers.set('cache-control', 'public, max-age=3600');
+  // Aggressive caching. Audio URLs from R2 are content-addressed —
+  // re-uploads get a new key, never a mutated body — so we can let
+  // both the browser and Vercel's edge cache them for a long time.
+  //   max-age   = browser cache
+  //   s-maxage  = shared/CDN cache (Vercel)
+  //   immutable = the browser skips even an If-Modified-Since
+  //               revalidation on reload because we promise the
+  //               bytes can't change for this URL
+  headers.set('cache-control', 'public, max-age=86400, s-maxage=31536000, immutable');
 
   // Download mode: stamp Content-Disposition so the browser actually
   // saves the file instead of navigating to it. Chrome/Firefox ignore
