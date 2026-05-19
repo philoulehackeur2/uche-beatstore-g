@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Save,
+  X, Share2, Music, Pencil, Download, Save, Plus, Send,
 } from 'lucide-react';
-import { toast } from '@/hooks/useToast';
+import { toast, confirmToast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
+import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { QuickShareModal } from '@/components/share/QuickShareModal';
 
 interface ShareLink {
   id: string;
@@ -40,6 +42,13 @@ export default function LinksPage() {
   // Mirrors the rest of the redesigned modals (Project share, drawer)
   // so the visual language stays consistent.
   const [active, setActive] = useState<ShareLink | null>(null);
+  // Multi-select state. Same Set<string> pattern as contacts/library
+  // so the floating BatchActionBar feels consistent.
+  const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Quick-share modal: lets the user spin up an ad-hoc share over
+  // ANY library tracks without making a project or playlist first.
+  const [showQuickShare, setShowQuickShare] = useState(false);
 
   const fetchLinks = async () => {
     setLoading(true);
@@ -139,9 +148,18 @@ export default function LinksPage() {
               <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Links</h1>
               <p className="text-[11px] text-[#a08a6a] max-w-md">Every share you&apos;ve sent. Tap a card to open and copy.</p>
             </div>
-            <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider mb-1">
-              {links.length} link{links.length !== 1 ? 's' : ''}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
+                {links.length} link{links.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => setShowQuickShare(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium transition-colors active:scale-[0.98]"
+              >
+                <Plus size={13} />
+                New share
+              </button>
+            </div>
           </div>
         </div>
 
@@ -157,21 +175,49 @@ export default function LinksPage() {
           </div>
         ) : (
           // Card grid — 1 col on mobile, 2 on md, 3 on lg. Each card
-          // is a button that opens the glass popup.
+          // is a button that opens the glass popup. Top-left corner
+          // holds a checkbox for multi-select.
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {links.map((link) => {
               const expired = isExpired(link);
+              const selected = selectedTokens.has(link.token);
               return (
-                <button
+                <div
                   key={link.token}
                   onClick={() => setActive(link)}
                   className={cn(
-                    'group relative text-left rounded-2xl p-4 transition-all',
-                    'bg-gradient-to-br from-[#14110d] to-[#0a0907] border border-[#1f1a13]',
-                    'hover:border-[#2d2620] hover:from-[#1a160f] active:scale-[0.99]',
+                    'group relative text-left rounded-2xl p-4 transition-all cursor-pointer',
+                    'bg-gradient-to-br from-[#14110d] to-[#0a0907] border',
+                    selected
+                      ? 'border-[#D4BFA0]/40 from-[#2A2418]/40'
+                      : 'border-[#1f1a13] hover:border-[#2d2620] hover:from-[#1a160f]',
+                    'active:scale-[0.99]',
                     expired && 'opacity-40',
                   )}
                 >
+                  {/* Selection checkbox — click swallowed so it doesn't
+                      open the popup. Stays visible on hover even when
+                      the row isn't selected, so the user knows the
+                      affordance exists. */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTokens((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(link.token)) next.delete(link.token);
+                        else next.add(link.token);
+                        return next;
+                      });
+                    }}
+                    className={cn(
+                      'absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
+                      selected
+                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
+                        : 'border-[#2d2620] bg-[#0a0907] opacity-0 group-hover:opacity-100 hover:border-[#4a4338]',
+                    )}
+                  >
+                    {selected && <Check size={11} className="text-black" strokeWidth={3} />}
+                  </div>
                   {/* Top row — title + kind + open-in-new shortcut. */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
@@ -219,7 +265,7 @@ export default function LinksPage() {
                       {link.allow_downloads !== false && <span className="text-[9px] uppercase">dl</span>}
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -241,6 +287,54 @@ export default function LinksPage() {
           fullUrl={fullUrl(active.token)}
           expired={isExpired(active)}
           formatDate={formatDate}
+        />
+      )}
+
+      {/* Floating bulk-action bar — appears when ≥1 link is selected.
+          Fans out DELETEs in parallel so a 20-link cleanup doesn't
+          take 20 sequential round-trips. */}
+      <BatchActionBar
+        count={selectedTokens.size}
+        noun={['link', 'links']}
+        onClear={() => setSelectedTokens(new Set())}
+        busy={bulkBusy}
+        actions={[
+          {
+            label: 'Delete',
+            icon: <DeleteIcon size={11} />,
+            intent: 'danger',
+            onClick: async () => {
+              const tokens = Array.from(selectedTokens);
+              const ok = await confirmToast(
+                `Delete ${tokens.length} link${tokens.length === 1 ? '' : 's'}?`,
+                'Recipients with these URLs will get 404. This is permanent.',
+                { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true },
+              );
+              if (!ok) return;
+              setBulkBusy(true);
+              const results = await Promise.allSettled(
+                tokens.map((t) => fetch(`/api/share/${t}`, { method: 'DELETE' }).then((r) => {
+                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                })),
+              );
+              const failed = results.filter((r) => r.status === 'rejected').length;
+              setBulkBusy(false);
+              setSelectedTokens(new Set());
+              setLinks((prev) => prev.filter((l) => !tokens.includes(l.token)));
+              if (failed === 0) toast.success(`Deleted ${tokens.length} link${tokens.length === 1 ? '' : 's'}`);
+              else toast.warning(`Deleted ${tokens.length - failed}, ${failed} failed`);
+            },
+          },
+        ]}
+      />
+
+      {/* Ad-hoc share — pick tracks from the library, generate a
+          share link without first needing to make a project or
+          playlist. The endpoint accepts a track_ids[] directly. */}
+      {showQuickShare && (
+        <QuickShareModal
+          onClose={() => setShowQuickShare(false)}
+          onCreated={() => { setShowQuickShare(false); fetchLinks(); }}
         />
       )}
     </DashboardLayout>
