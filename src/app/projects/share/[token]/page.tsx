@@ -167,6 +167,72 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     },
   });
 
+  // Keyboard & Media Session API controls (Spotify-style)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying((p) => !p);
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        setActiveIndex((i) => (i < tracks.length - 1 ? (setIsPlaying(true), i + 1) : i));
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        setActiveIndex((i) => (i > 0 ? (setIsPlaying(true), i - 1) : i));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tracks.length, setIsPlaying, setActiveIndex]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !activeTrack) return;
+
+    const displayArtist = creator?.display_name || 'U2C Beatstore';
+    const albumCover = activeTrack.cover_url || project?.cover_url || '';
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: activeTrack.title.toUpperCase(),
+      artist: displayArtist,
+      album: project?.name || 'Shared Project',
+      artwork: albumCover
+        ? [
+            { src: albumCover, sizes: '96x96', type: 'image/png' },
+            { src: albumCover, sizes: '128x128', type: 'image/png' },
+            { src: albumCover, sizes: '192x192', type: 'image/png' },
+            { src: albumCover, sizes: '256x256', type: 'image/png' },
+            { src: albumCover, sizes: '384x384', type: 'image/png' },
+            { src: albumCover, sizes: '512x512', type: 'image/png' },
+          ]
+        : [],
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+    navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      setActiveIndex((i) => (i > 0 ? (setIsPlaying(true), i - 1) : i));
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      setActiveIndex((i) => (i < tracks.length - 1 ? (setIsPlaying(true), i + 1) : i));
+    });
+
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('previoustrack', null);
+      navigator.mediaSession.setActionHandler('nexttrack', null);
+    };
+  }, [activeTrack, tracks.length, project?.name, creator?.display_name, setIsPlaying, setActiveIndex]);
+
   // ── comments ────────────────────────────────────────────────────────
   const [comments, setComments] = useState<Comment[]>([]);
   const [authorName, setAuthorName] = useState('');
@@ -546,47 +612,55 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   if (share?.recipient_kind === 'producer' && project) {
     return (
-      <ProducerShareVariant
-        project={project}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) {
-            if (idx === activeIndex) {
-              setIsPlaying((p) => !p);
-            } else {
-              setActiveIndex(idx);
-              setIsPlaying(true);
+      <>
+        <div ref={waveRef} className="hidden" />
+        <ProducerShareVariant
+          project={project}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) {
+              if (idx === activeIndex) {
+                setIsPlaying((p) => !p);
+              } else {
+                setActiveIndex(idx);
+                setIsPlaying(true);
+              }
             }
-          }
-        }}
-      />
+          }}
+          waveRef={waveRef}
+        />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'rapper' && project) {
     return (
-      <RapperShareVariant
-        project={project}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) {
-            if (idx === activeIndex) {
-              setIsPlaying((p) => !p);
-            } else {
-              setActiveIndex(idx);
-              setIsPlaying(true);
+      <>
+        <div ref={waveRef} className="hidden" />
+        <RapperShareVariant
+          project={project}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) {
+              if (idx === activeIndex) {
+                setIsPlaying((p) => !p);
+              } else {
+                setActiveIndex(idx);
+                setIsPlaying(true);
+              }
             }
-          }
-        }}
-      />
+          }}
+          waveRef={waveRef}
+        />
+      </>
     );
   }
 

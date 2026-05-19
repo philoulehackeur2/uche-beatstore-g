@@ -52,9 +52,10 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
+  waveRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
+export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, waveRef }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
 
@@ -86,6 +87,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                 playingId={playingId ?? null}
                 onTogglePlay={onPlay}
                 size="large"
+                waveRef={waveRef}
               />
             </div>
           )}
