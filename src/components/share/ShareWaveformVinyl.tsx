@@ -31,6 +31,8 @@ interface Props {
   /** Visual variant — `compact` is for sidebars where 200px is the
    *  cap; `large` is for hero spots. */
   size?: 'compact' | 'large';
+  /** External waveRef from parent's WaveSurfer hook. */
+  waveRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -55,6 +57,7 @@ export function ShareWaveformVinyl({
   playingId,
   onTogglePlay,
   size = 'large',
+  waveRef,
 }: Props) {
   if (!track) return null;
 
@@ -135,19 +138,21 @@ export function ShareWaveformVinyl({
         )}
       </div>
 
-      {/* Inline waveform — wired to the global PlayerBar via WavePlayer's
-          `track` prop. Clicking the embedded play button promotes the
-          track to the bottom player instead of starting a second
-          decoder; the vinyl above mirrors the play state because it
-          reads the same usePlayer store the parent uses. */}
-      <div className="w-full max-w-2xl">
-        <WavePlayer
-          url={track.audio_url}
-          peaksUrl={track.peaks_url ?? null}
-          trackId={track.id}
-          track={track as any}
-          height={48}
-        />
+      {/* Waveform visual — if parent waveRef is supplied, we let the parent's
+          WaveSurfer handle layout/rendering directly to prevent audio collisions.
+          Otherwise fall back to the standalone WavePlayer component. */}
+      <div className="w-full max-w-2xl bg-[#0c0a08]/30 rounded-lg p-2 border border-white/[0.02]">
+        {waveRef ? (
+          <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
+        ) : (
+          <WavePlayer
+            url={track.audio_url}
+            peaksUrl={track.peaks_url ?? null}
+            trackId={track.id}
+            track={track as any}
+            height={48}
+          />
+        )}
       </div>
     </div>
   );

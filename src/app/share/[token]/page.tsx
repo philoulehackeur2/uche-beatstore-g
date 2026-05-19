@@ -266,65 +266,86 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
   if (share?.recipient_kind === 'client') {
     return (
-      <ClientShareVariant
-        project={projectMock}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) selectTrack(idx);
-        }}
-      />
+      <>
+        <div ref={waveRef} className="hidden" />
+        <ClientShareVariant
+          project={projectMock}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) selectTrack(idx);
+          }}
+          currentTime={currentTime}
+          duration={duration}
+          progressPct={progressPct}
+          waveRef={waveRef}
+          onSeek={(seconds) => {
+            if (ws.current && duration > 0) {
+              ws.current.seekTo(seconds / duration);
+            }
+          }}
+        />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'producer') {
     return (
-      <ProducerShareVariant
-        project={projectMock}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) selectTrack(idx);
-        }}
-      />
+      <>
+        <div ref={waveRef} className="hidden" />
+        <ProducerShareVariant
+          project={projectMock}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) selectTrack(idx);
+          }}
+        />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'rapper') {
     return (
-      <RapperShareVariant
-        project={projectMock}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) selectTrack(idx);
-        }}
-      />
+      <>
+        <div ref={waveRef} className="hidden" />
+        <RapperShareVariant
+          project={projectMock}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) selectTrack(idx);
+          }}
+        />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'friend') {
     return (
-      <FriendShareVariant
-        project={projectMock}
-        tracks={tracks}
-        creator={creator}
-        playingId={activeTrack?.id ?? null}
-        isPlaying={isPlaying}
-        onPlay={(t) => {
-          const idx = tracks.findIndex((x) => x.id === t.id);
-          if (idx >= 0) selectTrack(idx);
-        }}
-      />
+      <>
+        <div ref={waveRef} className="hidden" />
+        <FriendShareVariant
+          project={projectMock}
+          tracks={tracks}
+          creator={creator}
+          playingId={activeTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onPlay={(t) => {
+            const idx = tracks.findIndex((x) => x.id === t.id);
+            if (idx >= 0) selectTrack(idx);
+          }}
+        />
+      </>
     );
   }
 
