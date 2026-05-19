@@ -541,7 +541,6 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         project={project}
         tracks={tracks}
         creator={creator}
-        stems={stems}
         playingId={activeTrack?.id ?? null}
         isPlaying={isPlaying}
         onPlay={(t) => {

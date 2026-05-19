@@ -286,7 +286,6 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         project={projectMock}
         tracks={tracks}
         creator={creator}
-        stems={stems}
         playingId={activeTrack?.id ?? null}
         isPlaying={isPlaying}
         onPlay={(t) => {
