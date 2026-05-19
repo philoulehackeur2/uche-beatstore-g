@@ -29,6 +29,7 @@ import { audioSrc } from '@/lib/audio/url';
 import { StudioEngine, ChannelKey, playKick, playSnare, playHat, playClap } from '@/lib/audio/engine';
 import { toast } from '@/hooks/useToast';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
+import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 import { StudioMasterFX } from '@/components/studio/sections/StudioMasterFX';
 import { StudioTrackPicker } from '@/components/studio/sections/StudioTrackPicker';
 import { StudioTransport } from '@/components/studio/sections/StudioTransport';
@@ -777,6 +778,15 @@ export function StudioWorkstation() {
                   </div>
                 </div>
                 <LyricsStudio trackId={active.id} />
+              </div>
+
+              {/* Listing details — description + lease/exclusive price
+                  overrides for the active track. Same editor used on
+                  /library/[id]; surfacing it here means the producer
+                  can finalize the beat AND price it without context
+                  switching. Auto-saves on blur. */}
+              <div className="border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
+                <TrackListingEditor track={active} />
               </div>
 
               {/* Last take — extracted to sections/StudioLastTake. */}
