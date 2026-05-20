@@ -157,9 +157,9 @@ export default function ProjectsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
         {/* Header */}
-        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#2A2418]/30 via-[#1a160f]/20 to-[#0a0907] p-8">
+        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#2A2418]/30 via-[#1a160f]/20 to-[#0a0907] p-5 sm:p-7 md:p-8">
           {/* Abstract Image Background */}
           <div
             className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-2.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay"
@@ -172,7 +172,7 @@ export default function ProjectsPage() {
           <div className="relative z-10 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Work in progress</p>
-              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Projects</h1>
+              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Projects</h1>
               <p className="text-[11px] text-[#a08a6a] max-w-md">Active production. Tracks you&apos;re still working on — with stems, versions, and references.</p>
             </div>
             <div className="flex items-center gap-4">

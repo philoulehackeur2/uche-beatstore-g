@@ -47,7 +47,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-8 shadow-xl">
+    <section className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-5 sm:p-7 md:p-8 shadow-xl">
       <div className="flex items-center gap-3 mb-6 border-b border-[#1a160f] pb-4">
         <span className="text-[#a08a6a]">{icon}</span>
         <div>
@@ -148,12 +148,12 @@ export default function ProfilePage() {
       <div className="max-w-[860px] mx-auto px-4 md:px-10 pt-6 pb-32">
 
         {/* Page header */}
-        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-5 sm:p-7 md:p-8">
           <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-3.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Creator</p>
-              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-1">Profile</h1>
+              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-1">Profile</h1>
               <p className="text-[11px] text-[#a08a6a] mt-2">{user?.email}</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">

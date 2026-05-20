@@ -346,7 +346,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in" 
         onClick={onClose}
       />
-      <div className="fixed right-0 top-0 bottom-0 w-[420px] bg-[#0c0a08] border-l border-white/[0.04] z-50 flex flex-col shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-500">
+      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0a08] border-l border-white/[0.04] z-50 flex flex-col shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-500">
         {/* Glass header — backdrop-blur + radial gradient highlight so the
             top of the drawer reads as a lifted surface, not just another
             dark block stacked on dark. The accent dot in the corner is

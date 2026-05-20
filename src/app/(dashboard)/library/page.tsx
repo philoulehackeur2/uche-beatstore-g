@@ -341,14 +341,14 @@ export default function LibraryPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
         {/* Hero — gradient panel with the library "cover" tile, title,
             stats, and the two primary actions (Play / Shuffle). Builds on
             the same gradient + glass language as the project detail
             cover, only flatter and wider. Filter chips and the secondary
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
-        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/35 via-[#2A2418]/25 to-[#0c0c0c] p-7 transition-all duration-700">
+        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/35 via-[#2A2418]/25 to-[#0c0c0c] p-4 sm:p-6 md:p-7 transition-all duration-700">
           {/* Dynamic Image Background */}
           <div
             className="absolute inset-0 z-0 bg-cover bg-center opacity-25 mix-blend-overlay blur-[2px] transition-all duration-700"
@@ -358,9 +358,9 @@ export default function LibraryPage() {
             className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-25 z-0 transition-all duration-700"
             style={{ background: heroCoverUrl ? 'none' : 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
           />
-          <div className="relative z-10 flex items-end gap-7">
+          <div className="relative z-10 flex items-end gap-4 sm:gap-5 md:gap-7">
             {/* Dynamic Miniature Vinyl Record Card */}
-            <div className="relative w-[140px] h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
+            <div className="relative w-[88px] h-[88px] sm:w-[120px] sm:h-[120px] md:w-[140px] md:h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
               {heroCoverUrl ? (
                 <>
                   <img loading="lazy"
@@ -398,8 +398,8 @@ export default function LibraryPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E8D8B8] mb-2">Vault</p>
-              <h1 className="text-[56px] font-bold tracking-tight text-white leading-none mb-3 font-heading">Library</h1>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E8D8B8] mb-1 sm:mb-2">Vault</p>
+              <h1 className="text-[28px] sm:text-[40px] md:text-[56px] font-bold tracking-tight text-white leading-none mb-2 sm:mb-3 font-heading">Library</h1>
               <p className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">
                 {tracks.length} track{tracks.length !== 1 ? 's' : ''}
                 {totalDurationLabel && <> · {totalDurationLabel}</>}
@@ -433,7 +433,7 @@ export default function LibraryPage() {
                   )}
                 </div>
               )}
-              <div className="flex items-center gap-2 mt-5">
+              <div className="flex items-center gap-2 mt-4 sm:mt-5 flex-wrap">
                 <button
                   onClick={playAll}
                   disabled={!filtered.length}
@@ -529,8 +529,8 @@ export default function LibraryPage() {
         {/* Secondary toolbar — search on the left, sort dropdown on the
             right. Lives below the chips so the hero + chip strip read
             as the identity row, and the toolbar is the actual control. */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
+          <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" />
             <input
               placeholder="Search tracks"

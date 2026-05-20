@@ -311,7 +311,7 @@ export function Sidebar() {
                 ? <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
                 : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={9} /></div>}
             </div>
-            <p className="text-[10px] text-[#a08a6a] truncate flex-1 font-medium">{currentTrack.title}</p>
+            <p className="text-[10px] text-[#a08a6a] truncate flex-1 font-medium">{currentTrack.title || 'Untitled'}</p>
             <span className="flex gap-0.5 items-end h-2.5 shrink-0">
               <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '5px', animationDelay: '0ms' }} />
               <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '9px', animationDelay: '120ms' }} />

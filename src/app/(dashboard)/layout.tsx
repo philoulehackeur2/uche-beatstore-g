@@ -1,5 +1,6 @@
 import { TopBar } from '@/components/nav/TopBar';
 import { PlayerBar } from '@/components/player/PlayerBar';
+import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
 import { UploadsTray } from '@/components/upload/UploadsTray';
 import { StemWarmup } from '@/components/system/StemWarmup';
 
@@ -11,6 +12,7 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
         {children}
       </main>
       <PlayerBar />
+      <MediaSessionBridge />
       <UploadsTray />
       <StemWarmup />
     </div>

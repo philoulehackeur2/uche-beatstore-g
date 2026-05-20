@@ -40,7 +40,7 @@ export default function OfflinePage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
         <div className="flex items-end justify-between mb-8 pb-6 border-b border-[#16130e]">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Available offline</p>

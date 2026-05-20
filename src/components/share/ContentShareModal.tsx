@@ -105,7 +105,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
       setPassword('');
       fetchShares();
     } catch (err: any) {
-      toast.error('Couldn't create share link', err?.message);
+      toast.error('Couldn’t create share link', err?.message);
     } finally {
       setGenerating(false);
     }

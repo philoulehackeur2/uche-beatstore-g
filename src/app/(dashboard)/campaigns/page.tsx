@@ -67,12 +67,12 @@ export default function CampaignsPage() {
       <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
         {/* Header */}
         <div className="mb-6 pb-6 border-b border-[#16130e]">
-          <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
+          <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-5 sm:p-7 md:p-8">
             <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-3.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
             <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CAMPAIGNS</p>
-                <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">
+                <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">
                   Campaigns
                 </h1>
                 <p className="text-[11px] text-[#a08a6a] max-w-md">

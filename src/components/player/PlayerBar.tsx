@@ -96,8 +96,8 @@ export function PlayerBar() {
                 <ChevronDown size={14} className="text-white rotate-180" />
               </div>
             </button>
-            <div className="min-w-0 max-w-[120px] md:max-w-[160px]">
-              <h4 className="text-[12px] font-medium text-[#E8DCC8] truncate leading-tight">{currentTrack.title}</h4>
+            <div className="min-w-0 flex-1 md:flex-initial md:max-w-[160px]">
+              <h4 className="text-[12px] font-medium text-[#E8DCC8] truncate leading-tight">{currentTrack.title || 'Untitled'}</h4>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
                   {currentTrack.type}{currentTrack.bpm ? ` · ${currentTrack.bpm}` : ''}
@@ -303,7 +303,7 @@ export function PlayerBar() {
             <div className="pb-6">
               <div className="flex items-start justify-between gap-3 mb-1">
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight truncate flex-1">
-                  {currentTrack.title}
+                  {currentTrack.title || 'Untitled'}
                 </h2>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
