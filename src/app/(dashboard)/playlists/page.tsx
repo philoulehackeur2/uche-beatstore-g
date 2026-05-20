@@ -8,10 +8,12 @@
 
 import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, ListMusic, Plus, Check } from 'lucide-react';
+import { Loader2, Music, ListMusic, Plus, Check, Play, Share2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { usePlayer } from '@/hooks/usePlayer';
 import { cn } from '@/lib/utils';
 
 interface Playlist {
@@ -19,19 +21,27 @@ interface Playlist {
   name: string;
   cover_url?: string | null;
   track_count?: number;
+  total_duration?: number | null;
+  // First few track covers for the mosaic fallback art
+  preview_covers?: (string | null)[];
+}
+
+function fmtDuration(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${Math.max(1, m)} min`;
 }
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  // Selection mode for batch-delete. Disabled by default so the
-  // common case (clicking a card to open it) stays one click. A small
-  // "Select" toggle near the New-playlist button activates this mode;
-  // cards become checkable and the action bar appears.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const { setTrack, setQueue } = usePlayer();
+  const router = useRouter();
 
   const fetchPlaylists = async () => {
     try {
@@ -160,43 +170,95 @@ export default function PlaylistsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
             {playlists.map((playlist) => {
               const selected = selectedIds.has(playlist.id);
-              const cardInner = (
+              const covers = playlist.preview_covers?.filter(Boolean) ?? [];
+              const count = playlist.track_count ?? 0;
+
+              const artBlock = (
+                <div className={cn(
+                  'relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200',
+                  selected ? 'border-[#D4BFA0]/60' : 'border-[#1a160f] group-hover:border-[#2d2620]',
+                )}>
+                  {/* Cover art or mosaic or placeholder */}
+                  {playlist.cover_url ? (
+                    <img loading="lazy" src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+                  ) : covers.length >= 4 ? (
+                    <div className="w-full h-full grid grid-cols-2 gap-px bg-[#1a160f]">
+                      {covers.slice(0, 4).map((url, i) => (
+                        <div key={i} className="overflow-hidden bg-[#14110d]">
+                          {url
+                            ? <img loading="lazy" src={url} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center"><Music size={12} className="text-[#2d2620]" /></div>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
+                      <ListMusic size={32} className="text-[#2d2620]" />
+                    </div>
+                  )}
+
+                  {/* Hover overlay — Play + Open buttons */}
+                  {!selectMode && (
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            const res = await fetch(`/api/playlists/${playlist.id}/tracks`);
+                            const data = await res.json();
+                            const tracks = Array.isArray(data) ? data : data.tracks ?? [];
+                            if (tracks.length > 0) { setQueue(tracks); setTrack(tracks[0]); }
+                          } catch {}
+                        }}
+                        className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-xl"
+                        title="Play playlist"
+                      >
+                        <Play size={16} fill="currentColor" className="ml-0.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Selection checkbox */}
+                  {selectMode && (
+                    <div className={cn(
+                      'absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center backdrop-blur-md transition-colors border',
+                      selected ? 'bg-[#D4BFA0] border-[#E8D8B8]' : 'bg-black/50 border-white/20',
+                    )}>
+                      {selected && <Check size={12} className="text-black" strokeWidth={3} />}
+                    </div>
+                  )}
+
+                  {/* Track count badge bottom-right */}
+                  {!selectMode && count > 0 && (
+                    <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm">
+                      <span className="text-[9px] font-mono text-white/80 tabular-nums">{count}</span>
+                    </div>
+                  )}
+                </div>
+              );
+
+              const meta = (
                 <>
-                  <div className={cn(
-                    'relative aspect-square bg-[#14110d] rounded-lg mb-3 overflow-hidden border transition-colors',
-                    selected ? 'border-[#D4BFA0]' : 'border-[#1a160f] group-hover:border-[#2d2620]',
+                  <h3 className={cn(
+                    'text-[13px] font-semibold truncate leading-tight mb-0.5 transition-colors',
+                    selected ? 'text-white' : 'text-[#E8DCC8] group-hover:text-white',
                   )}>
-                    {playlist.cover_url ? (
-                      <img loading="lazy" src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music size={28} className="text-[#1a160f]" />
-                      </div>
-                    )}
-                    {/* Checkbox overlay — only rendered in select mode.
-                        Sits top-right with a backdrop so it's readable on
-                        both dark and light cover art. */}
-                    {selectMode && (
-                      <div className={cn(
-                        'absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center backdrop-blur-md transition-colors',
-                        selected
-                          ? 'bg-[#D4BFA0] border border-[#E8D8B8]'
-                          : 'bg-black/40 border border-white/20',
-                      )}>
-                        {selected && <Check size={13} className="text-white" />}
-                      </div>
-                    )}
-                  </div>
-                  <h3 className={cn('text-[13px] font-medium truncate leading-tight mb-1', selected ? 'text-white' : 'text-[#E8DCC8] group-hover:text-white')}>
                     {playlist.name}
                   </h3>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">
-                    {playlist.track_count || 0} track{(playlist.track_count || 0) !== 1 ? 's' : ''}
+                  <p className="text-[10px] font-mono text-[#5a5142] flex items-center gap-2">
+                    <span>{count} track{count !== 1 ? 's' : ''}</span>
+                    {playlist.total_duration != null && playlist.total_duration > 0 && (
+                      <>
+                        <span className="text-[#2d2620]">·</span>
+                        <span>{fmtDuration(playlist.total_duration)}</span>
+                      </>
+                    )}
                   </p>
                 </>
               );
+
               return selectMode ? (
-                // In select mode a plain button toggles selection — no nav.
                 <button
                   key={playlist.id}
                   type="button"
@@ -207,11 +269,11 @@ export default function PlaylistsPage() {
                   })}
                   className="group text-left"
                 >
-                  {cardInner}
+                  {artBlock}{meta}
                 </button>
               ) : (
                 <Link href={`/playlists/${playlist.id}`} key={playlist.id} className="group">
-                  {cardInner}
+                  {artBlock}{meta}
                 </Link>
               );
             })}

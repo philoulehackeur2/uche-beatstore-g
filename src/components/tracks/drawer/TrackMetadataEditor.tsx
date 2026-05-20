@@ -5,21 +5,24 @@ import { Track, TrackStatus, TrackType } from '@/lib/types';
 import { StarRating } from '@/components/tracks/StarRating';
 
 const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
-  { value: 'instrumental', label: 'Instrumental' },
+  { value: 'beat',         label: 'Beat' },
+  { value: 'instrumental', label: 'Instr.' },
   { value: 'song',         label: 'Song' },
   { value: 'remix',        label: 'Remix' },
 ];
 
-const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
-  { value: 'finished',   label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-  { value: 'needs_work', label: 'Needs work', color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
-  { value: 'archived',   label: 'Archived',   color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]' },
+const STATUS_OPTIONS: { value: TrackStatus; label: string; active: string; dot: string }[] = [
+  { value: 'finished',   label: 'Finished',   active: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]', dot: 'bg-[#8ecf9f]' },
+  { value: 'needs_work', label: 'Needs work', active: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]', dot: 'bg-[#c8a84b]' },
+  { value: 'archived',   label: 'Archived',   active: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]', dot: 'bg-[#4a4338]' },
 ];
 
-// All 12 chromatic pitch classes. Essentia outputs sharp notation
-// (C#, D#…), so we mirror that here for consistency — flat notation
-// would have to be normalized somewhere otherwise.
-const KEY_OPTIONS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+// All 12 chromatic pitch classes in circle-of-fifths order so adjacent
+// keys are harmonically related — easier to navigate when correcting
+// Essentia's half/double-time errors.
+const KEY_ROW_1 = ['C', 'G', 'D', 'A', 'E', 'B'] as const;
+const KEY_ROW_2 = ['F#', 'C#', 'G#', 'D#', 'A#', 'F'] as const;
+
 const SCALE_OPTIONS: { value: string; label: string }[] = [
   { value: 'major', label: 'Major' },
   { value: 'minor', label: 'Minor' },
@@ -27,26 +30,11 @@ const SCALE_OPTIONS: { value: string; label: string }[] = [
 
 interface Props {
   track: Track;
-  /** Caller patches the track. Drives optimistic + PATCH + rollback. */
   onPatch: (patch: Record<string, unknown>) => void;
-  /** Rating mutates through its own /api/tracks/[id]/rate endpoint; the
-   *  drawer wires the result through the optimistic overlay so it sticks
-   *  past the drawer close. */
   onRatingChange: (newRating: number) => void;
 }
 
-/**
- * Type / Status / Rating editor — extracted from TrackDetailsDrawer.
- *
- * Owns nothing stateful: it's a thin set of controls that emit changes
- * through `onPatch` / `onRatingChange`. The drawer keeps the patchTrack
- * helper (which manages optimistic overlay + PATCH + rollback) since
- * that helper is shared with notes editing and other drawer surfaces.
- */
 export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
-  // Local BPM state so we can commit on blur instead of firing a
-  // PATCH per keystroke. Re-syncs whenever the prop changes (drawer
-  // navigation, post-analysis refresh).
   const [bpmDraft, setBpmDraft] = useState<string>(track.bpm != null ? String(track.bpm) : '');
   useEffect(() => {
     setBpmDraft(track.bpm != null ? String(track.bpm) : '');
@@ -56,9 +44,6 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
     const trimmed = bpmDraft.trim();
     const next = trimmed === '' ? null : Number(trimmed);
     if (next !== null && (!Number.isFinite(next) || next < 20 || next > 300)) {
-      // Out-of-range typed value — revert. 20–300 covers ambient
-      // half-time through DnB; values outside are almost certainly
-      // typos.
       setBpmDraft(track.bpm != null ? String(track.bpm) : '');
       return;
     }
@@ -66,38 +51,48 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
     onPatch({ bpm: next });
   };
 
-  return (
-    <div className="p-8 border-b border-[#1f1a13] space-y-5">
-      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4a4338]">Track Metadata</h3>
+  const currentStatus = (track.status as TrackStatus) || 'needs_work';
+  const isMinor = track.scale === 'minor';
 
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">Type</span>
-        <select
-          // `value` (not `defaultValue`) so the select reflects optimistic
-          // updates when the parent's track prop changes after PATCH.
-          value={track.type}
-          onChange={(e) => onPatch({ type: e.target.value })}
-          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-panchang uppercase tracking-widest text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0]"
-        >
-          {TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} className="bg-[#0a0907]">{o.label}</option>
+  return (
+    <div className="px-6 py-5 border-b border-[#1f1a13] space-y-5">
+      <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-[#4a4338]">Metadata</h3>
+
+      {/* Type — pill row */}
+      <div>
+        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest block mb-2">Type</span>
+        <div className="flex gap-1.5 flex-wrap">
+          {TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onPatch({ type: opt.value })}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-all ${
+                track.type === opt.value
+                  ? 'bg-[#2A2418] border-[#8A7A5C]/50 text-[#E8D8B8] shadow-sm'
+                  : 'bg-transparent border-[#1f1a13] text-[#4a4338] hover:border-[#2d2620] hover:text-[#6a5d4a]'
+              }`}
+            >
+              {opt.label}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">Status</span>
-        <div className="flex gap-1">
+      {/* Status — pill row with colored dots */}
+      <div>
+        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest block mb-2">Status</span>
+        <div className="flex gap-1.5 flex-wrap">
           {STATUS_OPTIONS.map((opt) => {
-            const active = (track.status || 'needs_work') === opt.value;
+            const active = currentStatus === opt.value;
             return (
               <button
                 key={opt.value}
                 onClick={() => onPatch({ status: opt.value })}
-                className={`px-2 py-1 rounded text-[9px] font-mono uppercase tracking-widest border transition-colors ${
-                  active ? opt.color : 'bg-transparent text-[#4a4338] border-[#1f1a13] hover:border-[#2d2620] hover:text-[#6a5d4a]'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-all ${
+                  active ? opt.active : 'bg-transparent border-[#1f1a13] text-[#4a4338] hover:border-[#2d2620] hover:text-[#6a5d4a]'
                 }`}
               >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? opt.dot : 'bg-[#2d2620]'}`} />
                 {opt.label}
               </button>
             );
@@ -105,65 +100,96 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
         </div>
       </div>
 
+      {/* Rating */}
       <div className="flex items-center justify-between">
         <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">Rating</span>
-        <StarRating
-          trackId={track.id}
-          initialRating={track.rating || 0}
-          onChange={onRatingChange}
-        />
+        <StarRating trackId={track.id} initialRating={track.rating || 0} onChange={onRatingChange} />
       </div>
 
-      {/* BPM — manual override. Essentia / AudD often gets it half-
-          or double-time on certain genres (drill is the worst); the
-          producer overriding by hand is the safety valve. Commits on
-          blur and Enter so the optimistic PATCH doesn't fire per
-          keystroke. */}
+      {/* BPM — inline number input with +/- nudge buttons */}
       <div className="flex items-center justify-between">
         <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">BPM</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={20}
-          max={300}
-          value={bpmDraft}
-          onChange={(e) => setBpmDraft(e.target.value)}
-          onBlur={commitBpm}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          placeholder="—"
-          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-mono text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0] w-20 text-right tabular-nums"
-        />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              const v = Number(bpmDraft);
+              if (v > 20) { const n = v - 1; setBpmDraft(String(n)); onPatch({ bpm: n }); }
+            }}
+            className="w-6 h-6 rounded border border-[#1f1a13] text-[#4a4338] hover:text-white hover:border-[#2d2620] flex items-center justify-center text-[12px] leading-none transition-colors"
+          >−</button>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={20} max={300}
+            value={bpmDraft}
+            onChange={(e) => setBpmDraft(e.target.value)}
+            onBlur={commitBpm}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            placeholder="—"
+            className="bg-[#0a0907] border border-[#1f1a13] rounded-lg px-2 py-1 text-[11px] font-mono font-bold text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0] w-16 text-center tabular-nums"
+          />
+          <button
+            onClick={() => {
+              const v = Number(bpmDraft);
+              if (v < 300) { const n = v + 1; setBpmDraft(String(n)); onPatch({ bpm: n }); }
+            }}
+            className="w-6 h-6 rounded border border-[#1f1a13] text-[#4a4338] hover:text-white hover:border-[#2d2620] flex items-center justify-center text-[12px] leading-none transition-colors"
+          >+</button>
+        </div>
       </div>
 
-      {/* Key + Scale. Sharp-only notation matches Essentia output —
-          flat-notation tracks would otherwise have to be normalised.
-          Empty string maps to NULL on PATCH so the analyzer can
-          re-fill it later if the user clears their override. */}
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">Key</span>
-        <select
-          value={track.key ?? ''}
-          onChange={(e) => onPatch({ key: e.target.value || null })}
-          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-[#E8D8B8] focus:outline-none focus:border-[#D4BFA0] w-20 text-center"
-        >
-          <option value="" className="bg-[#0a0907]">—</option>
-          {KEY_OPTIONS.map((k) => (
-            <option key={k} value={k} className="bg-[#0a0907]">{k}</option>
+      {/* Key — chromatic button grid in circle-of-fifths layout */}
+      <div>
+        <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest block mb-2">Key</span>
+        <div className="space-y-1">
+          {[KEY_ROW_1, KEY_ROW_2].map((row, ri) => (
+            <div key={ri} className="flex gap-1">
+              {row.map((k) => {
+                const active = track.key === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => onPatch({ key: active ? null : k })}
+                    className={`flex-1 py-1.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wide border transition-all ${
+                      active
+                        ? isMinor
+                          ? 'bg-[#1a1833] border-[#534AB7]/50 text-[#9d95e8]'
+                          : 'bg-[#1f1a10] border-[#3d3020]/60 text-[#c8a47a]'
+                        : 'bg-[#0a0907] border-[#1f1a13] text-[#4a4338] hover:border-[#2d2620] hover:text-[#6a5d4a]'
+                    }`}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
+            </div>
           ))}
-        </select>
+        </div>
       </div>
+
+      {/* Scale — two-state toggle */}
       <div className="flex items-center justify-between">
         <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">Scale</span>
-        <select
-          value={track.scale ?? ''}
-          onChange={(e) => onPatch({ scale: e.target.value || null })}
-          className="bg-[#0a0907] border border-[#1f1a13] rounded px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-[#a08a6a] focus:outline-none focus:border-[#D4BFA0] w-20 text-center"
-        >
-          <option value="" className="bg-[#0a0907]">—</option>
-          {SCALE_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value} className="bg-[#0a0907]">{s.label}</option>
-          ))}
-        </select>
+        <div className="flex rounded-lg border border-[#1f1a13] overflow-hidden">
+          {SCALE_OPTIONS.map((s) => {
+            const active = (track.scale ?? 'major') === s.value;
+            return (
+              <button
+                key={s.value}
+                onClick={() => onPatch({ scale: s.value })}
+                className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider transition-colors ${
+                  active
+                    ? s.value === 'minor'
+                      ? 'bg-[#1a1833] text-[#9d95e8]'
+                      : 'bg-[#1f1a10] text-[#c8a47a]'
+                    : 'bg-transparent text-[#4a4338] hover:text-[#6a5d4a]'
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

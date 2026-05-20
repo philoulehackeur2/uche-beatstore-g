@@ -645,9 +645,14 @@ export function ContactsView({
                       className="accent-[#D4BFA0] cursor-pointer"
                       aria-label={`Select ${contact.name}`}
                     />
-                    <div className="w-8 h-8 rounded-full bg-[#16130e] border border-[#1a160f] flex items-center justify-center text-[11px] font-medium text-[#E8D8B8]">
-                      {contact.name[0]?.toUpperCase()}
-                    </div>
+                    {(() => {
+                      const av = nameToAvatar(contact.name);
+                      return (
+                        <div className={`w-8 h-8 rounded-full ${av.bg} border ${av.border} flex items-center justify-center text-[11px] font-bold ${av.text} shrink-0`}>
+                          {contact.name[0]?.toUpperCase()}
+                        </div>
+                      );
+                    })()}
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <Link
@@ -992,6 +997,25 @@ export function ContactsView({
 }
 
 /**
+ * Avatar palette — 6 warm/cool tones derived from the contact name.
+ * Gives each row a unique hue so the list is scannable without photos.
+ */
+const AVATAR_PALETTES = [
+  { bg: 'bg-[#1a1230]', text: 'text-[#9d95e8]', border: 'border-[#534AB7]/30' },
+  { bg: 'bg-[#0a1f0f]', text: 'text-[#6DC6A4]', border: 'border-[#1f5a4a]/40' },
+  { bg: 'bg-[#1f1a0a]', text: 'text-[#c8a84b]', border: 'border-[#3a2f1f]/60' },
+  { bg: 'bg-[#1f0f0a]', text: 'text-[#e87a6a]', border: 'border-[#6a2a1f]/40' },
+  { bg: 'bg-[#0a1420]', text: 'text-[#7aa8e8]', border: 'border-[#3a4a6a]/40' },
+  { bg: 'bg-[#1a1410]', text: 'text-[#E8D8B8]', border: 'border-[#8A7A5C]/30' },
+];
+
+function nameToAvatar(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
+}
+
+/**
  * Quiet stat tile used in the contacts header. Numbers in cream-bone,
  * label in warm muted. The `tone` prop tints the value when the metric
  * is "engagement-positive" — keeps the page reading as one system
@@ -1009,18 +1033,18 @@ function StatCard({
   tone?: 'active';
 }) {
   return (
-    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3 flex items-baseline justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">{label}</p>
-        <p className={`text-[24px] font-medium tabular-nums leading-tight mt-1 ${
-          tone === 'active' ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'
+    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">{label}</p>
+      <div className="flex items-end gap-2">
+        <p className={`text-[28px] font-black tabular-nums leading-none ${
+          tone === 'active' ? 'text-[#E8D8B8]' : 'text-white'
         }`}>
           {value}
         </p>
+        {hint && (
+          <span className="text-[11px] font-mono text-[#a08a6a] mb-0.5 tabular-nums">{hint}</span>
+        )}
       </div>
-      {hint && (
-        <span className="text-[10px] font-mono text-[#6a5d4a] tabular-nums shrink-0">{hint}</span>
-      )}
     </div>
   );
 }
@@ -1052,31 +1076,56 @@ function relativeDays(iso: string | undefined | null): string {
 }
 
 /**
- * Pipeline-stage pill — reflects the most recent beat_send's status
- * for a contact. Each stage gets its own tone so the page reads at a
- * glance: amber/orange = momentum, green = won, red = lost, neutral
- * gray = early. Stage transitions happen elsewhere (in the
- * ContactHistoryDrawer); this is purely a presentational view.
+ * Pipeline progress track — 5 sequential stages rendered as a
+ * growing dot-bar. Filled dots show progress; unfilled recede.
+ * "Pass" breaks out of the sequence with a red pill so it reads
+ * as a terminal state rather than a position on the track.
  */
-const PIPELINE_TONES: Record<string, { dot: string; text: string; ring: string; label: string }> = {
-  sent:         { dot: 'bg-[#6a5d4a]', text: 'text-[#a08a6a]', ring: 'ring-[#2d2620]',       label: 'Sent' },
-  opened:       { dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]', ring: 'ring-[#3a4a6a]',       label: 'Opened' },
-  interested:   { dot: 'bg-[#E8D8B8]', text: 'text-[#E8D8B8]', ring: 'ring-[#8A7A5C]/40',    label: 'Interested' },
-  negotiating:  { dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-[#8A7A5C]/40',    label: 'Negotiating' },
-  placed:       { dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]', ring: 'ring-[#1f5a4a]',       label: 'Placed' },
-  pass:         { dot: 'bg-[#e88a8a]', text: 'text-[#e88a8a]', ring: 'ring-[#6a2a2a]',       label: 'Pass' },
+const PIPELINE_STAGES = ['sent', 'opened', 'interested', 'negotiating', 'placed'] as const;
+type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+const STAGE_FILL: Record<PipelineStage, string> = {
+  sent:        'bg-[#6a5d4a]',
+  opened:      'bg-[#7aa8e8]',
+  interested:  'bg-[#E8D8B8]',
+  negotiating: 'bg-[#e8a86a]',
+  placed:      'bg-[#6DC6A4]',
 };
 
 function PipelinePill({ status }: { status: string | null }) {
-  if (!status) {
-    return <span className="text-[10px] text-[#3a3328]">—</span>;
+  if (!status) return <span className="text-[10px] text-[#3a3328]">—</span>;
+
+  if (status === 'pass') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider text-[#e88a8a] ring-1 ring-inset ring-[#6a2a2a]/60">
+        Pass
+      </span>
+    );
   }
-  const tone = PIPELINE_TONES[status] ?? PIPELINE_TONES.sent;
+
+  const currentIdx = PIPELINE_STAGES.indexOf(status as PipelineStage);
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset ${tone.ring} ${tone.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
-      {tone.label}
-    </span>
+    <div className="flex flex-col gap-1" title={label}>
+      <div className="flex items-center gap-0.5">
+        {PIPELINE_STAGES.map((stage, i) => (
+          <div
+            key={stage}
+            className={`rounded-full transition-all ${
+              i <= currentIdx
+                ? `${STAGE_FILL[stage]} h-1.5 w-4`
+                : 'bg-[#1f1a13] h-1.5 w-2'
+            }`}
+          />
+        ))}
+      </div>
+      <span className={`text-[9px] font-mono uppercase tracking-wider ${
+        currentIdx >= 3 ? 'text-[#e8a86a]' : currentIdx >= 1 ? 'text-[#7aa8e8]' : 'text-[#6a5d4a]'
+      }`}>
+        {label}
+      </span>
+    </div>
   );
 }
 

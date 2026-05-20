@@ -201,7 +201,7 @@ export default function ProjectsPage() {
               placeholder="Search projects"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#0e0c08] border border-[#1a160f] rounded-md pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#2d2620]"
+              className="w-full bg-[#0e0c08] border border-[#1a160f] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#2d2620]"
             />
           </div>
           <div className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-wider">
@@ -209,10 +209,10 @@ export default function ProjectsPage() {
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
+                className={`px-3 py-1.5 rounded-full transition-colors border ${
                   statusFilter === s
-                    ? 'bg-[#2A2418] text-[#E8D8B8] border border-[#8A7A5C]'
-                    : 'text-[#5a5142] hover:text-[#a08a6a]'
+                    ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/60'
+                    : 'text-[#5a5142] hover:text-[#a08a6a] border-transparent'
                 }`}
               >
                 {s.replace('_', ' ')}

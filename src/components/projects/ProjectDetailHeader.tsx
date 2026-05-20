@@ -131,59 +131,69 @@ export function ProjectDetailHeader(props: Props) {
             <div className="flex items-center gap-2 mb-3">
               <input
                 autoFocus
-                className="bg-transparent border-b border-[#2d2620] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#D4BFA0]"
+                className="bg-transparent border-b-2 border-[#D4BFA0]/40 text-4xl font-black tracking-tight outline-none text-white flex-1 focus:border-[#D4BFA0] uppercase"
                 value={tempTitle}
                 onChange={(e) => setTempTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onTitleSave()}
+                onKeyDown={(e) => { if (e.key === 'Enter') onTitleSave(); if (e.key === 'Escape') onTitleEditCancel(); }}
               />
-              <button onClick={onTitleSave} className="p-1.5 rounded hover:bg-[#16130e] text-[#D4BFA0]"><Check size={14} /></button>
-              <button onClick={onTitleEditCancel} className="p-1.5 rounded hover:bg-[#16130e] text-[#5a5142]"><X size={14} /></button>
+              <button onClick={onTitleSave} className="p-1.5 rounded-lg bg-[#D4BFA0]/10 hover:bg-[#D4BFA0]/20 text-[#D4BFA0] transition-colors"><Check size={14} /></button>
+              <button onClick={onTitleEditCancel} className="p-1.5 rounded-lg hover:bg-[#16130e] text-[#5a5142] transition-colors"><X size={14} /></button>
             </div>
           ) : (
             <div className="group flex items-center gap-2 mb-3">
-              <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate">{project?.name}</h1>
-              <button onClick={onTitleEditStart} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#5a5142] hover:text-white transition-all">
-                <Edit2 size={13} />
+              <h1 className="text-4xl font-black text-white leading-none tracking-tight truncate uppercase">{project?.name}</h1>
+              <button onClick={onTitleEditStart} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#4a4338] hover:text-[#D4BFA0] transition-all rounded-lg hover:bg-white/[0.04]">
+                <Edit2 size={12} />
               </button>
             </div>
           )}
 
-          <div className="flex items-center gap-3 text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">
-            <span>{trackCount} track{trackCount !== 1 ? 's' : ''}</span>
-            <span>·</span>
-            <span>{fmtDuration(totalDuration)}</span>
-            <span>·</span>
+          {/* Stats row */}
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="text-[10px] font-mono text-[#5a5142] tabular-nums">
+              {trackCount} track{trackCount !== 1 ? 's' : ''}
+            </span>
+            {totalDuration > 0 && (
+              <>
+                <span className="text-[#2d2620]">·</span>
+                <span className="text-[10px] font-mono text-[#5a5142]">{fmtDuration(totalDuration)}</span>
+              </>
+            )}
+            <span className="text-[#2d2620]">·</span>
             {editingTargets ? (
               <div className="flex items-center gap-1">
                 <input
                   value={targetBpm}
                   onChange={(e) => setTargetBpm(e.target.value)}
                   placeholder="BPM"
-                  className="w-14 bg-[#0e0c08] border border-[#2d2620] rounded px-2 py-0.5 text-[10px] font-mono text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0]"
+                  className="w-14 bg-[#0e0c08] border border-[#2d2620] rounded-lg px-2 py-1 text-[10px] font-mono text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0]"
                 />
                 <input
                   value={targetKey}
                   onChange={(e) => setTargetKey(e.target.value)}
                   placeholder="Key"
-                  className="w-14 bg-[#0e0c08] border border-[#2d2620] rounded px-2 py-0.5 text-[10px] font-mono text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0]"
+                  className="w-14 bg-[#0e0c08] border border-[#2d2620] rounded-lg px-2 py-1 text-[10px] font-mono text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0]"
                 />
-                <button onClick={onTargetsSave} className="p-0.5 text-[#D4BFA0]"><Check size={12} /></button>
-                <button onClick={onTargetsEditCancel} className="p-0.5 text-[#5a5142]"><X size={12} /></button>
+                <button onClick={onTargetsSave} className="p-1 text-[#D4BFA0] hover:bg-[#D4BFA0]/10 rounded transition-colors"><Check size={11} /></button>
+                <button onClick={onTargetsEditCancel} className="p-1 text-[#5a5142] hover:bg-white/[0.04] rounded transition-colors"><X size={11} /></button>
               </div>
             ) : (
-              <button onClick={onTargetsEditStart} className="flex items-center gap-1.5 text-[#5a5142] hover:text-[#E8D8B8] transition-colors">
-                <Target size={10} />
-                Target {fmtBpm(project?.bpm_target)} · {fmtKey(project?.key_target, null)}
+              <button onClick={onTargetsEditStart} className="flex items-center gap-1.5 text-[10px] font-mono text-[#5a5142] hover:text-[#E8D8B8] transition-colors">
+                <Target size={9} />
+                {project?.bpm_target || project?.key_target
+                  ? `Target ${fmtBpm(project?.bpm_target)} ${fmtKey(project?.key_target, null)}`.trim()
+                  : 'Set target BPM / Key'}
               </button>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action buttons — pill style matching the rest of the app */}
+        <div className="flex items-center gap-2 flex-wrap mt-4">
           <button
             onClick={onPlay}
             disabled={playDisabled}
-            className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#E8DCC8] disabled:opacity-30 transition-colors"
+            className="flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-30 transition-all"
           >
             <Play size={12} fill="currentColor" className="ml-0.5" />
             Play
@@ -191,21 +201,21 @@ export function ProjectDetailHeader(props: Props) {
           <button
             onClick={onShare}
             disabled={shareDisabled}
-            className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] disabled:opacity-30 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.04] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] disabled:opacity-30 transition-all"
           >
             <Share2 size={12} />
             Share
           </button>
           <button
             onClick={onAddFromLibrary}
-            className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-[#a08a6a] text-[12px] font-medium hover:text-[#E8DCC8] hover:border-white/[0.1] transition-all"
           >
             <Library size={12} />
-            From library
+            Library
           </button>
           <button
             onClick={onToggleUpload}
-            className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-[#a08a6a] text-[12px] font-medium hover:text-[#E8DCC8] hover:border-white/[0.1] transition-all"
           >
             <Plus size={12} />
             Upload
