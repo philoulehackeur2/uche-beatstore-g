@@ -69,11 +69,21 @@ export async function POST(req: NextRequest) {
 
         // Map cart license_id → DB-valid license_type.
         // DB CHECK constraint: license_type IN ('lease', 'exclusive').
-        const rawLicenseId = cartItems.length > 0 ? cartItems[0].license_id : '';
-        const licenseType =
-          rawLicenseId === 'basic-lease' || rawLicenseId === 'lease' ? 'lease'
-          : rawLicenseId === 'exclusive-rights' || rawLicenseId === 'exclusive' ? 'exclusive'
-          : 'lease'; // safe fallback
+        const normalizeType = (raw: string): 'lease' | 'exclusive' =>
+          raw === 'exclusive-rights' || raw === 'exclusive' ? 'exclusive' : 'lease';
+
+        // Per-item breakdown (migration 029). Without this, a mixed cart
+        // (e.g. one lease + one exclusive) silently records every track
+        // under whichever license_id happened to be first in the array.
+        const lineItems = cartItems.map((i: any) => ({
+          track_id: i.track_id,
+          license_type: normalizeType(i.license_id ?? ''),
+        }));
+
+        // Legacy denormalized headline fields kept for backward compat
+        // with anything reading license_type directly. New code should
+        // read line_items.
+        const headlineLicenseType = lineItems[0]?.license_type ?? 'lease';
 
         // UPSERT on stripe_session_id — handles redelivery cleanly.
         const { error } = await admin
@@ -85,7 +95,8 @@ export async function POST(req: NextRequest) {
               buyer_stripe_customer: session.customer || null,
               share_token: meta.share_token || null,
               track_ids: trackIds,
-              license_type: licenseType,
+              line_items: lineItems,
+              license_type: headlineLicenseType,
               amount_usd: (session.amount_total ?? 0) / 100,
               stripe_session_id: session.id,
               stripe_payment_intent: session.payment_intent || null,
@@ -128,10 +139,16 @@ export async function POST(req: NextRequest) {
           try {
             const resend = new Resend(process.env.RESEND_API_KEY);
             const APP_URL = getAppUrl();
+            // The receipt's CTA points back at whichever surface the
+            // purchase originated from. Storefront purchases go to
+            // /store; share-link purchases go to whichever share
+            // route the buyer arrived on.
             const isProjShare = meta.is_project_share !== 'false';
-            const shareUrl = isProjShare
-              ? `${APP_URL}/projects/share/${meta.share_token}`
-              : `${APP_URL}/share/${meta.share_token}`;
+            const shareUrl = meta.source === 'store'
+              ? `${APP_URL}/store?purchase=success`
+              : isProjShare
+                ? `${APP_URL}/projects/share/${meta.share_token}`
+                : `${APP_URL}/share/${meta.share_token}`;
             await resend.emails.send({
               from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
               to: meta.buyer_email,

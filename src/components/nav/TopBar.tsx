@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   User,
+  Store,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
   { label: 'Contacts',  icon: Users,     href: '/contacts'  },
   { label: 'Calendar',  icon: Calendar,  href: '/calendar'  },
   { label: 'Links',     icon: Link2,     href: '/links'     },
+  { label: 'Store',     icon: Store,     href: '/store'     },
   { label: 'Offline',   icon: CloudOff,  href: '/offline'   },
 ];
 
