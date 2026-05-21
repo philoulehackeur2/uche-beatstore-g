@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Music, Search, ShoppingCart, Loader2, Play, Pause,
-  Mail, Globe, ExternalLink, X, CheckCircle2, XCircle,
+  Mail, Globe, ExternalLink, X, CheckCircle2, XCircle, ChevronRight,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -311,6 +312,15 @@ function Hero({ creator, trackCount }: { creator: CreatorProfile | null; trackCo
   );
 }
 
+/**
+ * BeatCard — compact grid card for the /store catalogue.
+ *
+ * UX rules:
+ *  • Clicking the cover art square plays/pauses (audio preview only).
+ *  • Clicking the title / meta row navigates to the full product page.
+ *  • Price buttons add directly to cart without navigating away.
+ *  • "Details →" link is always present as an explicit escape hatch.
+ */
 function BeatCard({
   track, priceLease, priceExclusive, isCurrent, isPlaying,
   onPlay, onAddLease, onAddExclusive,
@@ -325,35 +335,48 @@ function BeatCard({
   onAddExclusive: () => void;
 }) {
   return (
-    <div className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all ${
+    <div className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${
       isCurrent ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/5' : 'border-[#1f1a13] hover:border-[#2d2620]'
     }`}>
-      {/* Cover + play overlay */}
+      {/* Cover + play overlay — click = play/pause only */}
       <button
         onClick={onPlay}
-        className="relative w-full aspect-square bg-[#0a0907] overflow-hidden block"
+        className="relative w-full aspect-square bg-[#0a0907] overflow-hidden block shrink-0"
+        aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
       >
         {track.cover_url ? (
-          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
+          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
             <Music size={36} />
           </div>
         )}
-        <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
-          isCurrent || 'opacity-0 group-hover:opacity-100'
+        <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-150 ${
+          isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}>
-          <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-xl">
+          <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform">
             {isCurrent && isPlaying
               ? <Pause size={22} fill="currentColor" />
               : <Play size={22} className="ml-0.5" fill="currentColor" />}
           </div>
         </div>
+        {/* Now playing dot */}
+        {isCurrent && (
+          <div className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse" />
+        )}
       </button>
 
-      {/* Meta */}
-      <div className="p-4">
-        <p className="text-[14px] font-medium text-white truncate">{track.title}</p>
+      {/* Meta — clicking title navigates to product page */}
+      <div className="p-4 flex flex-col flex-1">
+        <Link
+          href={`/store/${track.id}`}
+          className="group/title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[14px] font-semibold text-white truncate group-hover/title:text-[#D4BFA0] transition-colors">
+            {track.title}
+          </p>
+        </Link>
         <p className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-1">
           {track.type}
           {track.bpm ? ` · ${track.bpm} bpm` : ''}
@@ -386,6 +409,15 @@ function BeatCard({
             </span>
           </button>
         </div>
+
+        {/* Details link */}
+        <Link
+          href={`/store/${track.id}`}
+          className="mt-3 flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#3a3328] hover:text-[#a08a6a] transition-colors self-start"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Details <ChevronRight size={9} />
+        </Link>
       </div>
     </div>
   );
