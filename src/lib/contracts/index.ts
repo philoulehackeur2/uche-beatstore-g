@@ -143,6 +143,8 @@ export type ProjectSharePatchBody = z.infer<typeof ProjectSharePatchBodySchema>;
 export const PlaylistPatchBodySchema = z.object({
   name: z.string().min(1).max(200).optional(),
   cover_url: z.string().nullable().optional(),
+  store_featured: z.boolean().optional(),
+  store_order: z.number().int().nullable().optional(),
 }).strict();
 export type PlaylistPatchBody = z.infer<typeof PlaylistPatchBodySchema>;
 

@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   { label: 'Contacts',  icon: Users,     href: '/contacts'  },
   { label: 'Calendar',  icon: Calendar,  href: '/calendar'  },
   { label: 'Links',     icon: Link2,     href: '/links'     },
-  { label: 'Store',     icon: Store,     href: '/store'     },
+  { label: 'Store',     icon: Store,     href: '/store-editor' },
   { label: 'Offline',   icon: CloudOff,  href: '/offline'   },
 ];
 
