@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
       soundcloud_url,
       website_url,
       contact_email,
+      accent_color,
+      font_style,
     } = body;
 
     const payload = {
@@ -51,6 +53,9 @@ export async function POST(req: NextRequest) {
       soundcloud_url: soundcloud_url || null,
       website_url: website_url || null,
       contact_email: contact_email || null,
+      // Storefront theme (migration 034)
+      accent_color: accent_color || '#D4BFA0',
+      font_style: font_style || 'default',
     };
 
     const result = await updateCreatorProfile(payload);

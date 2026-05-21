@@ -59,9 +59,11 @@ export async function GET() {
         'duration_seconds', 'bpm', 'key', 'scale',
         'rating', 'description',
         'lease_price_usd', 'exclusive_price_usd',
-        'store_listed', 'created_at',
+        'store_listed', 'free_download_enabled', 'store_sort_order', 'created_at',
       ].join(', '))
       .eq('store_listed', true)
+      // Explicit sort order takes priority; new drops (created_at) are tiebreaker
+      .order('store_sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
     if (tErr) throw tErr;
 
@@ -80,6 +82,7 @@ export async function GET() {
           'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
           'instagram_handle', 'twitter_handle', 'spotify_url',
           'soundcloud_url', 'website_url', 'contact_email',
+          'accent_color', 'font_style',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();

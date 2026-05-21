@@ -13,7 +13,7 @@ const TRACK_FIELDS = [
   'duration_seconds', 'bpm', 'key', 'scale',
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
-  'store_listed', 'created_at',
+  'store_listed', 'free_download_enabled', 'created_at',
 ].join(', ');
 
 /**
@@ -220,9 +220,12 @@ export async function GET(
     }
 
     // Resolve license tiers (custom tiers → legacy fallback)
-    const licenses = sellerId
-      ? await resolveLicenses(admin, sellerId, id, track, creatorRes.data)
-      : buildLegacyTiers(track, creatorRes.data);
+    const [licenses, tagsRes] = await Promise.all([
+      sellerId
+        ? resolveLicenses(admin, sellerId, id, track, creatorRes.data)
+        : Promise.resolve(buildLegacyTiers(track, creatorRes.data)),
+      admin.from('track_tags').select('tag, category').eq('track_id', id),
+    ]);
 
     // Strip user_id off every track before responding
     const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
@@ -233,6 +236,7 @@ export async function GET(
       track: safeTrack,
       creator: creatorRes.data ?? null,
       licenses,
+      tags: tagsRes.data ?? [],
       related: safeRelated,
     });
   } catch (err) {

@@ -199,7 +199,7 @@ function DownloadPortal() {
                   isCurrent ? 'border-[#D4BFA0]/30 bg-[#14110d]' : 'border-[#1f1a13] bg-[#14110d]/60'
                 }`}
               >
-                <div className="flex items-center gap-4 p-4">
+                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4">
                   {/* Cover art + play */}
                   <button
                     onClick={() => handlePlay(track)}
@@ -259,7 +259,7 @@ function DownloadPortal() {
                   <button
                     onClick={() => handleDownload(track)}
                     disabled={isDownloading}
-                    className="shrink-0 flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-60 text-black transition-all"
+                    className="shrink-0 flex flex-col items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-60 text-black transition-all"
                   >
                     {isDownloading
                       ? <Loader2 size={14} className="animate-spin" />

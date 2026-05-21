@@ -131,6 +131,7 @@ export default function StoreProductPage({
   const [track, setTrack] = useState<Track | null>(null);
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
   const [licenses, setLicenses] = useState<LicenseTier[]>([]);
+  const [tags, setTags] = useState<Array<{ tag: string; category: string }>>([]);
   const [related, setRelated] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -148,6 +149,7 @@ export default function StoreProductPage({
         setTrack(data.track as Track);
         setCreator(data.creator ?? null);
         setLicenses(((data.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier));
+        setTags(data.tags ?? []);
         setRelated((data.related as Track[]) ?? []);
       } catch {
         setNotFound(true);
@@ -232,10 +234,10 @@ export default function StoreProductPage({
 
       {/* ── Main product layout ── */}
       <div className="max-w-6xl mx-auto px-4 md:px-10 py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,380px)_1fr] gap-8 md:gap-14 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(260px,360px)_1fr] gap-6 md:gap-14 items-start">
 
           {/* ── LEFT: Cover + play ── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 md:sticky md:top-24">
             {/* Cover art */}
             <button
               onClick={handlePlay}
@@ -384,7 +386,39 @@ export default function StoreProductPage({
                   </div>
                 ))}
               </div>
+
+              {/* Tag chips */}
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {tags.map(({ tag, category }) => (
+                    <span
+                      key={`${category}:${tag}`}
+                      className="px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider border border-[#1f1a13] bg-white/[0.03] text-[#6a5d4a] hover:text-[#a08a6a] transition-colors cursor-default"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Free download CTA */}
+            {(track as any).free_download_enabled && (
+              <div className="rounded-xl border border-[#6DC6A4]/20 bg-[#6DC6A4]/5 px-5 py-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[12px] font-semibold text-[#6DC6A4]">Free Download Available</p>
+                  <p className="text-[10px] text-[#5a5142] mt-0.5">Download this track free — no account needed.</p>
+                </div>
+                <a
+                  href={`/api/store/free-download?track_id=${track.id}`}
+                  download
+                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-[#6DC6A4] hover:bg-[#7ED4B0] text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
+                >
+                  <Download size={12} />
+                  Free
+                </a>
+              </div>
+            )}
 
             {/* License cards */}
             {licenses.length > 0 ? (
@@ -453,7 +487,7 @@ export default function StoreProductPage({
                 View all <ChevronRight size={10} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
               {related.map((r) => (
                 <RelatedCard key={r.id} track={r} />
               ))}

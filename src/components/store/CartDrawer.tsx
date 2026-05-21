@@ -166,7 +166,7 @@ export function FloatingCartButton() {
   return (
     <button
       onClick={() => setIsOpen(true)}
-      className={`fixed bottom-32 right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
     >
       <ShoppingCart size={14} />
       <span className="text-[11px] font-bold uppercase tracking-wider">

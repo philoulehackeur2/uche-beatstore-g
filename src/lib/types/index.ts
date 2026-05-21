@@ -34,6 +34,9 @@ export interface Track {
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
   store_listed?: boolean | null;
+  free_download_enabled?: boolean | null;
+  /** Store display position. Lower = appears earlier. NULL = unordered (shown after all ordered tracks). */
+  store_sort_order?: number | null;
   created_at: string;
 }
 

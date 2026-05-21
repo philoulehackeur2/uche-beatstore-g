@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Music, Search, ShoppingCart, Loader2, Play, Pause,
-  Mail, Globe, X, CheckCircle2, XCircle, ChevronRight,
+  Mail, Globe, X, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { useCart } from '@/hooks/useCart';
@@ -41,6 +41,8 @@ interface CreatorProfile {
   soundcloud_url?: string | null;
   website_url?: string | null;
   contact_email?: string | null;
+  accent_color?: string | null;
+  font_style?: string | null;
 }
 
 interface StoreTrack extends Track {
@@ -70,6 +72,13 @@ function StorePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+
+  // Advanced filters
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [bpmMin, setBpmMin] = useState('');
+  const [bpmMax, setBpmMax] = useState('');
+  const [keyFilter, setKeyFilter] = useState('');
+  const [freeOnly, setFreeOnly] = useState(false);
 
   // Cart + global player.
   const { items, addItem, clearCart, isOpen, setIsOpen } = useCart();
@@ -109,10 +118,26 @@ function StorePage() {
     })();
   }, []);
 
+  // Collect unique keys for the key filter dropdown
+  const availableKeys = useMemo(() => {
+    const keys = new Set(tracks.map((t) => t.key).filter(Boolean) as string[]);
+    return Array.from(keys).sort();
+  }, [tracks]);
+
+  const activeFilterCount = [
+    bpmMin !== '', bpmMax !== '', keyFilter !== '', freeOnly,
+  ].filter(Boolean).length;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const minBpm = bpmMin !== '' ? Number(bpmMin) : null;
+    const maxBpm = bpmMax !== '' ? Number(bpmMax) : null;
     return tracks.filter((t) => {
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (freeOnly && !t.free_download_enabled) return false;
+      if (minBpm !== null && (t.bpm == null || t.bpm < minBpm)) return false;
+      if (maxBpm !== null && (t.bpm == null || t.bpm > maxBpm)) return false;
+      if (keyFilter && (t.key ?? '').toLowerCase() !== keyFilter.toLowerCase()) return false;
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
@@ -121,7 +146,7 @@ function StorePage() {
         (t.description ?? '').toLowerCase().includes(q)
       );
     });
-  }, [tracks, search, typeFilter]);
+  }, [tracks, search, typeFilter, freeOnly, bpmMin, bpmMax, keyFilter]);
 
   const handlePlay = (t: StoreTrack) => {
     if (currentTrack?.id === t.id) {
@@ -156,8 +181,13 @@ function StorePage() {
     toast.success(`Added: ${t.title} (${type})`);
   };
 
+  const accentColor = creator?.accent_color || '#D4BFA0';
+
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
+    <div
+      className="min-h-screen bg-[#0a0907] text-[#E8DCC8]"
+      style={{ '--store-accent': accentColor } as React.CSSProperties}
+    >
       {/* Purchase return banner */}
       {bannerOpen && (
         <div className={`sticky top-0 z-50 px-4 md:px-12 py-3 border-b ${
@@ -212,6 +242,22 @@ function StorePage() {
               </button>
             ))}
           </div>
+          {/* Advanced filters toggle */}
+          <button
+            onClick={() => setFiltersOpen((o) => !o)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-colors border ${
+              filtersOpen || activeFilterCount > 0
+                ? 'border-[#D4BFA0]/40 text-[#D4BFA0] bg-[#D4BFA0]/5'
+                : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8]'
+            }`}
+          >
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-[#D4BFA0] text-black text-[8px] flex items-center justify-center font-bold">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setIsOpen(true)}
             className="ml-auto flex items-center gap-2 px-3 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
@@ -226,6 +272,70 @@ function StorePage() {
             )}
           </button>
         </div>
+
+        {/* Advanced filter panel */}
+        {filtersOpen && (
+          <div className="max-w-6xl mx-auto px-4 md:px-10 pb-3 flex flex-wrap items-end gap-3 border-t border-[#1a160f] pt-3">
+            {/* BPM range */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">BPM</span>
+              <input
+                type="number"
+                placeholder="Min"
+                value={bpmMin}
+                onChange={(e) => setBpmMin(e.target.value)}
+                className="w-16 bg-[#14110d] border border-[#1f1a13] rounded-md py-1 px-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] font-mono"
+              />
+              <span className="text-[#3a3328] text-[10px]">–</span>
+              <input
+                type="number"
+                placeholder="Max"
+                value={bpmMax}
+                onChange={(e) => setBpmMax(e.target.value)}
+                className="w-16 bg-[#14110d] border border-[#1f1a13] rounded-md py-1 px-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] font-mono"
+              />
+            </div>
+
+            {/* Key */}
+            {availableKeys.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">Key</span>
+                <select
+                  value={keyFilter}
+                  onChange={(e) => setKeyFilter(e.target.value)}
+                  className="bg-[#14110d] border border-[#1f1a13] rounded-md py-1 px-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] font-mono"
+                >
+                  <option value="">Any</option>
+                  {availableKeys.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Free only */}
+            <button
+              onClick={() => setFreeOnly((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
+                freeOnly
+                  ? 'border-[#6DC6A4]/40 text-[#6DC6A4] bg-[#6DC6A4]/10'
+                  : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8]'
+              }`}
+            >
+              Free Only
+            </button>
+
+            {/* Clear */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => { setBpmMin(''); setBpmMax(''); setKeyFilter(''); setFreeOnly(false); }}
+                className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-red-400 transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Grid */}
@@ -269,14 +379,14 @@ function StorePage() {
 function Hero({ creator, trackCount }: { creator: CreatorProfile | null; trackCount: number }) {
   const hero = creator?.hero_image_url;
   return (
-    <div className="relative w-full min-h-[260px] md:min-h-[340px] overflow-hidden">
+    <div className="relative w-full min-h-[200px] sm:min-h-[260px] md:min-h-[340px] overflow-hidden">
       {hero ? (
         <img loading="eager" src={hero} alt="" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#2A2418] via-[#14110d] to-[#0a0907]" />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-[#0a0907]" />
-      <div className="relative z-10 max-w-6xl mx-auto px-4 md:px-10 pt-16 pb-10 md:pt-24 md:pb-16">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 md:px-10 pt-10 pb-8 md:pt-24 md:pb-16">
         <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-3">Beat store</p>
         <h1 className="text-3xl md:text-5xl font-medium tracking-tight text-white leading-[1.05] max-w-3xl">
           {creator?.display_name || 'Producer'}
@@ -333,17 +443,15 @@ function BeatCard({
   onAddLease: () => void;
   onAddExclusive: () => void;
 })
+
  {
   return (
     <div className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${
       isCurrent ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/5' : 'border-[#1f1a13] hover:border-[#2d2620]'
     }`}>
-      {/* Cover + play overlay — click = play/pause only */}
-      <button
-        onClick={onPlay}
-        className="relative w-full aspect-square bg-[#0a0907] overflow-hidden block shrink-0"
-        aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
-      >
+      {/* Cover art — always navigates to product page.
+          Play button floats on top and stops propagation to keep play/pause local. */}
+      <Link href={`/store/${track.id}`} className="relative w-full aspect-square bg-[#0a0907] overflow-hidden block shrink-0">
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         ) : (
@@ -351,40 +459,39 @@ function BeatCard({
             <Music size={36} />
           </div>
         )}
-        <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-150 ${
-          isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        }`}>
-          <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform">
-            {isCurrent && isPlaying
-              ? <Pause size={22} fill="currentColor" />
-              : <Play size={22} className="ml-0.5" fill="currentColor" />}
-          </div>
-        </div>
         {/* Now playing dot */}
         {isCurrent && (
           <div className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse" />
         )}
-      </button>
-
-      {/* Meta — clicking title navigates to product page */}
-      <div className="p-4 flex flex-col flex-1">
-        <Link
-          href={`/store/${track.id}`}
-          className="group/title"
-          onClick={(e) => e.stopPropagation()}
+        {/* Floating play button — stopPropagation keeps the Link from navigating */}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlay(); }}
+          aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+          className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-150 ${
+            isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
         >
-          <p className="text-[14px] font-semibold text-white truncate group-hover/title:text-[#D4BFA0] transition-colors">
-            {track.title}
-          </p>
-        </Link>
+          <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform pointer-events-none">
+            {isCurrent && isPlaying
+              ? <Pause size={22} fill="currentColor" />
+              : <Play size={22} className="ml-0.5" fill="currentColor" />}
+          </div>
+        </button>
+      </Link>
+
+      {/* Meta body — clicking this area also navigates to product page */}
+      <Link href={`/store/${track.id}`} className="p-4 flex flex-col flex-1 group/card">
+        <p className="text-[14px] font-semibold text-white truncate group-hover/card:text-[#D4BFA0] transition-colors">
+          {track.title}
+        </p>
         <p className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-1">
           {track.type}
           {track.bpm ? ` · ${track.bpm} bpm` : ''}
           {track.key ? ` · ${track.key}${track.scale ? ' ' + track.scale : ''}` : ''}
         </p>
 
-        {/* Waveform — lazy peaks load, progress shown only on active track */}
-        <div className="mt-3 px-0.5" onClick={(e) => e.stopPropagation()}>
+        {/* Waveform — stopPropagation so waveform seek/play doesn't navigate */}
+        <div className="mt-3 px-0.5" onClick={(e) => e.preventDefault()}>
           <MiniWaveform
             trackId={track.id}
             peaksUrl={track.peaks_url}
@@ -398,39 +505,44 @@ function BeatCard({
           <p className="text-[11px] text-[#a08a6a] mt-2 line-clamp-2 leading-relaxed">{track.description}</p>
         )}
 
-        {/* Price actions */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            onClick={onAddLease}
-            disabled={priceLease == null}
-            className="flex flex-col items-start px-3 py-2 rounded-md bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.15] text-left transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">Lease</span>
-            <span className="text-[13px] font-bold text-[#E8DCC8] tabular-nums">
-              {priceLease != null ? `$${priceLease.toLocaleString()}` : '—'}
-            </span>
-          </button>
-          <button
-            onClick={onAddExclusive}
-            disabled={priceExclusive == null}
-            className="flex flex-col items-start px-3 py-2 rounded-md bg-[#D4BFA0] hover:bg-[#E8D8B8] text-left transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <span className="text-[9px] font-mono uppercase tracking-wider text-black/70">Exclusive</span>
-            <span className="text-[13px] font-bold text-black tabular-nums">
-              {priceExclusive != null ? `$${priceExclusive.toLocaleString()}` : '—'}
-            </span>
-          </button>
+        {/* Price actions — stop propagation so buttons don't navigate */}
+        <div onClick={(e) => e.preventDefault()}>
+          {track.free_download_enabled ? (
+            <a
+              href={`/api/store/free-download?track_id=${track.id}`}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/25 hover:bg-[#6DC6A4]/20 text-[#6DC6A4] text-[11px] font-bold uppercase tracking-wider transition-colors"
+            >
+              Free Download
+            </a>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddLease(); }}
+                disabled={priceLease == null}
+                className="flex flex-col items-start px-3 py-2 rounded-md bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.15] text-left transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">Lease</span>
+                <span className="text-[13px] font-bold text-[#E8DCC8] tabular-nums">
+                  {priceLease != null ? `$${priceLease.toLocaleString()}` : '—'}
+                </span>
+              </button>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddExclusive(); }}
+                disabled={priceExclusive == null}
+                className="flex flex-col items-start px-3 py-2 rounded-md bg-[#D4BFA0] hover:bg-[#E8D8B8] text-left transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span className="text-[9px] font-mono uppercase tracking-wider text-black/70">Exclusive</span>
+                <span className="text-[13px] font-bold text-black tabular-nums">
+                  {priceExclusive != null ? `$${priceExclusive.toLocaleString()}` : '—'}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Details link */}
-        <Link
-          href={`/store/${track.id}`}
-          className="mt-3 flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#3a3328] hover:text-[#a08a6a] transition-colors self-start"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Details <ChevronRight size={9} />
-        </Link>
-      </div>
+      </Link>
     </div>
   );
 }
