@@ -7,6 +7,7 @@ import {
   Music, Search, ShoppingCart, Loader2, Play, Pause,
   Mail, Globe, ExternalLink, X, CheckCircle2, XCircle, ChevronRight,
 } from 'lucide-react';
+import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
@@ -333,7 +334,8 @@ function BeatCard({
   onPlay: () => void;
   onAddLease: () => void;
   onAddExclusive: () => void;
-}) {
+})
+ {
   return (
     <div className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${
       isCurrent ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/5' : 'border-[#1f1a13] hover:border-[#2d2620]'
@@ -382,6 +384,17 @@ function BeatCard({
           {track.bpm ? ` · ${track.bpm} bpm` : ''}
           {track.key ? ` · ${track.key}${track.scale ? ' ' + track.scale : ''}` : ''}
         </p>
+
+        {/* Waveform — lazy peaks load, progress shown only on active track */}
+        <div className="mt-3 px-0.5" onClick={(e) => e.stopPropagation()}>
+          <MiniWaveform
+            trackId={track.id}
+            peaksUrl={track.peaks_url}
+            height={36}
+            isActive={isCurrent}
+          />
+        </div>
+
         {track.description && (
           <p className="text-[11px] text-[#a08a6a] mt-2 line-clamp-2 leading-relaxed">{track.description}</p>
         )}

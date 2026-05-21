@@ -7,6 +7,7 @@ import {
   Music2, Check, X, Loader2, ExternalLink, Globe, Mail,
   AtSign, Download, ChevronRight, Tag, Link2,
 } from 'lucide-react';
+import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
@@ -276,6 +277,32 @@ export default function StoreProductPage({
                 </div>
               )}
             </button>
+
+            {/* Waveform seek strip — shows below the cover art */}
+            <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-3 py-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328]">
+                  Waveform Preview
+                </span>
+                {isCurrent && (
+                  <span className="text-[9px] font-mono text-[#6DC6A4] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse inline-block" />
+                    {isCurrentPlaying ? 'Playing' : 'Paused'}
+                  </span>
+                )}
+              </div>
+              <MiniWaveform
+                trackId={track.id}
+                peaksUrl={track.peaks_url}
+                height={48}
+                isActive={isCurrent}
+              />
+              {isCurrent && (
+                <p className="text-[9px] font-mono text-[#3a3328] mt-1.5 text-center">
+                  Click to seek
+                </p>
+              )}
+            </div>
 
             {/* Producer strip */}
             {creator && (
