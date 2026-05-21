@@ -90,6 +90,26 @@ export async function POST(req: NextRequest) {
 
     if (resendError) throw resendError;
 
+    // Upsert buyer contact in CRM (non-fatal — DB may not have migration 038 yet)
+    if (isSupabaseConfigured()) {
+      try {
+        const admin = createServiceClient();
+        await admin
+          .from('contacts')
+          .upsert(
+            {
+              email,
+              name: String(name).trim(),
+              category: 'buyer',
+              buyer_pipeline_status: 'new_lead',
+            },
+            { onConflict: 'email', ignoreDuplicates: false },
+          );
+      } catch {
+        // non-fatal
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Store contact error:', err);

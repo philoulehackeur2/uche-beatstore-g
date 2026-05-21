@@ -9,30 +9,29 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Strips double-protocol prefixes (e.g. "https://https://...") that can
+ * appear when the R2 public URL env var already has a trailing slash and
+ * the stored path accidentally prepends the full URL again.
+ */
+function sanitizeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.replace(/^(https?:\/\/)+/, 'https://');
+}
+
+/**
  * GET /api/store
  *
- * Public-by-design endpoint that powers the /store page. Returns
- * the producer's creator profile + every track flagged with
- * `tracks.store_listed = true`. Bypasses RLS via the service-role
- * client because the visitor has no auth session of their own.
+ * Public-by-design endpoint that powers the /store page. Returns:
+ *   creator:           CreatorProfile | null
+ *   tracks:            Array<Track + tags>
+ *   featuredPlaylists: Array<{ id, name, cover_url, tracks[] }>
  *
- * Resilient to partially-applied migrations: columns added in
- * migrations 033-035 (store_sort_order, store_enabled, store_featured,
- * store_order, accent_color, font_style) are fetched with try-catch
- * fallbacks so the store works even if those migrations haven't been
- * applied yet.
- *
- * Response shape:
- *   {
- *     creator:           CreatorProfile | null,
- *     tracks:            Array<Track>,
- *     featuredPlaylists: Array<{ id, name, cover_url }>,
- *   }
+ * Resilient to partially-applied migrations (033-036): each newer column
+ * set is fetched with a try-catch fallback.
  */
 export async function GET() {
   try {
     if (!isSupabaseConfigured()) {
-      // Local-store fallback so the demo deploy stays functional.
       const tracks = (getAll('tracks') as any[]).filter((t) => t.store_listed === true);
       const profiles = (getAll('creator_profiles' as any) as any[]) || [];
       const creator = profiles[0] ?? null;
@@ -42,8 +41,7 @@ export async function GET() {
     const admin = createServiceClient();
 
     // ── Tracks ─────────────────────────────────────────────────────────────
-    // Try with store_sort_order first (migration 033). If the column
-    // doesn't exist yet, fall back to a query without it.
+    // Try with store_sort_order first (migration 033). Fall back without it.
     let tracksAny: any[] = [];
 
     const withSortOrder = await admin
@@ -61,7 +59,6 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (withSortOrder.error) {
-      // store_sort_order column is missing — fall back without it
       const fallback = await admin
         .from('tracks')
         .select([
@@ -74,16 +71,36 @@ export async function GET() {
         ].join(', '))
         .eq('store_listed', true)
         .order('created_at', { ascending: false });
-
       if (fallback.error) throw fallback.error;
       tracksAny = (fallback.data as any[]) ?? [];
     } else {
       tracksAny = (withSortOrder.data as any[]) ?? [];
     }
 
+    // ── wav_url (migration 039) ─────────────────────────────────────────
+    // Re-fetch with wav_url if the column exists; otherwise it stays absent.
+    // We do this as a lightweight separate check rather than in the main query
+    // so the main tracks query stays resilient.
+
+    // ── Tags — join track_tags for all returned tracks ──────────────────
+    const trackIds = tracksAny.map((t: any) => t.id).filter(Boolean);
+    let tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
+    if (trackIds.length > 0) {
+      try {
+        const { data: tagRows } = await admin
+          .from('track_tags')
+          .select('track_id, tag, category')
+          .in('track_id', trackIds);
+        for (const row of (tagRows ?? []) as any[]) {
+          if (!tagsByTrack[row.track_id]) tagsByTrack[row.track_id] = [];
+          tagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
+        }
+      } catch {
+        // tags are optional enrichment; non-fatal
+      }
+    }
+
     // ── Creator profile ─────────────────────────────────────────────────────
-    // Fallback: if no listed tracks, still try to get a profile so
-    // store_enabled / hero / social data can be shown to the creator.
     const sellerId =
       tracksAny.find((t: any) => !!t.user_id)?.user_id ??
       (await admin.from('creator_profiles').select('user_id').limit(1).maybeSingle())
@@ -93,8 +110,7 @@ export async function GET() {
     let featuredPlaylists: Record<string, unknown>[] = [];
 
     if (sellerId) {
-      // Try fetching with the newer columns (migration 034+035).
-      // If those columns don't exist, fall back to the base set.
+      // Try with newer columns first (migrations 034, 035, 036).
       const profileWithNew = await admin
         .from('creator_profiles')
         .select([
@@ -102,13 +118,13 @@ export async function GET() {
           'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
           'instagram_handle', 'twitter_handle', 'spotify_url',
           'soundcloud_url', 'website_url', 'contact_email',
-          'accent_color', 'font_style', 'store_enabled',
+          'accent_color', 'font_style', 'store_enabled', 'text_color_primary',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();
 
       if (profileWithNew.error) {
-        // accent_color / font_style / store_enabled columns are missing — use base set
+        // Fall back without the newer columns
         const profileBase = await admin
           .from('creator_profiles')
           .select([
@@ -124,8 +140,12 @@ export async function GET() {
         creator = (profileWithNew.data as Record<string, unknown> | null) ?? null;
       }
 
-      // Featured playlists (migration 035: store_featured + store_order).
-      // Silently skip if the columns don't exist yet.
+      // Sanitize hero image URL
+      if (creator && creator.hero_image_url) {
+        creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url as string) };
+      }
+
+      // ── Featured playlists + their tracks (migration 035) ──────────────
       try {
         const playlistsResult = await admin
           .from('playlists')
@@ -135,19 +155,91 @@ export async function GET() {
           .order('store_order', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
 
-        if (!playlistsResult.error) {
-          featuredPlaylists = (playlistsResult.data as Record<string, unknown>[]) ?? [];
+        if (!playlistsResult.error && playlistsResult.data?.length) {
+          const playlists = playlistsResult.data as any[];
+          const plIds = playlists.map((p: any) => p.id);
+
+          // Fetch junction + tracks for all featured playlists in 2 queries
+          const [junctionRes, playlistTracksRes] = await Promise.all([
+            admin
+              .from('playlist_tracks')
+              .select('playlist_id, track_id, position')
+              .in('playlist_id', plIds)
+              .order('position', { ascending: true }),
+            Promise.resolve(null), // placeholder
+          ]);
+
+          const junction = (junctionRes.data ?? []) as any[];
+          const playlistTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+
+          let playlistTrackMap: Record<string, any> = {};
+          if (playlistTrackIds.length > 0) {
+            const { data: ptRows } = await admin
+              .from('tracks')
+              .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+              .in('id', playlistTrackIds);
+            for (const t of (ptRows ?? []) as any[]) {
+              playlistTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+            }
+          }
+
+          featuredPlaylists = playlists.map((pl: any) => {
+            const plTracks = junction
+              .filter((j: any) => j.playlist_id === pl.id)
+              .map((j: any) => playlistTrackMap[j.track_id])
+              .filter(Boolean);
+            return {
+              ...pl,
+              cover_url: sanitizeUrl(pl.cover_url),
+              tracks: plTracks,
+            };
+          });
         }
-        // If error (columns missing), featuredPlaylists stays []
       } catch {
-        // swallow — featured playlists are optional UI chrome
+        // featured playlists are optional chrome; non-fatal
       }
     }
 
-    // Strip the owner's auth uuid off every track before responding.
-    const safeTracks = tracksAny.map(({ user_id: _u, ...rest }: any) => rest);
+    // ── Licenses (from licenses table, migration 031) ────────────────────
+    let licenses: any[] = [];
+    if (sellerId) {
+      try {
+        const { data: licenseRows } = await admin
+          .from('licenses')
+          .select('id, name, description, price_usd, is_free, file_types, stems_included, is_exclusive, sort_order, streaming_limit, distribution_limit, commercial_rights, sync_rights, broadcast_rights, credit_required')
+          .eq('user_id', sellerId)
+          .order('sort_order', { ascending: true });
+        licenses = licenseRows ?? [];
+      } catch {
+        // licenses table may not exist in all deployments
+      }
+    }
 
-    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists });
+    // ── wav_url enrichment (migration 039) ───────────────────────────────
+    let wavByTrack: Record<string, string | null> = {};
+    if (trackIds.length > 0) {
+      try {
+        const { data: wavRows } = await admin
+          .from('tracks')
+          .select('id, wav_url')
+          .in('id', trackIds);
+        for (const r of (wavRows ?? []) as any[]) {
+          if (r.wav_url) wavByTrack[r.id] = r.wav_url;
+        }
+      } catch {
+        // wav_url column not yet added — non-fatal
+      }
+    }
+
+    // Strip owner uuid + sanitize cover_url + attach tags to each track
+    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => ({
+      ...rest,
+      cover_url: sanitizeUrl(cover_url),
+      tags: tagsByTrack[rest.id] ?? [],
+      wav_url: wavByTrack[rest.id] ?? null,
+    }));
+
+    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, licenses });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

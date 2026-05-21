@@ -36,6 +36,7 @@ interface ProfileForm {
   hero_image_url: string;
   accent_color: string;
   font_style: string;
+  text_color_primary: string;
   instagram_handle: string;
   twitter_handle: string;
   spotify_url: string;
@@ -64,6 +65,7 @@ const EMPTY_PROFILE: ProfileForm = {
   hero_image_url: '',
   accent_color: '#D4BFA0',
   font_style: 'default',
+  text_color_primary: '#E8DCC8',
   instagram_handle: '',
   twitter_handle: '',
   spotify_url: '',
@@ -331,6 +333,7 @@ export default function StoreEditorPage() {
           hero_image_url: p.hero_image_url ?? '',
           accent_color: p.accent_color ?? '#D4BFA0',
           font_style: p.font_style ?? 'default',
+          text_color_primary: p.text_color_primary ?? '#E8DCC8',
           instagram_handle: p.instagram_handle ?? '',
           twitter_handle: p.twitter_handle ?? '',
           spotify_url: p.spotify_url ?? '',
@@ -421,6 +424,7 @@ export default function StoreEditorPage() {
         hero_image_url: form.hero_image_url || null,
         accent_color: form.accent_color || '#D4BFA0',
         font_style: form.font_style || 'default',
+        text_color_primary: form.text_color_primary || '#E8DCC8',
         instagram_handle: form.instagram_handle || null,
         twitter_handle: form.twitter_handle || null,
         spotify_url: form.spotify_url || null,
@@ -687,7 +691,7 @@ export default function StoreEditorPage() {
               {/* Font style */}
               <Field label="Font Style">
                 <div className="flex gap-2">
-                  {(['default', 'modern', 'minimal'] as const).map((fs) => (
+                  {(['default', 'serif', 'mono'] as const).map((fs) => (
                     <button
                       key={fs}
                       type="button"
@@ -698,9 +702,38 @@ export default function StoreEditorPage() {
                           : 'bg-[#0c0a08] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
                       }`}
                     >
-                      {fs}
+                      {fs === 'default' ? 'Sans (default)' : fs === 'serif' ? 'Serif' : 'Mono'}
                     </button>
                   ))}
+                </div>
+              </Field>
+
+              {/* Primary text color */}
+              <Field label="Text Color">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-1.5">
+                    <input
+                      type="color"
+                      value={form.text_color_primary}
+                      onChange={set('text_color_primary')}
+                      className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
+                    />
+                    <input
+                      type="text"
+                      value={form.text_color_primary}
+                      onChange={set('text_color_primary')}
+                      maxLength={7}
+                      placeholder="#E8DCC8"
+                      className="w-20 bg-transparent text-[12px] text-[#E8DCC8] focus:outline-none font-mono"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, text_color_primary: '#E8DCC8' }))}
+                    className="text-[10px] font-mono text-[#5a5142] hover:text-[#E8DCC8] transition-colors"
+                  >
+                    Reset
+                  </button>
                 </div>
               </Field>
             </Section>
