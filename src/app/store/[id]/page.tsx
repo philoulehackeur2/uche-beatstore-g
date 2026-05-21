@@ -19,8 +19,6 @@ interface CreatorProfile {
   display_name?: string | null;
   bio?: string | null;
   hero_image_url?: string | null;
-  license_lease_price_usd?: number | null;
-  license_exclusive_price_usd?: number | null;
   license_notes?: string | null;
   instagram_handle?: string | null;
   twitter_handle?: string | null;
@@ -30,6 +28,25 @@ interface CreatorProfile {
   contact_email?: string | null;
 }
 
+/** Shape returned by /api/store/[id] after license resolution */
+interface ApiLicenseTier {
+  id: string;
+  name: string;
+  price_usd: number;
+  description: string | null;
+  is_free: boolean;
+  file_types: string[];
+  stems_included: boolean;
+  is_exclusive: boolean;
+  streaming_limit: number | null;
+  distribution_limit: number | null;
+  commercial_rights: boolean;
+  sync_rights: boolean;
+  broadcast_rights: boolean;
+  credit_required: boolean;
+}
+
+/** Shape the LicenseCard component expects */
 interface LicenseTier {
   id: string;
   name: string;
@@ -40,6 +57,8 @@ interface LicenseTier {
   isExclusive: boolean;
   accentClass: string;
   buttonClass: string;
+  /** 'lease' | 'exclusive' for the checkout API */
+  checkoutType: 'lease' | 'exclusive';
 }
 
 /* ─── Helpers ───────────────────────────────────────────────── */
@@ -56,70 +75,41 @@ function price(n: number | null | undefined): string {
   return `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
-/**
- * Build the 2-tier license array from track overrides + profile defaults.
- * Architecture is intentionally designed to accept 3-4 tiers in the future
- * (swap in the `licenses` table rows once the License Builder ships).
- */
-function buildLicenses(
-  track: Track,
-  creator: CreatorProfile | null,
-): LicenseTier[] {
-  const leasePrice =
-    track.lease_price_usd != null && Number(track.lease_price_usd) > 0
-      ? Number(track.lease_price_usd)
-      : creator?.license_lease_price_usd != null && Number(creator.license_lease_price_usd) > 0
-        ? Number(creator.license_lease_price_usd)
-        : null;
+function fmtLimit(n: number | null): string {
+  if (n == null) return 'Unlimited';
+  if (n >= 1_000_000) return `${n / 1_000_000}M`;
+  if (n >= 1_000) return `${n / 1_000}K`;
+  return String(n);
+}
 
-  const exclusivePrice =
-    track.exclusive_price_usd != null && Number(track.exclusive_price_usd) > 0
-      ? Number(track.exclusive_price_usd)
-      : creator?.license_exclusive_price_usd != null && Number(creator.license_exclusive_price_usd) > 0
-        ? Number(creator.license_exclusive_price_usd)
-        : null;
+/** Map server-resolved ApiLicenseTier → client LicenseTier for the card */
+function mapToUiTier(t: ApiLicenseTier): LicenseTier {
+  const rights: string[] = [];
+  if (t.is_exclusive) rights.push('Exclusive worldwide license');
+  else rights.push('Non-exclusive license');
+  rights.push(`Up to ${fmtLimit(t.streaming_limit)} streams`);
+  if (t.commercial_rights) rights.push('Commercial & paid use');
+  if (t.sync_rights) rights.push('Sync / film use');
+  if (t.broadcast_rights) rights.push('Broadcast / TV rights');
+  if (t.stems_included) rights.push('Stems included');
+  if (t.credit_required) rights.push('Producer credit required');
 
-  const tiers: LicenseTier[] = [];
-
-  if (leasePrice != null) {
-    tiers.push({
-      id: 'lease',
-      name: 'MP3 Lease',
-      price: leasePrice,
-      tagline: 'Non-exclusive · Personal & commercial use',
-      fileTypes: ['MP3'],
-      rights: [
-        'Non-exclusive license',
-        'Up to 100K streams / plays',
-        'Commercial & paid performances',
-        'Credit producer in releases',
-      ],
-      isExclusive: false,
-      accentClass: 'border-[#2d2620] hover:border-[#a08a6a]/40',
-      buttonClass: 'bg-white/[0.06] hover:bg-white/[0.1] text-[#E8DCC8] border border-white/[0.08]',
-    });
-  }
-
-  if (exclusivePrice != null) {
-    tiers.push({
-      id: 'exclusive',
-      name: 'Exclusive Rights',
-      price: exclusivePrice,
-      tagline: 'Full ownership transfer · Beat removed from store',
-      fileTypes: ['MP3', 'WAV', 'STEMS'],
-      rights: [
-        'Exclusive worldwide license',
-        'Unlimited streams & distribution',
-        'Full commercial & sync rights',
-        'Track removed from store on purchase',
-      ],
-      isExclusive: true,
-      accentClass: 'border-[#D4BFA0]/30 bg-gradient-to-b from-[#1f1a13] to-[#14110d]',
-      buttonClass: 'bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black',
-    });
-  }
-
-  return tiers;
+  return {
+    id: t.id,
+    name: t.name,
+    price: t.price_usd,
+    tagline: t.description ?? (t.is_exclusive ? 'Full ownership transfer' : 'Non-exclusive · Commercial use'),
+    fileTypes: t.file_types,
+    rights: rights.slice(0, 5),
+    isExclusive: t.is_exclusive,
+    checkoutType: t.is_exclusive ? 'exclusive' : 'lease',
+    accentClass: t.is_exclusive
+      ? 'border-[#D4BFA0]/30 bg-gradient-to-b from-[#1f1a13] to-[#14110d]'
+      : 'border-[#2d2620] hover:border-[#a08a6a]/40',
+    buttonClass: t.is_exclusive
+      ? 'bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black'
+      : 'bg-white/[0.06] hover:bg-white/[0.1] text-[#E8DCC8] border border-white/[0.08]',
+  };
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -140,6 +130,7 @@ export default function StoreProductPage({
 
   const [track, setTrack] = useState<Track | null>(null);
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
+  const [licenses, setLicenses] = useState<LicenseTier[]>([]);
   const [related, setRelated] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -156,6 +147,7 @@ export default function StoreProductPage({
         if (data.error) { setNotFound(true); return; }
         setTrack(data.track as Track);
         setCreator(data.creator ?? null);
+        setLicenses(((data.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier));
         setRelated((data.related as Track[]) ?? []);
       } catch {
         setNotFound(true);
@@ -183,7 +175,6 @@ export default function StoreProductPage({
     );
   }
 
-  const licenses = buildLicenses(track, creator);
   const isCurrent = currentTrack?.id === track.id;
   const isCurrentPlaying = isCurrent && isPlaying;
 
@@ -196,7 +187,7 @@ export default function StoreProductPage({
 
   const handleAddToCart = (tier: LicenseTier) => {
     addItem(track, {
-      id: `${tier.id}-${track.id}`,
+      id: `${tier.checkoutType}-${track.id}`,
       name: tier.name,
       price_usd: tier.price,
       file_types: tier.fileTypes,
@@ -296,6 +287,7 @@ export default function StoreProductPage({
                 peaksUrl={track.peaks_url}
                 height={48}
                 isActive={isCurrent}
+                onPlay={!isCurrent ? handlePlay : undefined}
               />
               {isCurrent && (
                 <p className="text-[9px] font-mono text-[#3a3328] mt-1.5 text-center">
@@ -422,16 +414,14 @@ export default function StoreProductPage({
               </div>
             )}
 
-            {/* View cart prompt */}
-            {isOpen === false && (
-              <button
-                onClick={() => setIsOpen(true)}
-                className="inline-flex items-center gap-2 text-[11px] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors self-start"
-              >
-                <ShoppingCart size={12} />
-                View cart
-              </button>
-            )}
+            {/* View cart — layout mounts the CartDrawer; just open it */}
+            <button
+              onClick={() => setIsOpen(true)}
+              className="inline-flex items-center gap-2 text-[11px] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors self-start"
+            >
+              <ShoppingCart size={12} />
+              View cart
+            </button>
 
             {/* Description */}
             {track.description && (

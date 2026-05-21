@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
         seller_user_id: sellerUserId ?? '',
         buyer_email: buyerEmail,
       },
-      success_url: `${APP_URL}/store?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/store?purchase=cancelled`,
     });
 

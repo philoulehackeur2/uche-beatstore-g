@@ -50,7 +50,8 @@ ALTER TABLE public.licenses ENABLE ROW LEVEL SECURITY;
 
 -- Owner can do everything; public gets nothing (prices go through the public
 -- /api/store endpoint which uses the service-role client).
-CREATE POLICY IF NOT EXISTS "licenses_owner_all"
+DROP POLICY IF EXISTS "licenses_owner_all" ON public.licenses;
+CREATE POLICY "licenses_owner_all"
   ON public.licenses
   FOR ALL
   USING (user_id = auth.uid())
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS public.track_licenses (
 
 ALTER TABLE public.track_licenses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "track_licenses_owner_all"
+DROP POLICY IF EXISTS "track_licenses_owner_all" ON public.track_licenses;
+CREATE POLICY "track_licenses_owner_all"
   ON public.track_licenses
   FOR ALL
   USING (

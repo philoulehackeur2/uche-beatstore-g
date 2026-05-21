@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
             // route the buyer arrived on.
             const isProjShare = meta.is_project_share !== 'false';
             const shareUrl = meta.source === 'store'
-              ? `${APP_URL}/store?purchase=success`
+              ? `${APP_URL}/store/download?session_id=${session.id}`
               : isProjShare
                 ? `${APP_URL}/projects/share/${meta.share_token}`
                 : `${APP_URL}/share/${meta.share_token}`;
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
                   <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 14px; color: #D4BFA0;">Purchase complete</h1>
                   <p style="font-size: 15px; line-height: 1.7;">Thanks for your purchase. Your licenses are now active.</p>
                   <div style="margin-top: 40px;">
-                    <a href="${shareUrl}" style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Access tracks</a>
+                    <a href="${shareUrl}" style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Download your files</a>
                   </div>
                   <p style="margin-top: 60px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">U2C Beatstore</p>
                 </div>

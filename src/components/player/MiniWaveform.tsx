@@ -111,9 +111,15 @@ interface Props {
   height?: number;
   /** Whether this track is the currently active track in the global player. */
   isActive: boolean;
+  /**
+   * Optional callback fired when the user clicks the waveform on a track that
+   * isn't currently active. The caller should start playback of this track.
+   * When isActive is true the click seeks instead (via seekTo in the store).
+   */
+  onPlay?: () => void;
 }
 
-export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive }: Props) {
+export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [bars, setBars] = useState<number[]>(() => syntheticBars(trackId, BAR_COUNT));
   const [peaksLoaded, setPeaksLoaded] = useState(false);
@@ -156,12 +162,17 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive }: Props
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isActive) return; // clicking a non-active waveform just plays it
+      if (!isActive) {
+        // Non-active track: clicking anywhere on the waveform starts playback.
+        onPlay?.();
+        return;
+      }
+      // Active track: clicking seeks to that position.
       const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
       const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       seekTo(fraction);
     },
-    [isActive, seekTo],
+    [isActive, onPlay, seekTo],
   );
 
   const fillPct = isActive ? progress * 100 : 0;
@@ -171,7 +182,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive }: Props
       ref={containerRef}
       onClick={handleClick}
       style={{ height }}
-      className={`relative w-full overflow-hidden ${isActive ? 'cursor-col-resize' : 'cursor-default'}`}
+      className={`relative w-full overflow-hidden ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
       role={isActive ? 'slider' : undefined}
       aria-label={isActive ? 'Seek' : undefined}
       aria-valuenow={isActive ? Math.round(progress * 100) : undefined}
