@@ -4,11 +4,9 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
+// force-dynamic: no static pre-render; every request hits the DB so
+// newly listed tracks appear immediately (no 60-second stale window).
 export const dynamic = 'force-dynamic';
-// Edge cache the public storefront for 60s — the catalogue doesn't
-// change second-by-second, and unauthed visitors should NEVER pay
-// for a cold render. SWR keeps the page snappy after expiry.
-export const revalidate = 60;
 
 /**
  * GET /api/store
@@ -72,21 +70,39 @@ export async function GET() {
     // track's user_id; if there are no listed tracks, the creator
     // ends up null and the page renders an empty-state.
     let creator: Record<string, unknown> | null = null;
+    let featuredPlaylists: Record<string, unknown>[] = [];
     const tracksAny = (tracks as any[]) ?? [];
-    const sellerId = tracksAny.find((t: any) => !!t.user_id)?.user_id;
+
+    // Fallback: if no listed tracks, still try to get a profile so
+    // store_enabled / hero / social data can be shown to the creator.
+    const sellerId =
+      tracksAny.find((t: any) => !!t.user_id)?.user_id ??
+      (await admin.from('creator_profiles').select('user_id').limit(1).maybeSingle())
+        .data?.user_id;
+
     if (sellerId) {
-      const { data: profile } = await admin
-        .from('creator_profiles')
-        .select([
-          'display_name', 'bio', 'hero_image_url', 'credits',
-          'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
-          'instagram_handle', 'twitter_handle', 'spotify_url',
-          'soundcloud_url', 'website_url', 'contact_email',
-          'accent_color', 'font_style',
-        ].join(', '))
-        .eq('user_id', sellerId)
-        .maybeSingle();
-      creator = (profile as Record<string, unknown> | null) ?? null;
+      const [profileResult, playlistsResult] = await Promise.all([
+        admin
+          .from('creator_profiles')
+          .select([
+            'display_name', 'bio', 'hero_image_url', 'credits',
+            'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
+            'instagram_handle', 'twitter_handle', 'spotify_url',
+            'soundcloud_url', 'website_url', 'contact_email',
+            'accent_color', 'font_style', 'store_enabled',
+          ].join(', '))
+          .eq('user_id', sellerId)
+          .maybeSingle(),
+        admin
+          .from('playlists')
+          .select('id, name, cover_url, store_order')
+          .eq('user_id', sellerId)
+          .eq('store_featured', true)
+          .order('store_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false }),
+      ]);
+      creator = (profileResult.data as Record<string, unknown> | null) ?? null;
+      featuredPlaylists = (playlistsResult.data as Record<string, unknown>[]) ?? [];
     }
 
     // Strip the owner's auth uuid off every track before responding
@@ -94,7 +110,7 @@ export async function GET() {
     // ever multi-tenanted.
     const safeTracks = tracksAny.map(({ user_id: _u, ...rest }: any) => rest);
 
-    return NextResponse.json({ creator, tracks: safeTracks });
+    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

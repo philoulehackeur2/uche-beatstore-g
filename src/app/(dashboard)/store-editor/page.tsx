@@ -20,12 +20,12 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Loader2, Save, ExternalLink, ChevronDown, ChevronRight,
-  Image as ImageIcon, Upload, Globe, Instagram, Twitter,
+  Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
-  GripVertical, Check, X, Plus,
+  GripVertical, Check, X, Plus, Layers,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
-import { audioSrc } from '@/lib/audio/url';
+import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -141,14 +141,34 @@ const textareaCls = `${inputCls} resize-none leading-relaxed`;
 
 /* ─── Live preview ───────────────────────────────────────────── */
 
+interface PreviewTrack {
+  id: string;
+  title: string;
+  type: string;
+  cover_url: string | null;
+  bpm: number | null;
+}
+
 function StorePreview({
   profile,
   featuredPlaylists,
+  tracks,
 }: {
   profile: ProfileForm;
   featuredPlaylists: PlaylistRow[];
+  tracks: PreviewTrack[];
 }) {
   const accent = profile.accent_color || '#D4BFA0';
+
+  // Social link presence badges (bottom of preview)
+  const socialLinks = [
+    profile.instagram_handle && { label: 'IG', value: `@${profile.instagram_handle.replace(/^@/, '')}` },
+    profile.twitter_handle   && { label: 'X',  value: `@${profile.twitter_handle.replace(/^@/, '')}` },
+    profile.spotify_url      && { label: 'Spotify', value: '↗' },
+    profile.soundcloud_url   && { label: 'SoundCloud', value: '↗' },
+    profile.website_url      && { label: 'Site', value: '↗' },
+    profile.contact_email    && { label: 'Email', value: profile.contact_email },
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
 
   return (
     <div
@@ -156,27 +176,29 @@ function StorePreview({
       style={{ '--store-accent': accent } as React.CSSProperties}
     >
       {/* Hero strip */}
-      <div className="relative min-h-[160px] flex flex-col justify-end p-5">
-        {/* Background */}
+      <div className="relative min-h-[140px] flex flex-col justify-end p-5">
         {profile.hero_image_url ? (
           <img
             src={profile.hero_image_url}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-30"
+            className="absolute inset-0 w-full h-full object-cover opacity-40"
           />
         ) : (
           <div
-            className="absolute inset-0 opacity-20"
+            className="absolute inset-0 opacity-25"
             style={{ background: `radial-gradient(ellipse at 30% 50%, ${accent} 0%, transparent 65%)` }}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0907]/90 to-transparent" />
-
         <div className="relative z-10">
           <p className="text-[8px] font-mono uppercase tracking-widest mb-1" style={{ color: accent }}>
-            {profile.credits || 'Producer'}
+            {profile.credits || 'Beat store'}
           </p>
-          <h2 className="text-[22px] font-black uppercase tracking-tight text-white leading-none">
+          <h2
+            className={`text-[20px] font-black uppercase tracking-tight text-white leading-none ${
+              profile.font_style === 'serif' ? 'font-serif' : ''
+            }`}
+          >
             {profile.display_name || 'Your Name'}
           </h2>
           {profile.bio && (
@@ -184,72 +206,70 @@ function StorePreview({
               {profile.bio}
             </p>
           )}
-          {/* Social icons strip */}
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {profile.instagram_handle && (
-              <span className="text-[9px] font-mono text-[#6a5d4a] bg-white/[0.04] border border-[#1f1a13] px-2 py-0.5 rounded">
-                IG @{profile.instagram_handle}
-              </span>
-            )}
-            {profile.twitter_handle && (
-              <span className="text-[9px] font-mono text-[#6a5d4a] bg-white/[0.04] border border-[#1f1a13] px-2 py-0.5 rounded">
-                𝕏 @{profile.twitter_handle}
-              </span>
-            )}
-            {profile.spotify_url && (
-              <span className="text-[9px] font-mono text-[#6a5d4a] bg-white/[0.04] border border-[#1f1a13] px-2 py-0.5 rounded">
-                Spotify
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
       {/* Featured playlists */}
       {featuredPlaylists.length > 0 && (
         <div className="px-4 py-3 border-t border-[#1a160f]">
-          <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Featured</p>
+          <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Featured Playlists</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {featuredPlaylists.map((pl) => (
-              <div key={pl.id} className="shrink-0 w-16">
-                <div className="w-16 h-16 rounded-lg bg-[#1a160f] border border-[#2d2620] overflow-hidden flex items-center justify-center mb-1">
+              <div key={pl.id} className="shrink-0 w-14">
+                <div className="w-14 h-14 rounded-lg bg-[#1a160f] border border-[#2d2620] overflow-hidden flex items-center justify-center mb-1">
                   {pl.cover_url
                     ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
-                    : <ListMusic size={16} className="text-[#3a3328]" />}
+                    : <ListMusic size={14} className="text-[#3a3328]" />}
                 </div>
-                <p className="text-[8px] text-[#6a5d4a] truncate leading-tight">{pl.name}</p>
+                <p className="text-[7px] text-[#6a5d4a] truncate leading-tight">{pl.name}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Track grid stub */}
+      {/* Beat grid — real published tracks */}
       <div className="px-4 py-3 border-t border-[#1a160f]">
-        <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Beats</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="aspect-square rounded-lg bg-[#1a160f] border border-[#1f1a13] flex items-center justify-center">
-              <Music size={12} className="text-[#2d2620]" />
-            </div>
-          ))}
-        </div>
-        <p className="text-[9px] text-[#3a3328] mt-2 font-mono">Your published beats appear here.</p>
+        <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">
+          Beats ({tracks.length} published)
+        </p>
+        {tracks.length > 0 ? (
+          <div className="grid grid-cols-3 gap-1.5">
+            {tracks.slice(0, 6).map((t) => (
+              <div key={t.id} className="aspect-square rounded-lg bg-[#1a160f] border border-[#1f1a13] overflow-hidden flex items-center justify-center relative">
+                {t.cover_url
+                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                  : <Music size={12} className="text-[#2d2620]" />}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="aspect-square rounded-lg bg-[#1a160f] border border-dashed border-[#1f1a13] flex items-center justify-center">
+                <Music size={10} className="text-[#1f1a13]" />
+              </div>
+            ))}
+          </div>
+        )}
+        {tracks.length === 0 && (
+          <p className="text-[8px] text-[#3a3328] mt-1.5 font-mono">
+            List beats in store to see them here.
+          </p>
+        )}
       </div>
 
-      {/* Price bar */}
-      {(profile.license_lease_price_usd || profile.license_exclusive_price_usd) && (
-        <div className="px-4 py-2 border-t border-[#1a160f] flex items-center gap-3">
-          {profile.license_lease_price_usd && (
-            <span className="text-[9px] font-mono text-[#E8DCC8]">
-              Lease from <strong>${profile.license_lease_price_usd}</strong>
-            </span>
-          )}
-          {profile.license_exclusive_price_usd && (
-            <span className="text-[9px] font-mono text-[#6a5d4a]">
-              · Excl. ${profile.license_exclusive_price_usd}
-            </span>
-          )}
+      {/* Social links at bottom */}
+      {socialLinks.length > 0 && (
+        <div className="px-4 py-3 border-t border-[#1a160f]">
+          <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Links</p>
+          <div className="flex flex-wrap gap-1.5">
+            {socialLinks.map(({ label, value }) => (
+              <span key={label} className="text-[8px] font-mono text-[#6a5d4a] bg-white/[0.03] border border-[#1f1a13] px-2 py-0.5 rounded">
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -262,11 +282,12 @@ export default function StoreEditorPage() {
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE);
   const [playlists, setPlaylists] = useState<PlaylistRow[]>([]);
   const [featured, setFeatured] = useState<PlaylistRow[]>([]);
+  const [previewTracks, setPreviewTracks] = useState<PreviewTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(['hero', 'social', 'playlists', 'track-controls']),
+    new Set(['hero', 'social', 'playlists', 'track-controls', 'licenses']),
   );
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -294,11 +315,14 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
+          fetch('/api/store'),
         ]);
-        const [pd, pld] = await Promise.all([profileRes.json(), playlistRes.json()]);
+        const [pd, pld, sd] = await Promise.all([profileRes.json(), playlistRes.json(), storeRes.json()]);
+        // Real published beats for the live preview
+        setPreviewTracks((sd.tracks ?? []).slice(0, 6) as PreviewTrack[]);
         const p = pd.profile ?? {};
         setForm({
           display_name: p.display_name ?? '',
@@ -879,38 +903,6 @@ export default function StoreEditorPage() {
                 </button>
               </div>
 
-              {/* Default license prices */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Default Lease Price (USD)">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#5a5142]">$</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={form.license_lease_price_usd}
-                      onChange={set('license_lease_price_usd')}
-                      placeholder="e.g. 29.99"
-                      className={`${inputCls} pl-7`}
-                    />
-                  </div>
-                </Field>
-                <Field label="Default Exclusive Price (USD)">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#5a5142]">$</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={form.license_exclusive_price_usd}
-                      onChange={set('license_exclusive_price_usd')}
-                      placeholder="e.g. 299.99"
-                      className={`${inputCls} pl-7`}
-                    />
-                  </div>
-                </Field>
-              </div>
-
               {/* License notes */}
               <Field label="License Notes">
                 <textarea
@@ -921,6 +913,23 @@ export default function StoreEditorPage() {
                   className={textareaCls}
                 />
               </Field>
+            </Section>
+
+            {/* ⑤ License Tiers */}
+            <Section
+              id="licenses"
+              title="License Tiers"
+              icon={<Layers size={13} />}
+              open={openSections.has('licenses')}
+              onToggle={() =>
+                setOpenSections((prev) => {
+                  const next = new Set(prev);
+                  next.has('licenses') ? next.delete('licenses') : next.add('licenses');
+                  return next;
+                })
+              }
+            >
+              <LicenseBuilder />
             </Section>
 
             {/* Mobile save shortcut */}
@@ -953,6 +962,7 @@ export default function StoreEditorPage() {
               <StorePreview
                 profile={form}
                 featuredPlaylists={featured}
+                tracks={previewTracks}
               />
               {!form.store_enabled && (
                 <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-950/30 border border-amber-900/30 text-amber-500 text-[10px] font-mono">
