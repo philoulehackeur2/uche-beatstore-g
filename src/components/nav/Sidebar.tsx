@@ -114,7 +114,7 @@ export function Sidebar() {
   }, []);
   const fetchProjects = async () => {
     try {
-      const res = await fetch('/api/projects', { cache: 'no-store' });
+      const res = await fetch('/api/projects');
       if (!res.ok) return;
       const data = await res.json();
       const list = Array.isArray(data) ? data : data.projects || [];

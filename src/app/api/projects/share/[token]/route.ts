@@ -121,33 +121,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     // ── Project share (default) ─────────────────────────────────────────
-    const { data: project } = await admin
-      .from('projects')
-      .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
-      .eq('id', share.project_id)
-      .maybeSingle();
-
-    let creator: Record<string, unknown> | null = null;
-    if (project?.user_id) creator = await fetchCreator(project.user_id);
-
-    const { data: junction } = await admin
-      .from('project_tracks')
-      .select('track_id, role, position')
-      .eq('project_id', share.project_id)
-      .order('position', { ascending: true });
+    // Project + junction don't depend on each other; fan out.
+    const [{ data: project }, { data: junction }] = await Promise.all([
+      admin.from('projects')
+        .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
+        .eq('id', share.project_id)
+        .maybeSingle(),
+      admin.from('project_tracks')
+        .select('track_id, role, position')
+        .eq('project_id', share.project_id)
+        .order('position', { ascending: true }),
+    ]);
 
     const trackIds = (junction ?? []).map((j: any) => j.track_id);
-    let tracks: any[] = [];
-    let stems: any[] = [];
-    if (trackIds.length) {
-      const [tracksRes, stemsRes] = await Promise.all([
-        admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
-        admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
-      ]);
-      stems = stemsRes.data ?? [];
-      const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
-      tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean);
-    }
+
+    // Creator depends on project.user_id; tracks/stems depend on junction.
+    // Run all three in parallel now that those inputs are resolved.
+    const [creator, tracksRes, stemsRes] = await Promise.all([
+      project?.user_id ? fetchCreator(project.user_id) : Promise.resolve(null),
+      trackIds.length ? admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds) : Promise.resolve({ data: [] as any[] }),
+      trackIds.length ? admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds) : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const stems = stemsRes.data ?? [];
+    const byId = new Map(((tracksRes as any).data ?? []).map((t: any) => [t.id, t]));
+    const tracks = trackIds.length
+      ? (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean)
+      : [];
 
     const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
 

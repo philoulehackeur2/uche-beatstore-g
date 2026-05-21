@@ -33,6 +33,7 @@ export interface Track {
   description?: string | null;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  store_listed?: boolean | null;
   created_at: string;
 }
 

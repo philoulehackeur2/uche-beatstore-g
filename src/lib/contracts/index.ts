@@ -66,6 +66,7 @@ export const TrackPatchBodySchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   lease_price_usd: z.number().nonnegative().nullable().optional(),
   exclusive_price_usd: z.number().nonnegative().nullable().optional(),
+  store_listed: z.boolean().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 

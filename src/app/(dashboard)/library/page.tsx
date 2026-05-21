@@ -107,7 +107,7 @@ export default function LibraryPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/tracks', { cache: 'no-store' });
+      const res = await fetch('/api/tracks');
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || `Failed to load tracks (${res.status})`);
