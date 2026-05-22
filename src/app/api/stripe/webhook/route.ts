@@ -32,8 +32,8 @@ export const dynamic = 'force-dynamic';
  *   track_license (lease/exclusive/custom) — email + download; exclusive also
  *     delists the track (store_listed=false).
  *   project        — create project_access_links row (with unique token) +
- *     delivery email pointing to /projects/share/<token>. Buyer gets full
- *     access to every track in the project via the existing share UI + downloads.
+ *     delivery email pointing to /store/projects/access/<token>. Buyer gets
+ *     a token-gated delivery page with per-track WAV/MP3 download links.
  *
  * ── Background processing ─────────────────────────────────────────────────
  * The critical path (signature verify + purchase upsert + event log insert)
@@ -414,7 +414,7 @@ export async function POST(req: NextRequest) {
           const accessId = createdAccess.id;
           const accessToken = createdAccess.token;
 
-          // Fire-and-forget fulfillment (CRM + email with /projects/share/${token})
+          // Fire-and-forget fulfillment (CRM + email with /store/projects/access/${token})
           void runProjectFulfillment({
             session,
             meta,
