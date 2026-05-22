@@ -22,7 +22,8 @@ import {
   Loader2, Save, ExternalLink, ChevronDown, ChevronRight,
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
-  GripVertical, Check, X, Plus, Layers,
+  GripVertical, Check, X, Plus, Layers, Search,
+  ToggleLeft, ToggleRight, ShoppingBag,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -149,6 +150,19 @@ interface PreviewTrack {
   type: string;
   cover_url: string | null;
   bpm: number | null;
+}
+
+interface TrackRow {
+  id: string;
+  title: string;
+  type: string;
+  cover_url: string | null;
+  bpm: number | null;
+  key: string | null;
+  store_listed: boolean;
+  store_sort_order: number | null;
+  lease_price_usd: number | null;
+  exclusive_price_usd: number | null;
 }
 
 function StorePreview({
@@ -285,11 +299,14 @@ export default function StoreEditorPage() {
   const [playlists, setPlaylists] = useState<PlaylistRow[]>([]);
   const [featured, setFeatured] = useState<PlaylistRow[]>([]);
   const [previewTracks, setPreviewTracks] = useState<PreviewTrack[]>([]);
+  const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
+  const [trackSearch, setTrackSearch] = useState('');
+  const [togglingTrack, setTogglingTrack] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(['hero', 'social', 'playlists', 'track-controls', 'licenses']),
+    new Set(['hero', 'social', 'playlists', 'tracks', 'track-controls', 'licenses']),
   );
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -317,14 +334,40 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes, tracksRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
           fetch('/api/store'),
+          fetch('/api/tracks'),
         ]);
-        const [pd, pld, sd] = await Promise.all([profileRes.json(), playlistRes.json(), storeRes.json()]);
+        const [pd, pld, sd, td] = await Promise.all([
+          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(),
+        ]);
         // Real published beats for the live preview
         setPreviewTracks((sd.tracks ?? []).slice(0, 6) as PreviewTrack[]);
+
+        // All tracks for the listing manager (array response from /api/tracks)
+        const rawTracks: TrackRow[] = Array.isArray(td)
+          ? td.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              type: t.type,
+              cover_url: t.cover_url ?? null,
+              bpm: t.bpm ?? null,
+              key: t.key ?? null,
+              store_listed: !!t.store_listed,
+              store_sort_order: t.store_sort_order ?? null,
+              lease_price_usd: t.lease_price_usd ?? null,
+              exclusive_price_usd: t.exclusive_price_usd ?? null,
+            }))
+          : [];
+        setAllTracks(rawTracks.sort((a, b) => {
+          // Listed first (by sort order), then unlisted alphabetically
+          if (a.store_listed && !b.store_listed) return -1;
+          if (!a.store_listed && b.store_listed) return 1;
+          if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
+          return a.title.localeCompare(b.title);
+        }));
         const p = pd.profile ?? {};
         setForm({
           display_name: p.display_name ?? '',
@@ -411,6 +454,42 @@ export default function StoreEditorPage() {
     });
   };
   const handleDragEnd = () => { dragIdx.current = null; };
+
+  /* ── Track listing toggle ── */
+  const toggleTrackListed = async (trackId: string, currentlyListed: boolean) => {
+    setTogglingTrack(trackId);
+    const nextState = !currentlyListed;
+    // Optimistic update
+    setAllTracks((prev) =>
+      prev.map((t) => t.id === trackId ? { ...t, store_listed: nextState } : t),
+    );
+    // Update preview tracks
+    setPreviewTracks((prev) => {
+      if (!nextState) return prev.filter((t) => t.id !== trackId);
+      // Don't add back — just re-fetch on save
+      return prev;
+    });
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_listed: nextState }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      toast.success(nextState ? 'Added to store ✓' : 'Removed from store');
+    } catch (err: any) {
+      // Rollback
+      setAllTracks((prev) =>
+        prev.map((t) => t.id === trackId ? { ...t, store_listed: currentlyListed } : t),
+      );
+      toast.error('Failed to update', err.message);
+    } finally {
+      setTogglingTrack(null);
+    }
+  };
 
   /* ── Save ── */
   const handleSave = async () => {
@@ -907,10 +986,126 @@ export default function StoreEditorPage() {
               )}
             </Section>
 
-            {/* ④ Track Listing Controls */}
+            {/* ④ Track Listing — publish tracks to the store */}
+            <Section
+              id="tracks"
+              title="Beat Listing"
+              icon={<ShoppingBag size={15} />}
+              open={openSections.has('tracks')}
+              onToggle={() => toggleSection('tracks')}
+            >
+              <p className="text-[11px] text-[#5a5142]">
+                Toggle beats on or off to control what appears in your public store. To set prices and cover art, open the beat in your{' '}
+                <a href="/library" className="text-[#a08a6a] underline underline-offset-2 hover:text-[#D4BFA0] transition-colors">Library</a>.
+              </p>
+
+              {/* Search */}
+              {allTracks.length > 4 && (
+                <div className="relative">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" />
+                  <input
+                    type="text"
+                    value={trackSearch}
+                    onChange={(e) => setTrackSearch(e.target.value)}
+                    placeholder="Search beats…"
+                    className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors"
+                  />
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="flex items-center gap-3 text-[10px] font-mono text-[#5a5142]">
+                <span className="px-2 py-0.5 rounded bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] font-bold">
+                  {allTracks.filter((t) => t.store_listed).length} listed
+                </span>
+                <span>{allTracks.length} total beats</span>
+              </div>
+
+              {/* Track rows */}
+              {allTracks.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#1f1a13] py-10 text-center">
+                  <Music size={20} className="text-[#2d2620] mx-auto mb-2" />
+                  <p className="text-[12px] text-[#5a5142]">No beats in your library yet.</p>
+                  <a href="/library" className="mt-2 inline-block text-[10px] font-mono text-[#a08a6a] hover:text-[#D4BFA0] underline underline-offset-2 transition-colors">
+                    Upload your first beat →
+                  </a>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
+                  {allTracks
+                    .filter((t) =>
+                      !trackSearch.trim() ||
+                      t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
+                      (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
+                      String(t.bpm ?? '').includes(trackSearch),
+                    )
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                          t.store_listed
+                            ? 'bg-[#0e140e] border-[#6DC6A4]/20 hover:border-[#6DC6A4]/35'
+                            : 'bg-[#0a0907] border-[#1a160f] hover:border-[#1f1a13]'
+                        }`}
+                      >
+                        {/* Cover art */}
+                        <div className="w-9 h-9 rounded-md overflow-hidden bg-[#1a160f] border border-[#2d2620] shrink-0">
+                          {t.cover_url
+                            ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[12px] font-medium truncate ${t.store_listed ? 'text-[#E8DCC8]' : 'text-[#a08a6a]'}`}>
+                            {t.title}
+                          </p>
+                          <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">
+                            {t.type}
+                            {t.bpm ? ` · ${t.bpm} BPM` : ''}
+                            {t.key ? ` · ${t.key}` : ''}
+                          </p>
+                        </div>
+
+                        {/* Price badge (if set) */}
+                        {t.lease_price_usd != null && (
+                          <span className="hidden sm:block text-[9px] font-mono text-[#a08a6a] tabular-nums shrink-0">
+                            ${t.lease_price_usd}
+                          </span>
+                        )}
+
+                        {/* Status badge */}
+                        <span className={`hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
+                          t.store_listed
+                            ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20'
+                            : 'text-[#4a4338] bg-[#1a160f] border border-[#1f1a13]'
+                        }`}>
+                          {t.store_listed ? 'Live' : 'Draft'}
+                        </span>
+
+                        {/* Toggle */}
+                        <button
+                          onClick={() => toggleTrackListed(t.id, t.store_listed)}
+                          disabled={togglingTrack === t.id}
+                          title={t.store_listed ? 'Remove from store' : 'Add to store'}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none disabled:opacity-60 ${
+                            t.store_listed ? 'bg-[#6DC6A4]' : 'bg-[#1f1a13]'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            t.store_listed ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </Section>
+
+            {/* ⑤ Track Listing Controls */}
             <Section
               id="track-controls"
-              title="Track Listing Controls"
+              title="Store Settings"
               icon={<DollarSign size={15} />}
               open={openSections.has('track-controls')}
               onToggle={() => toggleSection('track-controls')}

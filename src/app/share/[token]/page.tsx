@@ -342,6 +342,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           project={projectMock}
           tracks={tracks}
           creator={creator}
+          licenses={[]}
           shareToken={share?.sales_enabled ? params.token : undefined}
           shareLeasePrice={share?.lease_price_usd ?? null}
           shareExclusivePrice={share?.exclusive_price_usd ?? null}

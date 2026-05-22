@@ -17,22 +17,25 @@ export const dynamic = 'force-dynamic';
  *
  * Returns everything the /store/download portal needs to render:
  *   {
- *     purchase: {
- *       id, buyer_email, amount_usd, created_at, status,
- *       line_items: [{track_id, license_type}]
- *     },
- *     tracks: [{id, title, type, cover_url, duration_seconds, bpm, key}],
- *     download_base: string  // base URL for download links
+ *     purchase: { id, buyer_email, amount_usd, created_at, status },
+ *     tracks: [
+ *       {
+ *         ...track fields...,
+ *         license_type: 'lease' | 'exclusive',
+ *         downloads: [
+ *           { format: 'mp3', label: 'MP3', proxied_url: '/api/audio?...' },
+ *           { format: 'wav', label: 'WAV', proxied_url: '...' },      // if wav_url uploaded
+ *           { format: 'vocals', label: 'Vocals Stem', proxied_url: '...' }, // if stems done + exclusive
+ *           ...
+ *         ]
+ *       }
+ *     ]
  *   }
  *
- * The download links themselves are constructed client-side as:
- *   /api/store/download-file?session_id=xxx&track_id=yyy
- * so the portal can show per-track buttons without extra round-trips.
- *
- * Security:
- *   - session_id is a Stripe cs_xxx — not guessable
- *   - download_unlocked=false rows (refunded/disputed) return 403
- *   - No PII beyond what the buyer themselves submitted at checkout
+ * Download URLs are pre-computed as /api/audio proxy URLs (same-origin,
+ * Content-Disposition: attachment) so the client can trigger them with a
+ * plain <a href download> — no server-side redirect chain that confuses
+ * browsers into "opening a page" instead of saving.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -47,10 +50,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const admin = createServiceClient();
+    const APP_URL = getAppUrl();
 
+    // ── Validate purchase ──────────────────────────────────────────────────
     const { data: purchase, error: pErr } = await admin
       .from('license_purchases')
-      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, track_ids, line_items, share_token, seller_user_id')
+      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, track_ids, line_items')
       .eq('stripe_session_id', sessionId)
       .maybeSingle();
 
@@ -66,34 +71,108 @@ export async function GET(req: NextRequest) {
     }
 
     const trackIds: string[] = Array.isArray(purchase.track_ids) ? purchase.track_ids : [];
-    let tracks: any[] = [];
+    const lineItems: Array<{ track_id: string; license_type: string }> =
+      Array.isArray(purchase.line_items) ? purchase.line_items : [];
 
+    let tracks: any[] = [];
     if (trackIds.length > 0) {
       const { data: trackRows } = await admin
         .from('tracks')
-        .select('id, title, type, cover_url, audio_url, peaks_url, duration_seconds, bpm, key, scale')
+        .select('id, title, type, cover_url, audio_url, wav_url, peaks_url, duration_seconds, bpm, key, scale, stems_status')
         .in('id', trackIds);
       tracks = trackRows ?? [];
     }
 
-    // Determine the file types each track was licensed under.
-    // line_items is [{track_id, license_type}] from migration 029.
-    const lineItems: Array<{ track_id: string; license_type: string }> =
-      Array.isArray(purchase.line_items) ? purchase.line_items : [];
+    // ── WAV urls (migration 039, non-fatal if column absent) ──────────────
+    // wav_url is already in the select above. No extra query needed.
 
-    // Build a richer tracks array that includes what the buyer licensed
-    const tracksWithLicense = tracks.map((t) => {
+    // ── Stems (done rows for these tracks) ────────────────────────────────
+    let stemsByTrack: Record<string, any> = {};
+    if (trackIds.length > 0) {
+      try {
+        const { data: stemRows } = await admin
+          .from('stems')
+          .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
+          .in('track_id', trackIds)
+          .eq('status', 'done');
+        for (const r of (stemRows ?? []) as any[]) {
+          stemsByTrack[r.track_id] = r;
+        }
+      } catch {
+        // stems table may not exist — non-fatal
+      }
+    }
+
+    // ── Build per-track downloads array ────────────────────────────────────
+    function proxied(rawUrl: string, filename: string): string {
+      return `${APP_URL}/api/audio?src=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
+    }
+
+    const tracksWithDownloads = tracks.map((t) => {
       const item = lineItems.find((li) => li.track_id === t.id);
-      const licenseType = item?.license_type ?? 'lease';
+      const licenseType: 'lease' | 'exclusive' =
+        (item?.license_type === 'exclusive' ? 'exclusive' : 'lease');
+
+      const titleSafe = (t.title || 'track').replace(/[^\w\s\-]/g, '_');
+      const audioExt = (
+        (t.audio_url as string | null)?.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] ?? 'mp3'
+      ).toLowerCase();
+
+      const downloads: Array<{ format: string; label: string; proxied_url: string }> = [];
+
+      // MP3 / main audio — always included
+      if (t.audio_url) {
+        downloads.push({
+          format: audioExt === 'wav' ? 'wav-main' : 'mp3',
+          label: audioExt === 'wav' ? 'WAV (main)' : 'MP3',
+          proxied_url: proxied(t.audio_url, `${titleSafe}.${audioExt}`),
+        });
+      }
+
+      // Separate WAV upload (migration 039) — available for all license types
+      // if the producer uploaded it
+      const wavUrl = t.wav_url as string | null;
+      if (wavUrl && audioExt !== 'wav') {
+        downloads.push({
+          format: 'wav',
+          label: 'WAV (high quality)',
+          proxied_url: proxied(wavUrl, `${titleSafe}.wav`),
+        });
+      }
+
+      // Stems — only for exclusive licensees, and only when stems job is done
+      if (licenseType === 'exclusive') {
+        const stem = stemsByTrack[t.id];
+        if (stem) {
+          const stemMap = [
+            { format: 'vocals', label: 'Vocals Stem', urlKey: 'vocals_url' },
+            { format: 'drums',  label: 'Drums Stem',  urlKey: 'drums_url' },
+            { format: 'bass',   label: 'Bass Stem',   urlKey: 'bass_url' },
+            { format: 'other',  label: 'Other Stem',  urlKey: 'other_url' },
+          ];
+          for (const { format, label, urlKey } of stemMap) {
+            const url = stem[urlKey] as string | null;
+            if (url) {
+              downloads.push({
+                format,
+                label,
+                proxied_url: proxied(url, `${titleSafe}_${format}.wav`),
+              });
+            }
+          }
+        }
+      }
+
       return {
         ...t,
+        // remove raw R2 URLs from client response (they're embedded inside proxied_url already)
+        audio_url: undefined,
+        wav_url: undefined,
         license_type: licenseType,
-        // What formats are included depends on the license tier
-        file_types: licenseType === 'exclusive' ? ['MP3', 'WAV', 'STEMS'] : ['MP3'],
+        file_types: downloads.map((d) => d.label), // backward compat
+        downloads,
       };
     });
-
-    const APP_URL = getAppUrl();
 
     return NextResponse.json({
       purchase: {
@@ -103,9 +182,7 @@ export async function GET(req: NextRequest) {
         created_at: purchase.created_at,
         status: purchase.status,
       },
-      tracks: tracksWithLicense,
-      // The download endpoint that gates file access by session_id
-      download_base: `${APP_URL}/api/store/download-file`,
+      tracks: tracksWithDownloads,
     });
   } catch (err) {
     log.error('delivery lookup failed', { sessionId, error: errorMessage(err) });

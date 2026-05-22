@@ -200,6 +200,40 @@ export async function GET() {
       }
     }
 
+    // ── Store-featured projects (migration 040) ──────────────────────────
+    let featuredProjects: Record<string, unknown>[] = [];
+    if (sellerId) {
+      try {
+        const projectsResult = await admin
+          .from('projects')
+          .select([
+            'id', 'name', 'cover_url', 'created_at',
+            'project_tracks(position, track_id, tracks(id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled))',
+          ].join(', '))
+          .eq('user_id', sellerId)
+          .eq('store_featured', true)
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(6);
+
+        if (!projectsResult.error && projectsResult.data?.length) {
+          featuredProjects = (projectsResult.data as any[]).map((proj) => ({
+            id: proj.id,
+            name: proj.name,
+            cover_url: sanitizeUrl(proj.cover_url),
+            store_order: null,
+            tracks: ((proj.project_tracks ?? []) as any[])
+              .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+              .map((pt: any) => pt.tracks)
+              .filter(Boolean)
+              .map((t: any) => ({ ...t, cover_url: sanitizeUrl(t.cover_url) })),
+          }));
+        }
+      } catch {
+        // projects table or store_featured column may not exist yet — non-fatal
+      }
+    }
+
     // ── Licenses (from licenses table, migration 031) ────────────────────
     let licenses: any[] = [];
     if (sellerId) {
@@ -239,7 +273,7 @@ export async function GET() {
       wav_url: wavByTrack[rest.id] ?? null,
     }));
 
-    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, licenses });
+    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, featuredProjects, licenses });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

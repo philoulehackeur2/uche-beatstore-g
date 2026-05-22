@@ -151,6 +151,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
 
+    // ── Producer's custom license tiers (for client share page) ────────
+    let licenses: any[] = [];
+    if (project?.user_id) {
+      try {
+        const { data: licData } = await admin
+          .from('licenses')
+          .select('id, name, description, price_usd, is_free, file_types, stems_included, is_exclusive, sort_order')
+          .eq('user_id', project.user_id)
+          .order('sort_order', { ascending: true });
+        licenses = licData ?? [];
+      } catch {
+        // licenses table may not exist in all deployments — non-fatal
+      }
+    }
+
     return NextResponse.json({
       share: redactShare(share),
       project: projectPublic,
@@ -159,6 +174,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       tracks,
       creator,
       stems,
+      licenses,
     });
   } catch (error: any) {
     console.error('Project share read error:', error);

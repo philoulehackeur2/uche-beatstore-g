@@ -13,6 +13,7 @@ import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
+import type { LicenseTier } from '@/components/store/LicenseSelector';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
@@ -164,6 +165,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [stems, setStems] = useState<any[]>([]);
+  const [licenses, setLicenses] = useState<LicenseTier[]>([]);
 
   // We keep the unlocked password in memory so subsequent fetches
   // (comments etc.) don't re-prompt.
@@ -272,6 +274,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       // owner has filled out their settings form. Client variant
       // degrades section-by-section when fields are missing.
       setCreator(data.creator ?? null);
+      setLicenses((data.licenses as LicenseTier[]) ?? []);
       setRequiresPassword(false);
       if (pw) passwordRef.current = pw;
     } catch {
@@ -620,6 +623,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           project={displayProject}
           tracks={tracks}
           creator={creator}
+          licenses={licenses}
           shareToken={share.sales_enabled ? token : undefined}
           playingId={activeTrack?.id ?? null}
           isPlaying={isPlaying}

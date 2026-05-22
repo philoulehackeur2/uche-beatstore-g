@@ -9,7 +9,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ShareModal } from '@/components/share/ShareModal';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { usePlayer } from '@/hooks/usePlayer';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -654,12 +654,12 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       />
 
       {showShareModal && track && (
-        <ShareModal
+        <ContentShareModal
           onClose={() => setShowShareModal(false)}
-          title={track.title}
-          trackIds={[track.id]}
+          contentType="track"
+          contentId={track.id}
+          contentTitle={track.title}
           coverUrl={track.cover_url}
-          kind="track"
         />
       )}
 

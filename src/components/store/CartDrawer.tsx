@@ -8,7 +8,8 @@
  * mounted once in the store layout rather than duplicated per page.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart, X, Music, Loader2 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
@@ -32,34 +33,24 @@ interface CartDrawerProps {
 }
 
 export function CartDrawer({ onClose, items, removeItem, total }: CartDrawerProps) {
+  const router = useRouter();
   const [buyerEmail, setBuyerEmail] = useState('');
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  const handleCheckout = async () => {
-    if (!buyerEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail)) {
-      toast.error('Add your email so we can send the license');
-      return;
+  // Hydrate email from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('antigravity-buyer-email');
+    if (stored) {
+      setBuyerEmail(stored);
     }
+  }, []);
+
+  const handleCheckout = () => {
     if (items.length === 0) return;
-    setCheckoutLoading(true);
-    try {
-      const res = await fetch('/api/store/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buyer_email: buyerEmail.trim(),
-          items: items.map((i) => ({
-            track_id: i.track.id,
-            license_type: i.license.is_exclusive ? 'exclusive' : 'lease',
-          })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      if (data.url) window.location.href = data.url;
-    } catch (err) {
-      toast.error('Checkout failed', err instanceof Error ? err.message : 'Unknown error');
-      setCheckoutLoading(false);
+    onClose();
+    if (buyerEmail.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail.trim())) {
+      router.push(`/store/checkout?email=${encodeURIComponent(buyerEmail.trim())}`);
+    } else {
+      router.push('/store/checkout');
     }
   };
 
@@ -137,12 +128,10 @@ export function CartDrawer({ onClose, items, removeItem, total }: CartDrawerProp
           />
           <button
             onClick={handleCheckout}
-            disabled={items.length === 0 || checkoutLoading}
+            disabled={items.length === 0}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-40 text-black text-[12px] font-bold uppercase tracking-wider transition-all"
           >
-            {checkoutLoading
-              ? <Loader2 size={13} className="animate-spin" />
-              : <ShoppingCart size={13} />}
+            <ShoppingCart size={13} />
             Checkout
           </button>
           <p className="text-[10px] text-[#5a5142] text-center font-mono">

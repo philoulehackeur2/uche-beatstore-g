@@ -134,8 +134,11 @@ export async function POST(req: NextRequest) {
     const APP_URL = getAppUrl();
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
+      ui_mode: 'embedded',
       mode: 'payment',
-      payment_method_types: ['card'],
+      automatic_payment_methods: {
+        enabled: true,
+      },
       customer_email: buyerEmail,
       line_items: lineItems,
       // Webhook reads these on checkout.session.completed to record
@@ -157,11 +160,10 @@ export async function POST(req: NextRequest) {
         seller_user_id: sellerUserId ?? '',
         buyer_email: buyerEmail,
       },
-      success_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/store?purchase=cancelled`,
+      return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
     });
 
-    return NextResponse.json({ url: session.url, session_id: session.id });
+    return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
   } catch (err) {
     log.error('store checkout failed', { error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
