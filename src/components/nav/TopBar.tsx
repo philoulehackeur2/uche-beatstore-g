@@ -61,28 +61,28 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 h-14 bg-[#0a0907]/95 backdrop-blur-md border-b border-[#1a160f] z-30 flex items-center px-4 md:px-6 gap-3 md:gap-6">
+      <header className="fixed top-0 left-0 right-0 h-14 bg-black border-b-2 border-white z-30 flex items-center px-4 md:px-8 gap-3 md:gap-8">
         {/* Mobile hamburger — visible below md, opens the slide-in menu */}
         <button
           onClick={() => setMobileOpen(true)}
-          className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors"
+          className="md:hidden w-8 h-8 flex items-center justify-center text-white hover:bg-black/30 transition-colors border border-white"
           aria-label="Open navigation menu"
         >
-          <Menu size={16} />
+          <Menu size={16} strokeWidth={2} />
         </button>
 
         {/* Brand */}
-        <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
-          <div className="w-6 h-6 rounded-[6px] bg-[#E8DCC8] flex items-center justify-center">
-            <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
+        <Link href="/library" className="flex items-center gap-3 group shrink-0">
+          <div className="w-7 h-7 border-2 border-white flex items-center justify-center bg-black">
+            <span className="text-xs font-black text-white tracking-widest">U2C</span>
           </div>
-          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white hidden sm:inline">
-            u2c beatstore
+          <span className="text-xs font-bold tracking-[0.3em] uppercase text-white hidden sm:inline border-l-2 border-white pl-3">
+            Beatstore
           </span>
         </Link>
 
         {/* Desktop nav — hidden below md (replaced by the mobile drawer) */}
-        <nav className="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto no-scrollbar">
+        <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto no-scrollbar">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
@@ -91,14 +91,14 @@ export function TopBar() {
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] transition-colors shrink-0',
+                  'flex items-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 border',
                   active
-                    ? 'bg-[#16130e] text-white'
-                    : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#101010]',
+                    ? 'bg-white text-black border-white'
+                    : 'bg-transparent text-white border-white/40 hover:border-white',
                 )}
               >
-                <Icon size={13} strokeWidth={1.75} className={active ? 'text-white' : ''} />
-                <span className="font-medium tracking-tight">{item.label}</span>
+                <Icon size={12} strokeWidth={2.5} />
+                <span>{item.label}</span>
               </Link>
             );
           })}
@@ -112,23 +112,23 @@ export function TopBar() {
             Mobile users can still hit ⌘K / Ctrl+K. */}
         <button
           onClick={() => openPalette(true)}
-          className="hidden md:flex items-center gap-2 w-56 bg-[#14110d] border border-[#1a160f] rounded-md py-1.5 px-3 text-[11px] text-[#3a3328] hover:border-[#2d2620] hover:text-[#6a5d4a] transition-colors shrink-0"
+          className="hidden md:flex items-center gap-2 w-48 bg-black border-2 border-white py-1.5 px-3 text-xs text-white hover:bg-white/5 transition-colors shrink-0 font-bold uppercase tracking-widest"
           title="Search (⌘K)"
         >
-          <Search size={12} />
+          <Search size={12} strokeWidth={2.5} />
           <span className="flex-1 text-left">Search</span>
-          <kbd className="text-[9px] font-mono border border-[#1a160f] rounded px-1 py-0.5">⌘K</kbd>
+          <kbd className="text-[9px] font-mono border border-white px-1.5 py-0.5 text-white">⌘K</kbd>
         </button>
 
         {/* Activity bell — opens the slide-in activity panel. Shown at
             every breakpoint; mobile users want this just as much. */}
         <button
           onClick={() => setActivityOpen(true)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
+          className="w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 transition-colors shrink-0 border border-white/40 hover:border-white"
           aria-label="Open activity"
           title="Activity"
         >
-          <Bell size={14} />
+          <Bell size={12} strokeWidth={2.5} />
         </button>
 
         {/* Settings gear — moved out of the horizontal nav so it lives
@@ -140,13 +140,13 @@ export function TopBar() {
           aria-label="Open settings"
           title="Settings"
           className={cn(
-            'hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors shrink-0',
+            'hidden md:flex w-8 h-8 items-center justify-center transition-colors shrink-0 border',
             pathname === '/settings' || pathname.startsWith('/settings/')
-              ? 'bg-[#16130e] text-white'
-              : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
+              ? 'bg-white border-white text-black'
+              : 'bg-black border-white/40 text-white hover:border-white',
           )}
         >
-          <Settings size={14} />
+          <Settings size={12} strokeWidth={2.5} />
         </Link>
 
         {/* User badge — links to creator profile */}
@@ -155,14 +155,14 @@ export function TopBar() {
           aria-label="Creator profile"
           title="Profile"
           className={cn(
-            'flex items-center gap-2 shrink-0 w-7 h-7 rounded-full transition-colors',
+            'flex items-center gap-2 shrink-0 w-8 h-8 transition-colors border',
             pathname === '/profile' || pathname.startsWith('/profile/')
-              ? 'bg-[#D4BFA0]/20 border border-[#D4BFA0]/40'
-              : 'bg-[#1a160f] border border-[#2d2620] hover:border-[#D4BFA0]/30',
+              ? 'bg-white border-white text-black'
+              : 'bg-black border-white text-white hover:bg-white/10',
           )}
         >
-          <div className="w-full h-full rounded-full flex items-center justify-center">
-            <User size={12} className={pathname === '/profile' ? 'text-[#D4BFA0]' : 'text-[#a08a6a]'} />
+          <div className="w-full h-full flex items-center justify-center">
+            <User size={12} strokeWidth={2.5} />
           </div>
         </Link>
 
@@ -178,24 +178,24 @@ export function TopBar() {
         <>
           <div
             onClick={() => setMobileOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+            className="md:hidden fixed inset-0 bg-black/70 z-40 animate-in fade-in duration-200"
           />
           <aside
-            className="md:hidden fixed top-0 left-0 bottom-0 w-72 z-50 bg-[#0a0907] border-r border-white/[0.06] flex flex-col animate-in slide-in-from-left duration-300"
+            className="md:hidden fixed top-0 left-0 bottom-0 w-72 z-50 bg-black border-r-2 border-white flex flex-col animate-in slide-in-from-left duration-300"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
-              <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8]">
-                U2C Beatstore
+            <div className="flex items-center justify-between px-5 py-4 border-b-2 border-white">
+              <span className="text-xs font-bold tracking-[0.3em] uppercase text-white">
+                Beatstore
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.04] transition-colors"
+                className="w-7 h-7 flex items-center justify-center text-white hover:bg-white/10 transition-colors border border-white/40 hover:border-white"
                 aria-label="Close menu"
               >
-                <X size={14} />
+                <X size={14} strokeWidth={2.5} />
               </button>
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {[...NAV_ITEMS, ...MOBILE_EXTRA_ITEMS].map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/');
                 const Icon = item.icon;
@@ -205,14 +205,14 @@ export function TopBar() {
                     href={item.href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
+                      'flex items-center gap-3 px-3 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border',
                       active
-                        ? 'bg-[#16130e] text-white'
-                        : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
+                        ? 'bg-white text-black border-white'
+                        : 'text-white border-white/40 hover:border-white',
                     )}
                   >
-                    <Icon size={15} strokeWidth={1.75} />
-                    <span className="font-medium tracking-tight">{item.label}</span>
+                    <Icon size={14} strokeWidth={2.5} />
+                    <span>{item.label}</span>
                   </Link>
                 );
               })}
