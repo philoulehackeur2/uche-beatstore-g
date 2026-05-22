@@ -61,22 +61,20 @@ export async function GET() {
       projectIds.push(p.id);
     }
 
+    // Frozen amount_usd was added in migration 044; older access_links
+    // rows have it null and we fall back to projects.price_usd below.
     let accessLinks: any[] = [];
     if (projectIds.length > 0) {
       const { data: links, error: alErr } = await admin
         .from('project_access_links')
-        .select('id, project_id, buyer_email, stripe_session_id, created_at, expires_at')
+        .select('id, project_id, buyer_email, stripe_session_id, amount_usd, created_at, expires_at')
         .in('project_id', projectIds)
         .order('created_at', { ascending: false });
       if (alErr) throw alErr;
       accessLinks = links ?? [];
     }
 
-    // Pull project amounts from Stripe sessions via license_purchases? No —
-    // project purchases don't write to license_purchases (the webhook routes
-    // them to project_access_links). We don't store amount on access_links,
-    // so we read project.price_usd at display time. Not 100% historically
-    // accurate if price changes, but acceptable for a sales-list view.
+    // Fallback for legacy access_links that pre-date migration 044.
     const priceById: Record<string, number | null> = {};
     if (projectIds.length > 0) {
       const { data: priced } = await admin
@@ -127,7 +125,9 @@ export async function GET() {
       item_label: projectById[a.project_id] ?? 'Project',
       item_count: 1,
       license_type: null,
-      amount_usd: priceById[a.project_id] ?? null,
+      // Prefer frozen amount (migration 044); fall back to current
+      // projects.price_usd only for legacy rows.
+      amount_usd: a.amount_usd != null ? Number(a.amount_usd) : (priceById[a.project_id] ?? null),
       stripe_session_id: a.stripe_session_id ?? null,
       status: a.expires_at && new Date(a.expires_at).getTime() < Date.now() ? 'expired' : 'paid',
       download_unlocked: null,
