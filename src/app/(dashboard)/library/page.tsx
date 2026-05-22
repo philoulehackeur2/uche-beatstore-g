@@ -6,7 +6,7 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Search, Sparkles, Play, Shuffle, LayoutList, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -341,154 +341,75 @@ export default function LibraryPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
-        {/* Hero — gradient panel with the library "cover" tile, title,
-            stats, and the two primary actions (Play / Shuffle). Builds on
-            the same gradient + glass language as the project detail
-            cover, only flatter and wider. Filter chips and the secondary
-            toolbar sit underneath, outside the hero, so the hero only
-            owns identity + primary intent. */}
-        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/35 via-[#2A2418]/25 to-[#0c0c0c] p-4 sm:p-6 md:p-7 transition-all duration-700">
-          {/* Dynamic Image Background */}
-          <div
-            className="absolute inset-0 z-0 bg-cover bg-center opacity-25 mix-blend-overlay blur-[2px] transition-all duration-700"
-            style={{ backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')" }}
-          />
-          <div
-            className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-25 z-0 transition-all duration-700"
-            style={{ background: heroCoverUrl ? 'none' : 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
-          />
-          <div className="relative z-10 flex items-end gap-4 sm:gap-5 md:gap-7">
-            {/* Dynamic Miniature Vinyl Record Card */}
-            <div className="relative w-[88px] h-[88px] sm:w-[120px] sm:h-[120px] md:w-[140px] md:h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
-              {heroCoverUrl ? (
-                <>
-                  <img loading="lazy"
-                    src={heroCoverUrl}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none"
-                  />
-                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
-                    {/* Vinyl grooves */}
-                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
-                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
-                    <div className="absolute inset-5 rounded-full border border-white/[0.01]" />
-                    <div className="absolute inset-7 rounded-full border border-white/[0.01]" />
-                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#0a0907] relative animate-[spin_10s_linear_infinite]">
-                      <img loading="lazy"
-                        src={heroCoverUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40 shadow-inner" />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-[#D4BFA0]/20 to-[#3a2a8a]/20 flex items-center justify-center relative">
-                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
-                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
-                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#D4BFA0]/25 to-[#3a2a8a]/25 flex items-center justify-center text-white relative">
-                      <Disc3 size={24} className="text-white/80 animate-[spin_8s_linear_infinite]" strokeWidth={1.2} />
-                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40" />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-8 md:pt-16">
+        {/* Hero — minimal, floating typography inspired by Hyper Dreams.
+            Clean layout with brand-style typography and subtle metadata. */}
+        <div className="mb-10 sm:mb-14">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E8D8B8] mb-1 sm:mb-2">Vault</p>
-              <h1 className="text-[28px] sm:text-[40px] md:text-[56px] font-bold tracking-tight text-white leading-none mb-2 sm:mb-3 font-heading">Library</h1>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">
-                {tracks.length} track{tracks.length !== 1 ? 's' : ''}
-                {totalDurationLabel && <> · {totalDurationLabel}</>}
-              </p>
-              {/* Aggregate stat chips — only shown once there's data */}
-              {tracks.length > 0 && (
-                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  {libraryStats.avgBpm && (
-                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg tabular-nums">
-                      ⌀ {libraryStats.avgBpm} BPM
-                    </span>
-                  )}
-                  {libraryStats.topKey && (
-                    <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
-                      libraryStats.topKeyScale === 'minor'
-                        ? 'text-[#9d95e8] bg-[#1a1833]/50 border border-[#534AB7]/25'
-                        : 'text-[#c8a47a] bg-[#1f1a10]/50 border border-[#3d3020]/30'
-                    }`}>
-                      Top key: {libraryStats.topKey}
-                    </span>
-                  )}
-                  {libraryStats.topType && (
-                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg capitalize">
-                      Mostly {libraryStats.topType}s
-                    </span>
-                  )}
-                  {libraryStats.avgRating && (
-                    <span className="text-[10px] font-mono text-[#c8a84b] bg-[#1f1a0a]/50 border border-[#3a2f1f]/40 px-2.5 py-1 rounded-lg">
-                      ★ {libraryStats.avgRating} avg
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className="flex items-center gap-2 mt-4 sm:mt-5 flex-wrap">
-                <button
-                  onClick={playAll}
-                  disabled={!filtered.length}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
-                  <Play size={12} fill="currentColor" className="ml-0.5" />
-                  Play
-                </button>
-                <button
-                  onClick={shuffleAll}
-                  disabled={!filtered.length}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.1] hover:border-white/[0.16] backdrop-blur-sm disabled:opacity-40 transition-colors"
-                >
-                  <Shuffle size={12} />
-                  Shuffle
-                </button>
-                {stale.length > 0 && (
-                  <button
-                    onClick={runBulkAnalyze}
-                    disabled={!!bulkAnalyzing}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] text-[12px] font-medium hover:text-[#E8D8B8] hover:border-[#D4BFA0]/30 disabled:opacity-40 transition-colors"
-                    title="Run analysis on tracks missing intelligence fields"
-                  >
-                    {bulkAnalyzing ? (
-                      <>
-                        <Loader2 size={11} className="animate-spin" />
-                        <span>Analyzing {bulkAnalyzing.done}/{bulkAnalyzing.total}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={11} />
-                        <span>Analyze {stale.length}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-                <button
-                  onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-                  className={`text-[11px] font-medium px-4 py-2.5 rounded-full transition-colors ml-auto ${
-                    selectMode
-                      ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
-                      : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08]'
-                  }`}
-                >
-                  {selectMode ? 'Done' : 'Select'}
-                </button>
+              <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/40 mb-3">Your Vault</p>
+              <h1 className="text-[42px] sm:text-[56px] md:text-[72px] font-medium uppercase tracking-[0.15em] text-white leading-[0.9] mb-4">Library</h1>
+              <div className="flex items-center gap-6 text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">
+                <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
+                {totalDurationLabel && <span>{totalDurationLabel}</span>}
+                {libraryStats.avgBpm && <span className="hidden sm:inline">{libraryStats.avgBpm} BPM avg</span>}
+                {libraryStats.topKey && <span className="hidden md:inline">Key: {libraryStats.topKey}</span>}
               </div>
+            </div>
+            {/* Actions */}
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={playAll}
+                disabled={!filtered.length}
+                className="flex items-center gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-[0.15em] bg-white text-black hover:bg-white/90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <Play size={10} fill="currentColor" />
+                Play
+              </button>
+              <button
+                onClick={shuffleAll}
+                disabled={!filtered.length}
+                className="flex items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white/60 hover:text-white border border-white/20 hover:border-white/40 disabled:opacity-40 transition-colors"
+              >
+                <Shuffle size={10} />
+                Shuffle
+              </button>
+              {stale.length > 0 && (
+                <button
+                  onClick={runBulkAnalyze}
+                  disabled={!!bulkAnalyzing}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white/40 hover:text-white border border-white/10 hover:border-white/30 disabled:opacity-40 transition-colors"
+                  title="Run analysis on tracks missing intelligence fields"
+                >
+                  {bulkAnalyzing ? (
+                    <>
+                      <Loader2 size={10} className="animate-spin" />
+                      <span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={10} />
+                      <span>Analyze {stale.length}</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+                className={`text-[11px] font-medium uppercase tracking-[0.15em] px-4 py-2 transition-colors ${
+                  selectMode
+                    ? 'bg-white text-black'
+                    : 'text-white/40 hover:text-white border border-white/10 hover:border-white/30'
+                }`}
+              >
+                {selectMode ? 'Done' : 'Select'}
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Filter chips strip — type tabs as pill chips, scrolls
-            horizontally on narrow viewports so it never wraps. Active
-            chip is solid white-on-dark for clear focus state. */}
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+        {/* Filter chips strip — minimal, no backgrounds, text-only with underlines */}
+        <div className="flex items-center gap-6 mb-6 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide border-b border-white/10">
           {(['all', 'beat', 'instrumental', 'song', 'remix'] as const).map((t) => (
             <button
               key={t}
@@ -496,10 +417,10 @@ export default function LibraryPage() {
                 setOfflineOnly(false);
                 setTypeFilter(t);
               }}
-              className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors ${
+              className={`shrink-0 pb-3 text-[11px] font-medium uppercase tracking-[0.2em] transition-colors relative ${
                 typeFilter === t && !offlineOnly
-                  ? 'bg-white text-black'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+                  ? 'text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-white'
+                  : 'text-white/40 hover:text-white/70'
               }`}
             >{t === 'all' ? 'All' : t}</button>
           ))}
@@ -509,51 +430,46 @@ export default function LibraryPage() {
               setOfflineOnly(true);
               refreshOfflineList();
             }}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
+            className={`shrink-0 pb-3 text-[11px] font-medium uppercase tracking-[0.2em] transition-colors flex items-center gap-2 relative ${
               offlineOnly
-                ? 'bg-[#7F77DD] text-white border border-[#7F77DD]/40 shadow-[0_0_8px_rgba(127,119,221,0.4)]'
-                : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+                ? 'text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-white'
+                : 'text-white/40 hover:text-white/70'
             }`}
           >
             <span>Offline</span>
             {cachedIds.size > 0 && (
-              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                offlineOnly ? 'bg-white text-[#7F77DD]' : 'bg-[#7F77DD]/20 text-[#AFA9EC]'
-              }`}>
-                {cachedIds.size}
+              <span className="text-[9px] font-medium tabular-nums">
+                ({cachedIds.size})
               </span>
             )}
           </button>
         </div>
 
         {/* Secondary toolbar — search on the left, sort dropdown on the
-            right. Lives below the chips so the hero + chip strip read
-            as the identity row, and the toolbar is the actual control. */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
+            right. Clean, minimal styling. */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-8">
           <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
             <input
               placeholder="Search tracks"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full bg-transparent border border-white/15 px-8 py-2 text-[11px] uppercase tracking-[0.1em] text-white placeholder-white/30 focus:outline-none focus:border-white/40 transition-colors"
             />
           </div>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-3 ml-auto">
             <button
               onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition-colors ${
                 showFilters || hasActiveFilters(filters)
-                  ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08]'
+                  ? 'text-white border border-white/40'
+                  : 'text-white/40 hover:text-white border border-white/15 hover:border-white/30'
               }`}
             >
-              <SlidersHorizontal size={11} />
+              <SlidersHorizontal size={10} />
               Filters
               {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full bg-[#D4BFA0] text-black text-[8px] font-bold flex items-center justify-center leading-none">
-                  {activeFilterCount(filters)}
-                </span>
+                <span className="text-[9px] tabular-nums">({activeFilterCount(filters)})</span>
               )}
             </button>
             <Dropdown
@@ -563,24 +479,24 @@ export default function LibraryPage() {
               label="Sort"
               aria-label="Sort tracks"
             />
-            <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
+            <div className="flex items-center border border-white/15">
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-full transition-colors ${
-                  viewMode === 'list' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                className={`p-2 transition-colors ${
+                  viewMode === 'list' ? 'bg-white text-black' : 'text-white/40 hover:text-white'
                 }`}
                 title="List view"
               >
-                <LayoutList size={13} />
+                <LayoutList size={12} />
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-full transition-colors ${
-                  viewMode === 'grid' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                className={`p-2 transition-colors ${
+                  viewMode === 'grid' ? 'bg-white text-black' : 'text-white/40 hover:text-white'
                 }`}
                 title="Grid view"
               >
-                <LayoutGrid size={13} />
+                <LayoutGrid size={12} />
               </button>
             </div>
           </div>
@@ -596,42 +512,36 @@ export default function LibraryPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+          <div className="flex items-center justify-center py-24">
+            <Loader2 size={16} className="animate-spin text-white/30" />
           </div>
         ) : fetchError ? (
-          <div className="text-center py-16">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-red-950/30 border border-red-900/40 flex items-center justify-center">
-              <Music size={22} className="text-red-400" />
-            </div>
-            <p className="text-sm text-[#E8DCC8] mb-1">Couldn&apos;t load your library</p>
-            <p className="text-[11px] text-red-400 max-w-md mx-auto mb-4">{fetchError}</p>
+          <div className="text-center py-24">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60 mb-2">Could not load library</p>
+            <p className="text-[10px] text-white/30 max-w-md mx-auto mb-6">{fetchError}</p>
             <button
               onClick={fetchTracks}
-              className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-md border border-[#1a160f] bg-[#14110d] text-[#E8DCC8] hover:border-[#2d2620]"
+              className="text-[11px] font-medium uppercase tracking-[0.15em] px-4 py-2 border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors"
             >
               Retry
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-              <Music size={22} className="text-[#3a3328]" />
-            </div>
-            <p className="text-sm text-[#E8DCC8] mb-1">
+          <div className="text-center py-24">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60 mb-2">
               {tracks.length === 0 ? 'No tracks yet' : 'No matches'}
             </p>
-            <p className="text-[11px] text-[#5a5142]">
+            <p className="text-[10px] text-white/30">
               {tracks.length === 0
                 ? 'Upload above to start building your Vault'
                 : 'Try a different search or filter'}
             </p>
           </div>
         ) : viewMode === 'list' ? (
-          <div className="border-t border-[#161310] border-b mb-32">
+          <div className="border-t border-white/10 border-b mb-32">
             {/* Column header — grid must match TrackCard's 9-col md template */}
-            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
-              <span className="text-center flex items-center justify-center text-[#3a3328]">
+            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-10 border-b border-white/10 text-[9px] font-medium uppercase tracking-[0.2em]">
+              <span className="text-center flex items-center justify-center text-white/30">
                 {selectMode ? (
                   <button
                     type="button"
@@ -647,14 +557,14 @@ export default function LibraryPage() {
                         return next;
                       });
                     }}
-                    className={`w-4 h-4 rounded flex items-center justify-center transition-colors cursor-pointer border ${
+                    className={`w-4 h-4 flex items-center justify-center transition-colors cursor-pointer border ${
                       filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id))
-                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
-                        : 'border-[#2d2620] hover:border-[#4a4338]'
+                        ? 'bg-white border-white'
+                        : 'border-white/30 hover:border-white/60'
                     }`}
                   >
                     {filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id)) && (
-                      <span className="text-white text-[9px] leading-none">✓</span>
+                      <span className="text-black text-[9px] leading-none">✓</span>
                     )}
                   </button>
                 ) : (
@@ -674,13 +584,13 @@ export default function LibraryPage() {
                 ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
               ).map(({ label, sort, cls, activeSort }) => {
                 const isActive = activeSort ?? (sort != null && sortMode === sort);
-                if (!sort) return <span key={label} className={`${cls ?? ''} text-[#3a3328]`}>{label}</span>;
+                if (!sort) return <span key={label} className={`${cls ?? ''} text-white/30`}>{label}</span>;
                 return (
                   <button
                     key={label}
                     onClick={() => setSortMode(sort)}
-                    className={`flex items-center gap-1 transition-colors hover:text-[#E8DCC8] ${cls ?? ''} ${
-                      isActive ? 'text-[#D4BFA0]' : 'text-[#3a3328]'
+                    className={`flex items-center gap-1 transition-colors hover:text-white ${cls ?? ''} ${
+                      isActive ? 'text-white' : 'text-white/30'
                     }`}
                   >
                     {label}

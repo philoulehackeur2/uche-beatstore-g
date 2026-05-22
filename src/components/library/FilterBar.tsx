@@ -72,11 +72,11 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
   };
 
   return (
-    <div className="bg-[#0e0c08] border border-[#1a160f] rounded-xl p-4 mb-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="border border-white/15 p-5 mb-6 space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* BPM range */}
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">BPM range</p>
+          <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3">BPM range</p>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -85,9 +85,9 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
               max={999}
               value={filters.bpmMin ?? ''}
               onChange={(e) => set({ bpmMin: e.target.value ? Number(e.target.value) : null })}
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-2.5 py-1.5 text-[12px] text-[#E8DCC8] placeholder-[#3a3328] focus:outline-none focus:border-[#3a3328] tabular-nums"
+              className="w-full bg-transparent border border-white/15 px-3 py-2 text-[11px] text-white placeholder-white/30 focus:outline-none focus:border-white/40 tabular-nums"
             />
-            <span className="text-[#3a3328] text-[10px] shrink-0">–</span>
+            <span className="text-white/30 text-[10px] shrink-0">–</span>
             <input
               type="number"
               placeholder="Max"
@@ -95,27 +95,23 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
               max={999}
               value={filters.bpmMax ?? ''}
               onChange={(e) => set({ bpmMax: e.target.value ? Number(e.target.value) : null })}
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-2.5 py-1.5 text-[12px] text-[#E8DCC8] placeholder-[#3a3328] focus:outline-none focus:border-[#3a3328] tabular-nums"
+              className="w-full bg-transparent border border-white/15 px-3 py-2 text-[11px] text-white placeholder-white/30 focus:outline-none focus:border-white/40 tabular-nums"
             />
           </div>
         </div>
 
         {/* Scale */}
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Scale</p>
-          <div className="flex gap-1.5">
+          <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3">Scale</p>
+          <div className="flex gap-2">
             {(['all', 'major', 'minor'] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => set({ scale: s })}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors capitalize ${
+                className={`px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] transition-colors ${
                   filters.scale === s
-                    ? s === 'minor'
-                      ? 'bg-[#1a1833] border border-[#534AB7]/40 text-[#9d95e8]'
-                      : s === 'major'
-                        ? 'bg-[#1f1a10] border border-[#3d3020]/60 text-[#c8a47a]'
-                        : 'bg-white text-black'
-                    : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a]'
+                    ? 'bg-white text-black'
+                    : 'border border-white/15 text-white/50 hover:text-white hover:border-white/30'
                 }`}
               >
                 {s === 'all' ? 'Any' : s}
@@ -126,16 +122,16 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
         {/* Status */}
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Status</p>
-          <div className="flex gap-1.5 flex-wrap">
+          <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3">Status</p>
+          <div className="flex gap-2 flex-wrap">
             {Object.entries(STATUS_LABELS).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => toggleStatus(val)}
-                className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
+                className={`px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] transition-colors ${
                   filters.statuses.has(val)
-                    ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
-                    : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a]'
+                    ? 'bg-white text-black'
+                    : 'border border-white/15 text-white/50 hover:text-white hover:border-white/30'
                 }`}
               >
                 {label}
@@ -146,16 +142,16 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
         {/* Min rating */}
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Min rating</p>
-          <div className="flex gap-0.5">
+          <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3">Min rating</p>
+          <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
                 onClick={() => set({ rating: filters.rating === star ? null : star })}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center text-[14px] transition-colors ${
+                className={`w-8 h-8 flex items-center justify-center text-[14px] transition-colors border ${
                   filters.rating != null && star <= filters.rating
-                    ? 'text-[#c8a84b]'
-                    : 'text-[#2d2620] hover:text-[#c8a84b]/60'
+                    ? 'text-white border-white/40'
+                    : 'text-white/20 border-white/10 hover:text-white/50'
                 }`}
               >
                 ★
@@ -167,18 +163,18 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
       {/* Key picker — chromatic in circle-of-fifths order */}
       <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Key</p>
-        <div className="flex gap-1.5 flex-wrap">
+        <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3">Key</p>
+        <div className="flex gap-2 flex-wrap">
           {CHROMATIC_KEYS.map((k) => {
             const active = filters.keys.has(k);
             return (
               <button
                 key={k}
                 onClick={() => toggleKey(k)}
-                className={`w-9 h-9 rounded-lg text-[11px] font-mono font-bold transition-all ${
+                className={`w-10 h-10 text-[11px] font-medium transition-all ${
                   active
-                    ? 'bg-[#2A2418] border border-[#D4BFA0]/40 text-[#E8D8B8] shadow-[0_0_6px_rgba(212,191,160,0.12)]'
-                    : 'bg-[#14110d] border border-[#1f1a13] text-[#5a5142] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                    ? 'bg-white text-black'
+                    : 'border border-white/15 text-white/50 hover:text-white hover:border-white/30'
                 }`}
               >
                 {k}
@@ -190,8 +186,8 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
       {/* Active filter chips */}
       {hasActiveFilters(filters) && (
-        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[#1a160f]">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338]">Active:</span>
+        <div className="flex items-center gap-3 flex-wrap pt-4 border-t border-white/10">
+          <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/30">Active:</span>
           {(filters.bpmMin != null || filters.bpmMax != null) && (
             <Chip
               label={`BPM ${filters.bpmMin ?? '?'} – ${filters.bpmMax ?? '?'}`}
@@ -212,7 +208,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
           )}
           <button
             onClick={() => onChange({ ...DEFAULT_FILTERS, keys: new Set(), statuses: new Set() })}
-            className="text-[9px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] ml-1 transition-colors"
+            className="text-[9px] font-medium uppercase tracking-[0.15em] text-white/40 hover:text-white ml-1 transition-colors"
           >
             Clear all
           </button>
@@ -224,10 +220,10 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-[#1a160f] border border-[#2d2620] rounded-full pl-2.5 pr-1.5 py-1 text-[10px] text-[#E8DCC8] font-mono">
+    <span className="inline-flex items-center gap-2 border border-white/20 pl-3 pr-2 py-1.5 text-[10px] uppercase tracking-[0.1em] text-white">
       {label}
-      <button onClick={onRemove} className="text-[#6a5d4a] hover:text-white transition-colors leading-none">
-        <X size={9} />
+      <button onClick={onRemove} className="text-white/40 hover:text-white transition-colors leading-none">
+        <X size={10} />
       </button>
     </span>
   );
