@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Layers, Plus, Search, Play, Clock, ShoppingBag, Globe, Lock } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Search, Play, Clock, ShoppingBag, Globe } from 'lucide-react';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -89,19 +89,23 @@ export default function ProjectsPage() {
   const toggleStoreFeatured = async (project: Project, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!project.is_public && !project.store_featured) {
-      toast.warning('Make project public first', 'Open the project and enable sharing to show it in the store.');
-      return;
-    }
     const next = !project.store_featured;
+    // When adding to store, also make the project public so it passes the
+    // store API's is_public guard. A private project that is store_featured
+    // would never render — auto-publish avoids a confusing two-step flow.
+    const patch: Record<string, unknown> = { store_featured: next };
+    if (next && !project.is_public) patch.is_public = true;
+
     setTogglingStore(project.id);
     // Optimistic update
-    setProjects((prev) => prev.map((p) => p.id === project.id ? { ...p, store_featured: next } : p));
+    setProjects((prev) => prev.map((p) =>
+      p.id === project.id ? { ...p, store_featured: next, is_public: next ? true : p.is_public } : p,
+    ));
     try {
       const res = await fetch(`/api/projects/${project.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_featured: next }),
+        body: JSON.stringify(patch),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -110,7 +114,9 @@ export default function ProjectsPage() {
       toast.success(next ? 'Project added to store ✓' : 'Project removed from store');
     } catch (err: any) {
       // Rollback
-      setProjects((prev) => prev.map((p) => p.id === project.id ? { ...p, store_featured: !next } : p));
+      setProjects((prev) => prev.map((p) =>
+        p.id === project.id ? { ...p, store_featured: !next, is_public: project.is_public } : p,
+      ));
       toast.error('Failed to update', err.message);
     } finally {
       setTogglingStore(null);
@@ -404,16 +410,10 @@ export default function ProjectsPage() {
                   <button
                     onClick={(e) => toggleStoreFeatured(project, e)}
                     disabled={togglingStore === project.id}
-                    title={
-                      !project.is_public && !project.store_featured
-                        ? 'Make project public first'
-                        : project.store_featured ? 'Remove from store' : 'Show in store'
-                    }
+                    title={project.store_featured ? 'Remove from store' : 'Add to store (will also make project public)'}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-wider border transition-all w-full justify-center disabled:opacity-60 ${
                       project.store_featured
                         ? 'bg-[#D4BFA0]/10 border-[#D4BFA0]/30 text-[#D4BFA0] hover:bg-[#D4BFA0]/20'
-                        : !project.is_public
-                        ? 'bg-transparent border-[#1f1a13] text-[#4a4338] cursor-not-allowed'
                         : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#D4BFA0]/30 hover:text-[#D4BFA0]'
                     }`}
                   >
@@ -421,11 +421,9 @@ export default function ProjectsPage() {
                       ? <Loader2 size={9} className="animate-spin" />
                       : project.store_featured
                       ? <ShoppingBag size={9} />
-                      : !project.is_public
-                      ? <Lock size={9} />
                       : <Globe size={9} />
                     }
-                    {project.store_featured ? 'In store' : !project.is_public ? 'Private' : 'Add to store'}
+                    {project.store_featured ? 'In store' : 'Add to store'}
                   </button>
                 </div>
               );

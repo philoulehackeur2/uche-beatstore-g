@@ -155,19 +155,19 @@ export async function GET() {
           .order('store_order', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
 
-        if (!playlistsResult.error && playlistsResult.data?.length) {
+        if (playlistsResult.error) {
+          console.error('[store] featured playlists query error:', playlistsResult.error.message);
+        } else if (playlistsResult.data?.length) {
           const playlists = playlistsResult.data as any[];
           const plIds = playlists.map((p: any) => p.id);
 
-          // Fetch junction + tracks for all featured playlists in 2 queries
-          const [junctionRes, playlistTracksRes] = await Promise.all([
-            admin
-              .from('playlist_tracks')
-              .select('playlist_id, track_id, position')
-              .in('playlist_id', plIds)
-              .order('position', { ascending: true }),
-            Promise.resolve(null), // placeholder
-          ]);
+          // Fetch junction rows, then fetch all referenced tracks in one query.
+          // Two explicit queries avoids relying on PostgREST nested-select FK names.
+          const junctionRes = await admin
+            .from('playlist_tracks')
+            .select('playlist_id, track_id, position')
+            .in('playlist_id', plIds)
+            .order('position', { ascending: true });
 
           const junction = (junctionRes.data ?? []) as any[];
           const playlistTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
@@ -195,42 +195,72 @@ export async function GET() {
             };
           });
         }
-      } catch {
-        // featured playlists are optional chrome; non-fatal
+      } catch (e) {
+        console.error('[store] featured playlists error:', e);
       }
     }
 
     // ── Store-featured projects (migration 040) ──────────────────────────
+    // Only requires store_featured = true. is_public is auto-set when a
+    // producer clicks "Add to store", so we don't double-gate here.
     let featuredProjects: Record<string, unknown>[] = [];
     if (sellerId) {
       try {
         const projectsResult = await admin
           .from('projects')
-          .select([
-            'id', 'name', 'cover_url', 'created_at',
-            'project_tracks(position, track_id, tracks(id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled))',
-          ].join(', '))
+          .select('id, name, cover_url, description, price_usd, store_featured, store_order, created_at')
           .eq('user_id', sellerId)
           .eq('store_featured', true)
-          .eq('is_public', true)
+          .order('store_order', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(6);
 
-        if (!projectsResult.error && projectsResult.data?.length) {
-          featuredProjects = (projectsResult.data as any[]).map((proj) => ({
-            id: proj.id,
-            name: proj.name,
-            cover_url: sanitizeUrl(proj.cover_url),
-            store_order: null,
-            tracks: ((proj.project_tracks ?? []) as any[])
+        if (projectsResult.error) {
+          console.error('[store] featured projects query error:', projectsResult.error.message);
+        } else if (projectsResult.data?.length) {
+          const projects = projectsResult.data as any[];
+          const projIds = projects.map((p: any) => p.id);
+
+          // Fetch junction + tracks explicitly (avoids nested-select FK ambiguity)
+          const junctionRes = await admin
+            .from('project_tracks')
+            .select('project_id, track_id, position')
+            .in('project_id', projIds)
+            .order('position', { ascending: true });
+
+          const junction = (junctionRes.data ?? []) as any[];
+          const projectTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+
+          let projectTrackMap: Record<string, any> = {};
+          if (projectTrackIds.length > 0) {
+            const { data: ptRows } = await admin
+              .from('tracks')
+              .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+              .in('id', projectTrackIds);
+            for (const t of (ptRows ?? []) as any[]) {
+              projectTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+            }
+          }
+
+          featuredProjects = projects.map((proj: any) => {
+            const projTracks = junction
+              .filter((j: any) => j.project_id === proj.id)
               .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-              .map((pt: any) => pt.tracks)
-              .filter(Boolean)
-              .map((t: any) => ({ ...t, cover_url: sanitizeUrl(t.cover_url) })),
-          }));
+              .map((j: any) => projectTrackMap[j.track_id])
+              .filter(Boolean);
+            return {
+              id: proj.id,
+              name: proj.name,
+              cover_url: sanitizeUrl(proj.cover_url),
+              description: proj.description ?? null,
+              price_usd: proj.price_usd ?? null,
+              store_order: proj.store_order ?? null,
+              tracks: projTracks,
+            };
+          });
         }
-      } catch {
-        // projects table or store_featured column may not exist yet — non-fatal
+      } catch (e) {
+        console.error('[store] featured projects error:', e);
       }
     }
 
@@ -244,8 +274,8 @@ export async function GET() {
           .eq('user_id', sellerId)
           .order('sort_order', { ascending: true });
         licenses = licenseRows ?? [];
-      } catch {
-        // licenses table may not exist in all deployments
+      } catch (e) {
+        console.error('[store] licenses error:', e);
       }
     }
 
@@ -260,8 +290,8 @@ export async function GET() {
         for (const r of (wavRows ?? []) as any[]) {
           if (r.wav_url) wavByTrack[r.id] = r.wav_url;
         }
-      } catch {
-        // wav_url column not yet added — non-fatal
+      } catch (e) {
+        console.error('[store] wav_url enrichment error:', e);
       }
     }
 

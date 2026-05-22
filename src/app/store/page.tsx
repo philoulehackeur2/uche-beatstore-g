@@ -171,6 +171,20 @@ function StorePage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  const handleBuyProject = (proj: any) => {
+    if (!proj?.id) return;
+    const price = proj.price_usd != null ? Number(proj.price_usd) : 0;
+    if (price <= 0) {
+      toast.error('This project is not available for purchase');
+      return;
+    }
+    const storedEmail = localStorage.getItem('antigravity-buyer-email') || '';
+    const qs = storedEmail ? `?project_id=${proj.id}&email=${encodeURIComponent(storedEmail)}` : `?project_id=${proj.id}`;
+    router.push(`/store/checkout${qs}`);
+    toast.success(`Starting purchase: ${proj.name || 'Project'}`);
+  };
+
   const purchaseStatus = searchParams?.get('purchase');
   const [bannerOpen, setBannerOpen] = useState(false);
   useEffect(() => {
@@ -425,35 +439,38 @@ function StorePage() {
             />
           )}
           {featuredProjects.length > 0 && (
-            <FeaturedPlaylistsStrip
-              label="Projects"
-              playlists={featuredProjects}
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlay={(t, playlist) => {
-                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
-                setTrack(t as unknown as Track);
-              }}
-              priceFor={(t, type) => {
-                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-                if (override != null && Number(override) > 0) return Number(override);
-                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
-                return def != null && Number(def) > 0 ? Number(def) : null;
-              }}
-              onAddToCart={(t, type) => {
-                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
-                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
-                if (!price) { toast.error(`No ${type} price set`); return; }
-                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
-                  id: `${type}-${t.id}`,
-                  name: type === 'lease' ? 'Lease' : 'Exclusive',
-                  price_usd: Number(price),
-                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
-                  is_exclusive: type === 'exclusive',
-                });
-                toast.success(`Added: ${t.title} (${type})`);
-              }}
-            />
+             <FeaturedPlaylistsStrip
+               label="Projects"
+               playlists={featuredProjects}
+               detailHrefBase="/store/projects"
+               currentTrack={currentTrack}
+               isPlaying={isPlaying}
+               onPlay={(t, playlist) => {
+                 setQueue((playlist?.tracks ?? []) as unknown as Track[]);
+                 setTrack(t as unknown as Track);
+               }}
+               priceFor={(t, type) => {
+                 const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+                 if (override != null && Number(override) > 0) return Number(override);
+                 const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
+                 return def != null && Number(def) > 0 ? Number(def) : null;
+               }}
+               onAddToCart={(t, type) => {
+                 const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
+                   ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
+                 if (!price) { toast.error(`No ${type} price set`); return; }
+                 addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
+                   id: `${type}-${t.id}`,
+                   name: type === 'lease' ? 'Lease' : 'Exclusive',
+                   price_usd: Number(price),
+                   file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+                   is_exclusive: type === 'exclusive',
+                 });
+                 toast.success(`Added: ${t.title} (${type})`);
+               }}
+               onBuyProject={handleBuyProject}
+             />
+
           )}
         </div>
       )}
@@ -1727,6 +1744,8 @@ function ArtistBioBlock({ creator, trackCount }: { creator: CreatorProfile | nul
 function FeaturedPlaylistsStrip({
   label = 'Featured Playlists',
   playlists, currentTrack, isPlaying, onPlay, priceFor, onAddToCart,
+  detailHrefBase,
+  onBuyProject,
 }: {
   label?: string;
   playlists: FeaturedPlaylist[];
@@ -1735,6 +1754,10 @@ function FeaturedPlaylistsStrip({
   onPlay: (t: PlaylistTrackItem, playlist: FeaturedPlaylist) => void;
   priceFor: (t: PlaylistTrackItem, type: 'lease' | 'exclusive') => number | null;
   onAddToCart: (t: PlaylistTrackItem, type: 'lease' | 'exclusive') => void;
+  /** When set, expanded view shows "Open" link at `${detailHrefBase}/${pl.id}`. */
+  detailHrefBase?: string;
+  /** Optional handler for buying an entire project (only passed for the Projects strip) */
+  onBuyProject?: (proj: FeaturedPlaylist & { price_usd?: number | null }) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -1774,30 +1797,50 @@ function FeaturedPlaylistsStrip({
           <div className="mt-4 rounded-xl border border-[#1f1a13] bg-[#14110d] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a160f]">
               <p className="text-[11px] font-semibold text-[#E8DCC8]">{pl.name}</p>
-              <div className="flex items-center gap-2">
-                {/* Add All — Lease */}
-                {pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
-                  <button
-                    onClick={() => {
-                      let added = 0;
-                      pl.tracks.forEach((t) => {
-                        const lp = priceFor(t, 'lease');
-                        if (lp == null) return;
-                        onAddToCart(t, 'lease');
-                        added++;
-                      });
-                      if (added > 0) toast.success(`${added} beat${added !== 1 ? 's' : ''} added to cart`);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4BFA0]/30 text-[#D4BFA0] text-[9px] font-mono uppercase tracking-widest hover:bg-[#D4BFA0]/10 transition-colors"
-                  >
-                    <ShoppingBag size={11} />
-                    Add All — Lease
-                  </button>
-                )}
-                <button onClick={() => setExpandedId(null)} className="text-[#3a3328] hover:text-[#a08a6a] transition-colors">
-                  <X size={13} />
-                </button>
-              </div>
+               <div className="flex items-center gap-2">
+                 {detailHrefBase && (
+                   <Link
+                     href={`${detailHrefBase}/${pl.id}`}
+                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.08] text-[#a08a6a] text-[9px] font-mono uppercase tracking-widest hover:text-[#E8DCC8] hover:border-white/[0.16] transition-colors"
+                   >
+                     Open
+                     <ChevronRight size={11} />
+                   </Link>
+                 )}
+                 {/* Buy entire project (only for the Projects strip) */}
+                 {onBuyProject && (pl as any).price_usd != null && Number((pl as any).price_usd) > 0 && (
+                   <button
+                     onClick={() => onBuyProject(pl as any)}
+                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4BFA0] text-black text-[9px] font-mono uppercase tracking-widest hover:bg-[#E8D8B8] transition-colors"
+                   >
+                     <ShoppingBag size={11} />
+                     Buy project — ${(pl as any).price_usd}
+                   </button>
+                 )}
+                 {/* Add All — Lease */}
+                 {pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
+                   <button
+                     onClick={() => {
+                       let added = 0;
+                       pl.tracks.forEach((t) => {
+                         const lp = priceFor(t, 'lease');
+                         if (lp == null) return;
+                         onAddToCart(t, 'lease');
+                         added++;
+                       });
+                       if (added > 0) toast.success(`${added} beat${added !== 1 ? 's' : ''} added to cart`);
+                     }}
+                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4BFA0]/30 text-[#D4BFA0] text-[9px] font-mono uppercase tracking-widest hover:bg-[#D4BFA0]/10 transition-colors"
+                   >
+                     <ShoppingBag size={11} />
+                     Add All — Lease
+                   </button>
+                 )}
+                 <button onClick={() => setExpandedId(null)} className="text-[#3a3328] hover:text-[#a08a6a] transition-colors">
+                   <X size={13} />
+                 </button>
+               </div>
+
             </div>
             <div className="divide-y divide-[#1a160f]">
               {pl.tracks.map((t) => {

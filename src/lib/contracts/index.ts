@@ -85,6 +85,8 @@ export const ProjectPatchBodySchema = z.object({
   bpm_target: z.number().nullable().optional(),
   key_target: z.string().nullable().optional(),
   store_featured: z.boolean().optional(),
+  store_order: z.number().nullable().optional(),
+  price_usd: z.number().nonnegative().nullable().optional(),
   is_public: z.boolean().optional(),
 }).strict();
 export type ProjectPatchBody = z.infer<typeof ProjectPatchBodySchema>;

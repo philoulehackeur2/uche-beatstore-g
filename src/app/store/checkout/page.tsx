@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ShieldCheck, Loader2, AlertTriangle, ArrowLeft, Mail,
-  Check, Lock, RefreshCw, FileText, ShoppingBag, Music
+  Check, Lock, RefreshCw, FileText, ShoppingBag, Music, Package,
 } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
@@ -25,9 +25,17 @@ function CheckoutContent() {
   const [clientSecret, setClientSecret] = useState('');
   const [initError, setInitError] = useState('');
   const [isEmailSubmitted, setIsEmailSubmitted] = useState(false);
+  const [isProjectPurchase, setIsProjectPurchase] = useState(false);
+  const [projectIdForPurchase, setProjectIdForPurchase] = useState('');
   
   // Try to prefill email from query params or localStorage
+  // Also detect direct project purchase (from store page "Buy entire project")
   useEffect(() => {
+    const pId = searchParams?.get('project_id');
+    if (pId) {
+      setIsProjectPurchase(true);
+      setProjectIdForPurchase(pId);
+    }
     const queryEmail = searchParams?.get('email');
     if (queryEmail && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(queryEmail)) {
       setEmail(queryEmail);
@@ -54,7 +62,7 @@ function CheckoutContent() {
           return;
         }
 
-        checkoutInstance = await stripe.initEmbeddedCheckout({
+        checkoutInstance = await (stripe as any).initEmbeddedCheckout({
           clientSecret,
         });
         
@@ -112,16 +120,23 @@ function CheckoutContent() {
     localStorage.setItem('antigravity-buyer-email', targetEmail);
 
     try {
+      const payload: any = { buyer_email: targetEmail.trim() };
+      if (isProjectPurchase && projectIdForPurchase) {
+        payload.project_id = projectIdForPurchase;
+      } else {
+        // Include license_id so the server can resolve custom license tiers
+        // from the database instead of relying on the legacy type string only.
+        payload.items = items.map((i) => ({
+          track_id: i.track.id,
+          license_id: i.license.id,
+          license_type: i.license.is_exclusive ? 'exclusive' : 'lease',
+        }));
+      }
+
       const res = await fetch('/api/store/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buyer_email: targetEmail.trim(),
-          items: items.map((i) => ({
-            track_id: i.track.id,
-            license_type: i.license.is_exclusive ? 'exclusive' : 'lease',
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -149,27 +164,18 @@ function CheckoutContent() {
     setInitError('');
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && !isProjectPurchase) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-5 text-center px-4">
-        <div className="w-16 h-16 rounded-full bg-[#14110d] border border-[#1f1a13] flex items-center justify-center text-[#6a5d4a] mb-2">
-          <ShoppingBag size={24} />
-        </div>
-        <div>
+      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center p-6">
+        <div className="text-center">
           <h1 className="text-[16px] font-bold text-white uppercase tracking-wider mb-2">Your Cart is Empty</h1>
-          <p className="text-[12px] text-[#6a5d4a] max-w-sm mx-auto leading-relaxed">
-            You must add at least one track license to your cart before proceeding to checkout.
-          </p>
+          <p className="text-[#6a5d4a] text-[12px] mb-6">Add tracks from the store to purchase licenses.</p>
+          <Link href="/store" className="text-[#D4BFA0] hover:text-white text-[11px] font-mono uppercase tracking-wider">← Back to store</Link>
         </div>
-        <Link
-          href="/store"
-          className="px-6 py-3 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black text-[11px] font-bold uppercase tracking-widest transition-all"
-        >
-          Browse Beats
-        </Link>
       </div>
     );
   }
+
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 md:gap-12 items-start max-w-6xl mx-auto px-4 md:px-8 py-6">
@@ -325,47 +331,67 @@ function CheckoutContent() {
             </h3>
           </div>
 
-          {/* Item List */}
-          <ul className="divide-y divide-white/[0.03] px-5 max-h-[280px] overflow-y-auto">
-            {items.map((i) => (
-              <li key={i.id} className="py-4 flex gap-3.5 items-start">
-                <div className="w-12 h-12 rounded-lg bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
-                  {i.track.cover_url ? (
-                    <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
-                      <Music size={16} />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <p className="text-[12px] font-semibold text-white truncate">{i.track.title}</p>
-                  <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider">
-                    {i.license.name} Tier
-                  </p>
-                </div>
-                <span className="text-[12px] font-mono font-bold text-white tabular-nums">
-                  ${i.license.price_usd}
-                </span>
-              </li>
-            ))}
-          </ul>
+           {/* Item List — tracks for cart purchases, or project summary */}
+           {!isProjectPurchase ? (
+             <ul className="divide-y divide-white/[0.03] px-5 max-h-[280px] overflow-y-auto">
+               {items.map((i) => (
+                 <li key={i.id} className="py-4 flex gap-3.5 items-start">
+                   <div className="w-12 h-12 rounded-lg bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
+                     {i.track.cover_url ? (
+                       <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
+                     ) : (
+                       <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                         <Music size={16} />
+                       </div>
+                     )}
+                   </div>
+                   <div className="min-w-0 flex-1 space-y-0.5">
+                     <p className="text-[12px] font-semibold text-white truncate">{i.track.title}</p>
+                     <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider">
+                       {i.license.name} Tier
+                     </p>
+                   </div>
+                   <span className="text-[12px] font-mono font-bold text-white tabular-nums">
+                     ${i.license.price_usd}
+                   </span>
+                 </li>
+               ))}
+             </ul>
+           ) : (
+             <div className="px-5 py-5 bg-[#0a0907]/30 border-b border-white/[0.04]">
+               <div className="flex items-center gap-3">
+                 <div className="w-12 h-12 rounded-lg bg-[#14110d] border border-[#1f1a13] flex items-center justify-center shrink-0">
+                   <Package size={20} className="text-[#D4BFA0]" />
+                 </div>
+                 <div className="min-w-0 flex-1">
+                   <p className="text-[12px] font-semibold text-white">Full Project Bundle</p>
+                   <p className="text-[10px] text-[#6a5d4a] font-mono truncate">Project ID: {projectIdForPurchase.slice(0, 8)}…</p>
+                 </div>
+                 <span className="text-[12px] font-mono font-bold text-[#D4BFA0]">See price in Stripe</span>
+               </div>
+               <p className="mt-3 text-[10px] text-[#6a5d4a]">All tracks in the project will be delivered with full access via your private link.</p>
+             </div>
+           )}
 
-          {/* Totals */}
-          <div className="px-5 py-4 bg-[#0a0907]/40 border-t border-white/[0.04] space-y-1">
-            <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
-              <span>Subtotal</span>
-              <span>${cartTotal()}</span>
-            </div>
-            <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
-              <span>Processing Fee</span>
-              <span>$0.00</span>
-            </div>
-            <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/[0.02]">
-              <span className="text-[10px] font-mono text-[#a08a6a] uppercase tracking-wider">Total amount</span>
-              <span className="text-[18px] font-bold text-white tabular-nums">${cartTotal()}</span>
-            </div>
-          </div>
+
+           {/* Totals (only for track cart; Stripe shows amount for project) */}
+           {!isProjectPurchase && (
+             <div className="px-5 py-4 bg-[#0a0907]/40 border-t border-white/[0.04] space-y-1">
+               <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+                 <span>Subtotal</span>
+                 <span>${cartTotal()}</span>
+               </div>
+               <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+                 <span>Processing Fee</span>
+                 <span>$0.00</span>
+               </div>
+               <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/[0.02]">
+                 <span className="text-[10px] font-mono text-[#a08a6a] uppercase tracking-wider">Total amount</span>
+                 <span className="text-[18px] font-bold text-white tabular-nums">${cartTotal()}</span>
+               </div>
+             </div>
+           )}
+
         </div>
 
         {/* Trust & Reassurance Badges */}

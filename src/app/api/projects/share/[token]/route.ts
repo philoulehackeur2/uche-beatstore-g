@@ -45,12 +45,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const admin = createServiceClient();
-    const { data: share, error } = await admin
+    const { data: dbShare, error } = await admin
       .from('project_shares')
       .select('*')
       .eq('token', token)
       .maybeSingle();
     if (error) throw error;
+
+    let share: any = dbShare;
+    if (!share) {
+      // Fallback for paid storefront project purchases (migration 042)
+      const { data: paidAccess } = await admin
+        .from('project_access_links')
+        .select('id, project_id, buyer_email, token, created_at')
+        .eq('token', token)
+        .maybeSingle();
+      if (paidAccess) {
+        share = {
+          id: paidAccess.id,
+          project_id: paidAccess.project_id,
+          token: paidAccess.token,
+          role: 'viewer',
+          allow_downloads: true,
+          revoked_at: null,
+          expires_at: null,
+          password_hash: null,
+          invited_email: paidAccess.buyer_email,
+          label: 'Storefront purchase',
+          plays: 0,
+          created_at: paidAccess.created_at,
+          recipient_kind: 'client',
+          sales_enabled: false,
+          content_type: 'project',
+        };
+      }
+    }
     if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
 
     if (share.revoked_at) {
@@ -78,8 +107,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       return data ?? null;
     }
 
-    // Fire-and-forget play counter.
-    admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
+    // Fire-and-forget play counter (only for real project_shares rows, not paid access tokens)
+    if (dbShare && share.id === dbShare.id) {
+      admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
+    }
 
     const contentType: string = (share as any).content_type ?? 'project';
 

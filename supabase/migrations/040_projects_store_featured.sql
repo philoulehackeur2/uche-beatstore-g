@@ -17,4 +17,10 @@ CREATE INDEX IF NOT EXISTS idx_projects_store_featured
 ALTER TABLE public.projects
   ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT false;
 
+-- Backfill: any project already marked store_featured must also be public so
+-- the store page can find it. The UI now auto-sets both flags simultaneously.
+UPDATE public.projects
+  SET is_public = true
+  WHERE store_featured = true AND is_public = false;
+
 NOTIFY pgrst, 'reload schema';

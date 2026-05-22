@@ -59,6 +59,15 @@ interface PlaylistRow {
   store_order?: number | null;
 }
 
+interface ProjectRow {
+  id: string;
+  name: string;
+  cover_url?: string | null;
+  price_usd?: number | null;
+  store_featured?: boolean;
+  store_order?: number | null;
+}
+
 const EMPTY_PROFILE: ProfileForm = {
   display_name: '',
   bio: '',
@@ -298,6 +307,8 @@ export default function StoreEditorPage() {
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE);
   const [playlists, setPlaylists] = useState<PlaylistRow[]>([]);
   const [featured, setFeatured] = useState<PlaylistRow[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [featuredProjects, setFeaturedProjects] = useState<ProjectRow[]>([]);
   const [previewTracks, setPreviewTracks] = useState<PreviewTrack[]>([]);
   const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
@@ -306,7 +317,7 @@ export default function StoreEditorPage() {
   const [saving, setSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(['hero', 'social', 'playlists', 'tracks', 'track-controls', 'licenses']),
+    new Set(['hero', 'social', 'playlists', 'projects', 'tracks', 'track-controls', 'licenses']),
   );
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -314,6 +325,8 @@ export default function StoreEditorPage() {
 
   // Drag state for playlist reorder
   const dragIdx = useRef<number | null>(null);
+  // Drag state for project reorder
+  const projectDragIdx = useRef<number | null>(null);
 
   const toggleSection = (id: string) =>
     setOpenSections((prev) => {
@@ -334,14 +347,15 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes, tracksRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
           fetch('/api/store'),
           fetch('/api/tracks'),
+          fetch('/api/projects'),
         ]);
-        const [pd, pld, sd, td] = await Promise.all([
-          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(),
+        const [pd, pld, sd, td, prd] = await Promise.all([
+          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(),
         ]);
         // Real published beats for the live preview
         setPreviewTracks((sd.tracks ?? []).slice(0, 6) as PreviewTrack[]);
@@ -397,6 +411,20 @@ export default function StoreEditorPage() {
           .filter((pl) => pl.store_featured)
           .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
         setFeatured(feat);
+
+        const allProjects: ProjectRow[] = (prd.projects ?? []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          cover_url: p.cover_url ?? null,
+          price_usd: p.price_usd ?? null,
+          store_featured: !!p.store_featured,
+          store_order: p.store_order ?? null,
+        }));
+        setProjects(allProjects);
+        const featProjects = allProjects
+          .filter((p) => p.store_featured)
+          .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+        setFeaturedProjects(featProjects);
       } catch {
         toast.error('Failed to load store settings');
       } finally {
@@ -454,6 +482,34 @@ export default function StoreEditorPage() {
     });
   };
   const handleDragEnd = () => { dragIdx.current = null; };
+
+  /* ── Featured project helpers ── */
+  const addProjectToFeatured = (pr: ProjectRow) => {
+    if (featuredProjects.length >= 5) {
+      toast.error('Max 5 featured projects');
+      return;
+    }
+    if (featuredProjects.find((f) => f.id === pr.id)) return;
+    setFeaturedProjects((prev) => [...prev, pr]);
+  };
+
+  const removeProjectFromFeatured = (id: string) =>
+    setFeaturedProjects((prev) => prev.filter((f) => f.id !== id));
+
+  const handleProjectDragStart = (idx: number) => { projectDragIdx.current = idx; };
+  const handleProjectDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    const from = projectDragIdx.current;
+    if (from == null || from === idx) return;
+    setFeaturedProjects((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(idx, 0, item);
+      projectDragIdx.current = idx;
+      return next;
+    });
+  };
+  const handleProjectDragEnd = () => { projectDragIdx.current = null; };
 
   /* ── Track listing toggle ── */
   const toggleTrackListed = async (trackId: string, currentlyListed: boolean) => {
@@ -528,30 +584,29 @@ export default function StoreEditorPage() {
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));
-      const patchOps = [
+      const patchOps: Array<{ id: string; body: Record<string, unknown> }> = [
         // Featured in order
-        ...featured.map((pl, i) =>
-          fetch(`/api/playlists/${pl.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ store_featured: true, store_order: i }),
-          }),
-        ),
+        ...featured.map((pl, i) => ({ id: pl.id, body: { store_featured: true, store_order: i } })),
         // Un-featured (was featured before, no longer in list)
         ...playlists
           .filter((pl) => pl.store_featured && !featuredIds.has(pl.id))
-          .map((pl) =>
-            fetch(`/api/playlists/${pl.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ store_featured: false, store_order: null }),
-            }),
-          ),
+          .map((pl) => ({ id: pl.id, body: { store_featured: false, store_order: null } })),
       ];
-      const results = await Promise.allSettled(patchOps);
-      const failed = results.filter((r) => r.status === 'rejected').length;
+      const responses = await Promise.all(
+        patchOps.map(({ id, body }) =>
+          fetch(`/api/playlists/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }),
+        ),
+      );
+      const failed = responses.filter((r) => !r.ok).length;
       if (failed > 0) {
-        toast.warning('Store saved', `${failed} playlist update(s) failed`);
+        // Surface any error detail from the first failed response
+        const firstFailed = responses.find((r) => !r.ok)!;
+        const detail = await firstFailed.json().catch(() => ({}));
+        toast.warning('Store saved', `${failed} playlist update(s) failed: ${detail.error ?? `HTTP ${firstFailed.status}`}`);
       } else {
         toast.success('Store updated');
       }
@@ -564,6 +619,70 @@ export default function StoreEditorPage() {
           store_order: featured.findIndex((f) => f.id === pl.id),
         })),
       );
+
+      // 3. Persist each featured project's order + featured flag (resilient per-call, allSettled, refetch on partial failure)
+      const featuredProjectIds = new Set(featuredProjects.map((f) => f.id));
+      const projectPatchOps: Array<{ id: string; body: Record<string, unknown> }> = [
+        ...featuredProjects.map((pr, i) => ({ id: pr.id, body: { store_featured: true, store_order: i } })),
+        ...projects
+          .filter((pr) => pr.store_featured && !featuredProjectIds.has(pr.id))
+          .map((pr) => ({ id: pr.id, body: { store_featured: false, store_order: null } })),
+      ];
+      let projectFailed = 0;
+      if (projectPatchOps.length > 0) {
+        const projectResults = await Promise.allSettled(
+          projectPatchOps.map(async ({ id, body }) => {
+            try {
+              const res = await fetch(`/api/projects/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              });
+              if (!res.ok) {
+                const j = await res.json().catch(() => ({}));
+                return { ok: false, status: res.status, error: j.error || `HTTP ${res.status}` };
+              }
+              return { ok: true };
+            } catch (err: any) {
+              return { ok: false, error: err?.message || 'Network error' };
+            }
+          }),
+        );
+        projectFailed = projectResults.filter((r) => r.status !== 'fulfilled' || !r.value.ok).length;
+        const succeeded = projectPatchOps.length - projectFailed;
+        if (projectFailed > 0) {
+          toast.warning('Store saved', `${succeeded}/${projectPatchOps.length} project updates succeeded, ${projectFailed} failed`);
+        }
+      }
+
+      // Update local project state so re-saves are idempotent; refetch on any failure to keep truth
+      if (projectFailed > 0) {
+        try {
+          const prRes = await fetch('/api/projects');
+          const prd = await prRes.json();
+          const allP: ProjectRow[] = (prd.projects ?? []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            cover_url: p.cover_url ?? null,
+            price_usd: p.price_usd ?? null,
+            store_featured: !!p.store_featured,
+            store_order: p.store_order ?? null,
+          }));
+          setProjects(allP);
+          const featP = allP
+            .filter((p) => p.store_featured)
+            .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+          setFeaturedProjects(featP);
+        } catch {}
+      } else {
+        setProjects((prev) =>
+          prev.map((pr) => ({
+            ...pr,
+            store_featured: featuredProjectIds.has(pr.id),
+            store_order: featuredProjects.findIndex((f) => f.id === pr.id),
+          })),
+        );
+      }
     } catch (err: any) {
       toast.error('Save failed', err.message);
     } finally {
@@ -573,6 +692,8 @@ export default function StoreEditorPage() {
 
   /* ── unfeatured playlists (available to add) ── */
   const unfeatured = playlists.filter((pl) => !featured.find((f) => f.id === pl.id));
+  /* ── unfeatured projects (available to add) ── */
+  const unfeaturedProjects = projects.filter((pr) => !featuredProjects.find((f) => f.id === pr.id));
 
   if (loading) {
     return (
@@ -981,6 +1102,105 @@ export default function StoreEditorPage() {
                   No playlists yet — create some in{' '}
                   <a href="/playlists" className="text-[#a08a6a] underline underline-offset-2 hover:text-[#D4BFA0] transition-colors">
                     Playlists
+                  </a>.
+                </p>
+              )}
+            </Section>
+
+            {/* ③b Featured Projects */}
+            <Section
+              id="projects"
+              title="Featured Projects"
+              icon={<Layers size={15} />}
+              open={openSections.has('projects')}
+              onToggle={() => toggleSection('projects')}
+            >
+              <p className="text-[11px] text-[#5a5142]">
+                Up to 5 projects shown in your store. Drag to reorder.
+              </p>
+
+              {featuredProjects.length > 0 ? (
+                <div className="space-y-1">
+                  {featuredProjects.map((pr, idx) => (
+                    <div
+                      key={pr.id}
+                      draggable
+                      onDragStart={() => handleProjectDragStart(idx)}
+                      onDragOver={(e) => handleProjectDragOver(e, idx)}
+                      onDragEnd={handleProjectDragEnd}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#0c0a08] border border-[#1f1a13] cursor-grab active:cursor-grabbing hover:border-[#2d2620] transition-colors group"
+                    >
+                      <GripVertical size={13} className="text-[#3a3328] group-hover:text-[#5a5142] shrink-0" />
+                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#1a160f] border border-[#2d2620] shrink-0">
+                        {pr.cover_url
+                          ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center"><Layers size={12} className="text-[#3a3328]" /></div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-[#E8DCC8] truncate">{pr.name}</p>
+                        {pr.price_usd != null && (
+                          <p className="text-[10px] font-mono text-[#5a5142]">${pr.price_usd}</p>
+                        )}
+                      </div>
+                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded shrink-0">
+                        Featured
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeProjectFromFeatured(pr.id)}
+                        className="w-6 h-6 rounded-full bg-white/[0.04] border border-[#1f1a13] flex items-center justify-center text-[#5a5142] hover:text-red-400 hover:border-red-900/40 transition-colors shrink-0"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-[#1f1a13] py-8 text-center text-[#5a5142] text-[12px]">
+                  No featured projects yet. Add one below.
+                </div>
+              )}
+
+              {unfeaturedProjects.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-[#3a3328] mb-2">
+                    Add to featured {featuredProjects.length}/5
+                  </p>
+                  <div className="space-y-1">
+                    {unfeaturedProjects.map((pr) => (
+                      <div
+                        key={pr.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#0a0907] border border-[#1a160f] hover:border-[#2d2620] transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-md overflow-hidden bg-[#1a160f] border border-[#2d2620] shrink-0">
+                          {pr.cover_url
+                            ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center"><Layers size={10} className="text-[#3a3328]" /></div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-[#a08a6a] truncate">{pr.name}</p>
+                          {pr.price_usd != null && (
+                            <p className="text-[9px] font-mono text-[#3a3328]">${pr.price_usd}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addProjectToFeatured(pr)}
+                          disabled={featuredProjects.length >= 5}
+                          className="w-6 h-6 rounded-full bg-white/[0.04] border border-[#1f1a13] flex items-center justify-center text-[#5a5142] hover:text-[#6DC6A4] hover:border-[#6DC6A4]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {projects.length === 0 && (
+                <p className="text-[11px] text-[#3a3328]">
+                  No projects yet — create some in{' '}
+                  <a href="/projects" className="text-[#a08a6a] underline underline-offset-2 hover:text-[#D4BFA0] transition-colors">
+                    Projects
                   </a>.
                 </p>
               )}

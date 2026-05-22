@@ -60,19 +60,46 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (pErr) throw pErr;
+
+    let isProjectPurchase = false;
+    let projectAccess: any = null;
     if (!purchase) {
-      return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      // Check for project storefront purchase
+      const { data: access } = await admin
+        .from('project_access_links')
+        .select('id, project_id, buyer_email, created_at, stripe_session_id')
+        .eq('stripe_session_id', sessionId)
+        .maybeSingle();
+      if (access) {
+        isProjectPurchase = true;
+        projectAccess = access;
+      } else {
+        return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      }
     }
-    if (!purchase.download_unlocked) {
+    if (!isProjectPurchase && !purchase?.download_unlocked) {
       return NextResponse.json(
         { error: 'Download access revoked (refunded or disputed)' },
         { status: 403 },
       );
     }
 
-    const trackIds: string[] = Array.isArray(purchase.track_ids) ? purchase.track_ids : [];
-    const lineItems: Array<{ track_id: string; license_type: string }> =
-      Array.isArray(purchase.line_items) ? purchase.line_items : [];
+    let trackIds: string[] = [];
+    let lineItems: Array<{ track_id: string; license_type: string }> = [];
+    if (isProjectPurchase && projectAccess) {
+      // Load all tracks belonging to the purchased project; grant full access (stems included)
+      const { data: junctions } = await admin
+        .from('project_tracks')
+        .select('track_id')
+        .eq('project_id', projectAccess.project_id)
+        .order('position', { ascending: true });
+      trackIds = (junctions ?? []).map((j: any) => j.track_id);
+      // treat as exclusive for stems inclusion
+      lineItems = trackIds.map((tid) => ({ track_id: tid, license_type: 'exclusive' }));
+    } else if (purchase) {
+      trackIds = Array.isArray(purchase.track_ids) ? purchase.track_ids : [];
+      lineItems = Array.isArray(purchase.line_items) ? purchase.line_items : [];
+    }
 
     let tracks: any[] = [];
     if (trackIds.length > 0) {
@@ -174,14 +201,24 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const purchaseForClient = isProjectPurchase && projectAccess
+      ? {
+          id: projectAccess.id,
+          buyer_email: projectAccess.buyer_email,
+          amount_usd: 0, // will be shown in email / Stripe receipt
+          created_at: projectAccess.created_at,
+          status: 'paid',
+        }
+      : {
+          id: purchase!.id,
+          buyer_email: purchase!.buyer_email,
+          amount_usd: purchase!.amount_usd,
+          created_at: purchase!.created_at,
+          status: purchase!.status,
+        };
+
     return NextResponse.json({
-      purchase: {
-        id: purchase.id,
-        buyer_email: purchase.buyer_email,
-        amount_usd: purchase.amount_usd,
-        created_at: purchase.created_at,
-        status: purchase.status,
-      },
+      purchase: purchaseForClient,
       tracks: tracksWithDownloads,
     });
   } catch (err) {

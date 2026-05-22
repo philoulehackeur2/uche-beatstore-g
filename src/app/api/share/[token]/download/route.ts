@@ -61,6 +61,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       shareRow = linkShare ?? null;
     }
 
+    // Paid storefront project access (project_access_links token) — grant if track belongs to the purchased project
+    let isProjectPaidAccess = false;
+    if (!shareRow) {
+      const { data: paidAccess } = await admin
+        .from('project_access_links')
+        .select('project_id')
+        .eq('token', token)
+        .maybeSingle();
+      if (paidAccess) {
+        const { data: belongs } = await admin
+          .from('project_tracks')
+          .select('track_id')
+          .eq('project_id', paidAccess.project_id)
+          .eq('track_id', trackId)
+          .maybeSingle();
+        if (belongs) {
+          shareRow = { allow_downloads: true, revoked_at: null, expires_at: null } as any;
+          isProjectPaidAccess = true;
+        }
+      }
+    }
+
     if (!shareRow) {
       return NextResponse.json({ error: 'Share not found' }, { status: 404 });
     }
@@ -73,6 +95,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     // Free pass when the producer allowed downloads at the share level.
     let granted = shareRow.allow_downloads === true;
+
+    if (isProjectPaidAccess) {
+      granted = true; // token itself proves the purchase for this project's tracks
+    }
 
     // Paid pass: a purchase row covering this share + session + track.
     // We require session_id so a random visitor can't probe another buyer's
