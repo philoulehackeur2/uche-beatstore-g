@@ -77,9 +77,8 @@ export async function POST(req: NextRequest) {
       const stripe = getStripe();
 
       const session = await stripe.checkout.sessions.create({
-        ui_mode: 'embedded',
+        ui_mode: 'embedded_page',
         mode: 'payment',
-        automatic_payment_methods: { enabled: true },
         customer_email: buyerEmail,
         line_items: [{
           price_data: {
@@ -269,9 +268,8 @@ export async function POST(req: NextRequest) {
     const firstItem = cartItemsMeta[0];
 
     const session = await stripe.checkout.sessions.create({
-      ui_mode: 'embedded',
+      ui_mode: 'embedded_page',
       mode: 'payment',
-      automatic_payment_methods: { enabled: true },
       customer_email: buyerEmail,
       line_items: lineItems,
       metadata: {
