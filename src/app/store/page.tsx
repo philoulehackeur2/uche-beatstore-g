@@ -17,6 +17,8 @@ import { toast } from '@/hooks/useToast';
 import type { Track } from '@/lib/types';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier as LicenseTierImport } from '@/components/store/LicenseSelector';
+import { MusicArtwork } from '@/components/store/MusicArtwork';
+import { ParticleText } from '@/components/store/ParticleText';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -81,10 +83,14 @@ const TYPE_FILTERS = ['all', 'beats', 'song', 'remix'] as const;
 type TypeFilter = typeof TYPE_FILTERS[number];
 type ViewMode = 'grid' | 'list';
 
+// Producer "font style" maps to the app's primary type stack. `default`
+// is Akira Expanded (the body font); `serif` falls back to Synkopy
+// (heading); `mono` uses Panchang (already configured via .font-mono).
+// No new font imports — these are the three @font-face loaded in globals.css.
 const FONT_FAMILY_MAP: Record<string, string> = {
-  default: 'Inter, ui-sans-serif, system-ui, sans-serif',
-  serif:   'Georgia, ui-serif, Times New Roman, serif',
-  mono:    'ui-monospace, SFMono-Regular, Menlo, monospace',
+  default: '"Akira Expanded", system-ui, sans-serif',
+  serif: '"Synkopy", "Akira Expanded", system-ui, sans-serif',
+  mono: '"Panchang", ui-monospace, SFMono-Regular, Menlo, monospace',
 };
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -250,7 +256,7 @@ function StorePage() {
       setBpmMin(bpmRange.min);
       setBpmMax(bpmRange.max);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length]);
 
   const effectiveBpmMin = bpmMin === 0 ? bpmRange.min : bpmMin;
@@ -351,8 +357,8 @@ function StorePage() {
   }
 
   const accentColor = creator?.accent_color || '#D4BFA0';
-  const textColor   = creator?.text_color_primary || '#E8DCC8';
-  const fontFamily  = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  const textColor = creator?.text_color_primary || '#E8DCC8';
+  const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
 
   if (!loading && creator?.store_enabled === false) {
     return (
@@ -373,18 +379,17 @@ function StorePage() {
       className="min-h-screen bg-[#0a0907]"
       style={{
         '--store-accent': accentColor,
-        '--store-text':   textColor,
+        '--store-text': textColor,
         fontFamily,
         color: textColor,
       } as React.CSSProperties}
     >
       {/* ── Purchase return banner ─────────────────────────────── */}
       {bannerOpen && (
-        <div className={`sticky top-0 z-50 px-4 md:px-12 py-3 border-b ${
-          purchaseStatus === 'success'
+        <div className={`sticky top-0 z-50 px-4 md:px-12 py-3 border-b ${purchaseStatus === 'success'
             ? 'bg-[#0e1f17] border-[#6DC6A4]/30 text-[#6DC6A4]'
             : 'bg-[#1f1010] border-red-500/30 text-red-300'
-        }`}>
+          }`}>
           <div className="max-w-6xl mx-auto flex items-center gap-3">
             {purchaseStatus === 'success'
               ? <CheckCircle2 size={16} className="shrink-0" />
@@ -402,7 +407,7 @@ function StorePage() {
       )}
 
       {/* ── Artist bio block ──────────────────────────────────── */}
-      <ArtistBioBlock creator={creator} trackCount={tracks.length} />
+      <ArtistBioBlock creator={creator} trackCount={tracks.length} accentColor={accentColor} />
 
       {/* ── Featured playlists + projects ────────────────────── */}
       {(featuredPlaylists.length > 0 || featuredProjects.length > 0) && (
@@ -439,37 +444,37 @@ function StorePage() {
             />
           )}
           {featuredProjects.length > 0 && (
-             <FeaturedPlaylistsStrip
-               label="Projects"
-               playlists={featuredProjects}
-               detailHrefBase="/store/projects"
-               currentTrack={currentTrack}
-               isPlaying={isPlaying}
-               onPlay={(t, playlist) => {
-                 setQueue((playlist?.tracks ?? []) as unknown as Track[]);
-                 setTrack(t as unknown as Track);
-               }}
-               priceFor={(t, type) => {
-                 const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-                 if (override != null && Number(override) > 0) return Number(override);
-                 const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
-                 return def != null && Number(def) > 0 ? Number(def) : null;
-               }}
-               onAddToCart={(t, type) => {
-                 const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
-                   ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
-                 if (!price) { toast.error(`No ${type} price set`); return; }
-                 addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
-                   id: `${type}-${t.id}`,
-                   name: type === 'lease' ? 'Lease' : 'Exclusive',
-                   price_usd: Number(price),
-                   file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
-                   is_exclusive: type === 'exclusive',
-                 });
-                 toast.success(`Added: ${t.title} (${type})`);
-               }}
-               onBuyProject={handleBuyProject}
-             />
+            <FeaturedPlaylistsStrip
+              label="Projects"
+              playlists={featuredProjects}
+              detailHrefBase="/store/projects"
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              onPlay={(t, playlist) => {
+                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
+                setTrack(t as unknown as Track);
+              }}
+              priceFor={(t, type) => {
+                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+                if (override != null && Number(override) > 0) return Number(override);
+                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
+                return def != null && Number(def) > 0 ? Number(def) : null;
+              }}
+              onAddToCart={(t, type) => {
+                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
+                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
+                if (!price) { toast.error(`No ${type} price set`); return; }
+                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
+                  id: `${type}-${t.id}`,
+                  name: type === 'lease' ? 'Lease' : 'Exclusive',
+                  price_usd: Number(price),
+                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+                  is_exclusive: type === 'exclusive',
+                });
+                toast.success(`Added: ${t.title} (${type})`);
+              }}
+              onBuyProject={handleBuyProject}
+            />
 
           )}
         </div>
@@ -481,11 +486,10 @@ function StorePage() {
           {/* Mobile filters toggle */}
           <button
             onClick={() => setSidebarOpen((o) => !o)}
-            className={`lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-full border text-[10px] font-mono uppercase tracking-wider transition-colors ${
-              sidebarOpen || hasActiveFilters
+            className={`lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-full border text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
                 ? 'border-[#D4BFA0]/40 text-[#D4BFA0] bg-[#D4BFA0]/5'
                 : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8]'
-            }`}
+              }`}
           >
             <SlidersHorizontal size={11} />
             Filters
@@ -522,9 +526,8 @@ function StorePage() {
               <button
                 key={f}
                 onClick={() => setTypeFilter(f)}
-                className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${
-                  typeFilter === f ? 'text-black' : 'bg-transparent text-[#6a5d4a] hover:text-[#E8DCC8]'
-                }`}
+                className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-black' : 'bg-transparent text-[#6a5d4a] hover:text-[#E8DCC8]'
+                  }`}
                 style={typeFilter === f ? { backgroundColor: accentColor } : {}}
               >
                 {f}
@@ -611,7 +614,7 @@ function StorePage() {
         <div className="flex-1 min-w-0">
           {loading ? (
             viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="track-masonry">
                 {Array.from({ length: 6 }).map((_, i) => <BeatCardSkeleton key={i} />)}
               </div>
             ) : (
@@ -635,7 +638,7 @@ function StorePage() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="track-masonry">
               {filtered.map((t) => (
                 <BeatCard
                   key={t.id}
@@ -805,11 +808,10 @@ function StoreSidebar({
   }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
     <button
       onClick={onClick}
-      className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded-full border transition-all whitespace-nowrap ${
-        active
+      className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded-full border transition-all whitespace-nowrap ${active
           ? 'text-black border-[#D4BFA0]'
           : 'bg-transparent text-[#6a5d4a] border-[#1f1a13] hover:border-[#D4BFA0]/30 hover:text-[#a08a6a]'
-      }`}
+        }`}
       style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
     >
       {children}
@@ -917,11 +919,10 @@ function StoreSidebar({
       {/* Free only toggle */}
       <button
         onClick={() => setFreeOnly(!freeOnly)}
-        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
-          freeOnly
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${freeOnly
             ? 'bg-[#0e1f17]/60 border-[#6DC6A4]/30 text-[#6DC6A4]'
             : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
-        }`}
+          }`}
       >
         <div className="flex items-center gap-2">
           <Download size={11} />
@@ -955,9 +956,8 @@ function StoreSidebar({
       )}
 
       {/* Mobile bottom sheet */}
-      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#0c0a08] border-t border-[#1f1a13] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${
-        open ? 'translate-y-0' : 'translate-y-full'
-      }`}>
+      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#0c0a08] border-t border-[#1f1a13] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'
+        }`}>
         {/* Bottom sheet drag handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-[#2d2620]" />
@@ -984,22 +984,28 @@ function TagChips({ tags, max = 3, accentGenre = false }: { tags: TrackTag[]; ma
   if (display.length === 0) return null;
   const visible = display.slice(0, max);
   const overflow = display.length - max;
+  // Typography per spec: 10px · font-mono (Panchang) · uppercase ·
+  // tracking-[0.2em] · text-[#6a5d4a]. Category distinction comes from
+  // the background tint, not the text color.
   return (
     <div className="flex flex-wrap gap-1 mt-1.5">
       {visible.map((t) => {
         const isGenre = t.category === 'genre';
         return (
-          <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${
-            isGenre && accentGenre
-              ? 'bg-[#D4BFA0]/10 text-[#D4BFA0] border-[#D4BFA0]/20'
-              : 'bg-[#1f1a13] text-[#a08a6a] border-[#1f1a13]'
-          }`}>
+          <span
+            key={t.tag}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] border ${
+              isGenre && accentGenre
+                ? 'bg-[#D4BFA0]/10 border-[#D4BFA0]/20'
+                : 'bg-[#1f1a13] border-[#1f1a13]'
+            }`}
+          >
             {t.tag}
           </span>
         );
       })}
       {overflow > 0 && (
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-[#5a5142] bg-[#1a160f]">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] bg-[#1a160f]">
           +{overflow}
         </span>
       )}
@@ -1032,78 +1038,74 @@ function BeatCard({
   return (
     <div
       id={`beat-${track.id}`}
-      className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${
-        isPreview
+      className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${isPreview
           ? 'border-[#D4BFA0]/50 shadow-lg shadow-[#D4BFA0]/5'
           : isPlaying
-          ? 'shadow-md animate-[beat-pulse_2s_ease-in-out_infinite]'
-          : isCurrent
-          ? 'border-[#D4BFA0]/30 shadow-md shadow-[#D4BFA0]/5'
-          : 'border-[#1f1a13] hover:border-[#2d2620]'
-      }`}
+            ? 'shadow-md animate-[beat-pulse_2s_ease-in-out_infinite]'
+            : isCurrent
+              ? 'border-[#D4BFA0]/30 shadow-md shadow-[#D4BFA0]/5'
+              : 'border-[#1f1a13] hover:border-[#2d2620]'
+        }`}
       style={
         isPreview ? { borderColor: `${accentColor}80` }
-        : isPlaying ? { borderColor: `${accentColor}66`, boxShadow: `0 0 0 1px ${accentColor}33` }
-        : isCurrent ? { borderColor: `${accentColor}4D` }
-        : {}
+          : isPlaying ? { borderColor: `${accentColor}66`, boxShadow: `0 0 0 1px ${accentColor}33` }
+            : isCurrent ? { borderColor: `${accentColor}4D` }
+              : {}
       }
     >
-      {/* Cover art — clicking opens preview drawer */}
+      {/* Cover art + vinyl. Outer wrapper is overflow-visible so the
+          vinyl can peek out past the cover's rounded clip without
+          breaking the card's outer rounded corners (the parent card
+          still has overflow-hidden). Inner wrapper keeps the cover
+          image rounded + clipped. */}
       <div
-        className="relative w-full aspect-square bg-[#0a0907] overflow-hidden block shrink-0 cursor-pointer"
+        className="relative w-full aspect-square shrink-0 cursor-pointer"
         onClick={onPreview}
       >
-        {track.cover_url ? (
-          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
-            <Music size={36} />
-          </div>
-        )}
+        {/* Vinyl — sits behind the cover, slides out on group-hover via
+            globals.css `.vinyl-slide`. Skipped in reduced-motion. */}
+        <MusicArtwork
+          artist={null}
+          music={track.title}
+          albumArt={track.cover_url ?? null}
+          isSong={true}
+          isPlaying={isCurrent && isPlaying}
+          onTogglePlay={onPlay}
+        />
 
-        {/* BPM badge — top left */}
+        {/* Cover image — z-10 so it sits on top of the vinyl until hover */}
+        <div className="absolute inset-0 z-10 rounded-none overflow-hidden bg-[#0a0907] pointer-events-none">
+          {track.cover_url ? (
+            <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
+              <Music size={36} />
+            </div>
+          )}
+        </div>
+
+        {/* Badges + indicators — z-20 above the cover */}
         {track.bpm && (
-          <div className="absolute top-2 left-2 text-[8px] font-mono bg-black/70 text-white px-2 py-0.5 rounded border border-[#1f1a13] backdrop-blur-sm">
+          <div className="absolute top-2 left-2 z-20 text-[8px] font-mono bg-black/70 text-white px-2 py-0.5 rounded border border-[#1f1a13] backdrop-blur-sm pointer-events-none">
             {track.bpm} BPM
           </div>
         )}
-
-        {/* Key badge — top right */}
         {track.key && (
           <div
-            className="absolute top-2 right-2 text-[8px] font-mono font-semibold px-2 py-0.5 rounded backdrop-blur-sm"
+            className="absolute top-2 right-2 z-20 text-[8px] font-mono font-semibold px-2 py-0.5 rounded backdrop-blur-sm pointer-events-none"
             style={{ backgroundColor: `${accentColor}CC`, color: '#0a0907' }}
           >
             {track.key}{track.scale === 'minor' ? 'm' : ''}
           </div>
         )}
-
-        {/* Free badge overlay */}
         {track.free_download_enabled && (
-          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-[#6DC6A4] text-black">
+          <div className="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-[#6DC6A4] text-black pointer-events-none">
             Free
           </div>
         )}
-
-        {/* Playing indicator */}
         {isCurrent && (
-          <div className="absolute top-8 left-2 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse" />
+          <div className="absolute top-8 left-2 z-20 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse pointer-events-none" />
         )}
-
-        {/* Play overlay */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onPlay(); }}
-          aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
-          className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-150 ${
-            isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          }`}
-        >
-          <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform pointer-events-none">
-            {isCurrent && isPlaying
-              ? <Pause size={22} fill="currentColor" />
-              : <Play size={22} className="ml-0.5" fill="currentColor" />}
-          </div>
-        </button>
       </div>
 
       <div className="p-4 flex flex-col flex-1">
@@ -1229,22 +1231,20 @@ function BeatListRow({
   return (
     <div
       id={`beat-${track.id}`}
-      className={`rounded-xl border transition-all ${
-        isPreview
+      className={`rounded-xl border transition-all ${isPreview
           ? 'border-[#D4BFA0]/40 bg-[#16130e]'
           : isCurrent
-          ? 'border-[#D4BFA0]/20 bg-[#16130e]'
-          : 'border-[#1a160f] bg-[#14110d] hover:border-[#1f1a13]'
-      }`}
+            ? 'border-[#D4BFA0]/20 bg-[#16130e]'
+            : 'border-[#1a160f] bg-[#14110d] hover:border-[#1f1a13]'
+        }`}
       style={isPreview ? { borderColor: `${accentColor}66` } : isCurrent ? { borderColor: `${accentColor}33` } : {}}
     >
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Play button */}
         <button
           onClick={onPlay}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-            isCurrent ? 'text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'
-          }`}
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${isCurrent ? 'text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'
+            }`}
           style={isCurrent ? { backgroundColor: accentColor } : {}}
         >
           {isCurrent && isPlaying
@@ -1268,9 +1268,8 @@ function BeatListRow({
         {/* Title + meta + tags */}
         <div className="flex-1 min-w-0">
           <button onClick={onPreview} className="text-left w-full" title={track.title}>
-            <p className={`text-[13px] font-medium truncate transition-colors ${
-              isPreview || isCurrent ? '' : 'text-[#E8DCC8] hover:text-[#D4BFA0]'
-            }`}
+            <p className={`text-[13px] font-medium truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#E8DCC8] hover:text-[#D4BFA0]'
+              }`}
               style={isPreview || isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -1286,11 +1285,10 @@ function BeatListRow({
                 .filter((t) => t.category === 'genre' || t.category === 'mood')
                 .slice(0, 3)
                 .map((t) => (
-                  <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${
-                    t.category === 'genre'
+                  <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${t.category === 'genre'
                       ? 'bg-[#D4BFA0]/10 text-[#D4BFA0] border-[#D4BFA0]/20'
                       : 'bg-[#1f1a13] text-[#6a5d4a] border-[#1f1a13]'
-                  }`}>
+                    }`}>
                     {t.tag}
                   </span>
                 ))}
@@ -1387,7 +1385,7 @@ function BeatPreviewDrawer({
   // Reset selected license when track changes
   useEffect(() => {
     setSelectedLicense(priceLease != null ? 'lease' : priceExclusive != null ? 'exclusive' : licenses[0]?.id ?? 'lease');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.id]);
 
   // Escape key closes drawer
@@ -1419,13 +1417,13 @@ function BeatPreviewDrawer({
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     : [
-        priceLease != null
-          ? { id: 'lease', name: 'Lease', price_usd: priceLease, file_types: ['MP3', 'WAV'], is_exclusive: false }
-          : null,
-        priceExclusive != null
-          ? { id: 'exclusive', name: 'Exclusive', price_usd: priceExclusive, file_types: ['MP3', 'WAV', 'STEMS'], is_exclusive: true }
-          : null,
-      ].filter(Boolean) as LicenseTier[];
+      priceLease != null
+        ? { id: 'lease', name: 'Lease', price_usd: priceLease, file_types: ['MP3', 'WAV'], is_exclusive: false }
+        : null,
+      priceExclusive != null
+        ? { id: 'exclusive', name: 'Exclusive', price_usd: priceExclusive, file_types: ['MP3', 'WAV', 'STEMS'], is_exclusive: true }
+        : null,
+    ].filter(Boolean) as LicenseTier[];
 
   const selectedTier = activeLicenses.find((l) => l.id === selectedLicense) ?? activeLicenses[0];
 
@@ -1535,9 +1533,8 @@ function BeatPreviewDrawer({
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col gap-0.5 bg-[#0a0907] rounded-lg px-3 py-2.5 border border-[#1a160f]">
                   <span className="text-[8px] font-mono uppercase tracking-wider text-[#4a4338]">{label}</span>
-                  <span className={`text-[11px] font-mono font-medium ${
-                    label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#E8DCC8]'
-                  }`}>{value}</span>
+                  <span className={`text-[11px] font-mono font-medium ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#E8DCC8]'
+                    }`}>{value}</span>
                 </div>
               ))}
             </div>
@@ -1618,7 +1615,7 @@ function BeatPreviewDrawer({
 
 /* ─── Artist Bio Block ───────────────────────────────────────── */
 
-function ArtistBioBlock({ creator, trackCount }: { creator: CreatorProfile | null; trackCount: number }) {
+function ArtistBioBlock({ creator, trackCount, accentColor }: { creator: CreatorProfile | null; trackCount: number; accentColor?: string }) {
   const [licenseExpanded, setLicenseExpanded] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const bioIsLong = (creator?.bio?.length ?? 0) > 160;
@@ -1627,33 +1624,41 @@ function ArtistBioBlock({ creator, trackCount }: { creator: CreatorProfile | nul
   const socialLinks: Array<{ href: string; label: string; icon: React.ReactNode; color: string }> = [];
   if (creator?.instagram_handle) {
     const h = creator.instagram_handle.replace(/^@/, '');
-    socialLinks.push({ href: `https://instagram.com/${h}`, label: 'Instagram', color: 'hover:text-[#E1306C]', icon: (
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-      </svg>
-    )});
+    socialLinks.push({
+      href: `https://instagram.com/${h}`, label: 'Instagram', color: 'hover:text-[#E1306C]', icon: (
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    });
   }
   if (creator?.twitter_handle) {
     const h = creator.twitter_handle.replace(/^@/, '');
-    socialLinks.push({ href: `https://x.com/${h}`, label: 'X / Twitter', color: 'hover:text-white', icon: (
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.736-8.854L2.5 2.25h6.894l4.259 5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-      </svg>
-    )});
+    socialLinks.push({
+      href: `https://x.com/${h}`, label: 'X / Twitter', color: 'hover:text-white', icon: (
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.736-8.854L2.5 2.25h6.894l4.259 5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+        </svg>
+      )
+    });
   }
   if (creator?.spotify_url) {
-    socialLinks.push({ href: creator.spotify_url, label: 'Spotify', color: 'hover:text-[#1DB954]', icon: (
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
-        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-      </svg>
-    )});
+    socialLinks.push({
+      href: creator.spotify_url, label: 'Spotify', color: 'hover:text-[#1DB954]', icon: (
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+        </svg>
+      )
+    });
   }
   if (creator?.soundcloud_url) {
-    socialLinks.push({ href: creator.soundcloud_url, label: 'SoundCloud', color: 'hover:text-[#FF5500]', icon: (
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-        <path d="M1.175 12.225c-.014.095 0 .19 0 .285l1.3 5.48H1.175c-.65 0-1.175-.524-1.175-1.175v-3.62c0-.65.524-1.175 1.175-1.175v.205zm2.6-3.92c-.65 0-1.175.524-1.175 1.175v7.63h1.3V8.48c0-.65-.474-1.175-1.125-1.175zm1.3-.3c-.65 0-1.175.524-1.175 1.175v8.43h1.3V9.18c0-.65-.474-1.155-1.125-1.175zm1.3-1.24c-.65 0-1.175.524-1.175 1.175v9.67h1.3V7.94c0-.65-.474-1.175-1.125-1.175zm1.3.175c-.65 0-1.175.524-1.175 1.175v9.495l1.3-.7V7.115c0-.65-.474-1.175-1.125-1.175zm1.3 0c-.65 0-1.175.524-1.175 1.175v9.67c.27.095.555.175.855.175.38 0 .745-.095 1.065-.27V7.115c0-.65-.474-1.175-1.125-1.175z" />
-      </svg>
-    )});
+    socialLinks.push({
+      href: creator.soundcloud_url, label: 'SoundCloud', color: 'hover:text-[#FF5500]', icon: (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M1.175 12.225c-.014.095 0 .19 0 .285l1.3 5.48H1.175c-.65 0-1.175-.524-1.175-1.175v-3.62c0-.65.524-1.175 1.175-1.175v.205zm2.6-3.92c-.65 0-1.175.524-1.175 1.175v7.63h1.3V8.48c0-.65-.474-1.175-1.125-1.175zm1.3-.3c-.65 0-1.175.524-1.175 1.175v8.43h1.3V9.18c0-.65-.474-1.155-1.125-1.175zm1.3-1.24c-.65 0-1.175.524-1.175 1.175v9.67h1.3V7.94c0-.65-.474-1.175-1.125-1.175zm1.3.175c-.65 0-1.175.524-1.175 1.175v9.495l1.3-.7V7.115c0-.65-.474-1.175-1.125-1.175zm1.3 0c-.65 0-1.175.524-1.175 1.175v9.67c.27.095.555.175.855.175.38 0 .745-.095 1.065-.27V7.115c0-.65-.474-1.175-1.125-1.175z" />
+        </svg>
+      )
+    });
   }
   if (creator?.website_url) {
     socialLinks.push({ href: creator.website_url, label: 'Website', color: 'hover:text-[#E8DCC8]', icon: <Globe size={16} /> });
@@ -1673,14 +1678,20 @@ function ArtistBioBlock({ creator, trackCount }: { creator: CreatorProfile | nul
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 pt-10 pb-10 md:pt-24 md:pb-16">
         <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-3">Beat store</p>
-        <h1 className="text-3xl md:text-5xl font-medium tracking-tight text-white leading-[1.05] max-w-3xl">
-          {creator?.display_name || 'Producer'}
-        </h1>
+        {/* ParticleText replaces the plain <h1> — same role/label for
+            a11y; visible text is rendered as canvas particles. */}
+        <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
+        <div className="max-w-3xl">
+          <ParticleText
+            text={creator?.display_name || 'Producer'}
+            color={accentColor || '#D4BFA0'}
+            className="relative w-full h-[80px] md:h-[120px]"
+          />
+        </div>
         {creator?.bio && (
           <div className="mt-4">
-            <p className={`text-[14px] text-[#E8DCC8]/80 max-w-2xl leading-relaxed transition-all ${
-              bioIsLong && !bioExpanded ? 'line-clamp-3' : ''
-            }`}>
+            <p className={`text-[14px] text-[#E8DCC8]/80 max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''
+              }`}>
               {creator.bio}
             </p>
             {bioIsLong && (
@@ -1771,9 +1782,8 @@ function FeaturedPlaylistsStrip({
             onClick={() => setExpandedId((id) => (id === pl.id ? null : pl.id))}
             className={`shrink-0 w-[120px] sm:w-[140px] text-left group transition-all ${expandedId === pl.id ? 'opacity-100' : ''}`}
           >
-            <div className={`w-full aspect-square rounded-xl bg-[#14110d] border overflow-hidden mb-2 flex items-center justify-center transition-all ${
-              expandedId === pl.id ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/5' : 'border-[#1f1a13] group-hover:border-[#2d2620]'
-            }`}>
+            <div className={`w-full aspect-square rounded-xl bg-[#14110d] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/5' : 'border-[#1f1a13] group-hover:border-[#2d2620]'
+              }`}>
               {pl.cover_url
                 ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
                 : <ListMusic size={24} className="text-[#2d2620]" />}
@@ -1797,49 +1807,49 @@ function FeaturedPlaylistsStrip({
           <div className="mt-4 rounded-xl border border-[#1f1a13] bg-[#14110d] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a160f]">
               <p className="text-[11px] font-semibold text-[#E8DCC8]">{pl.name}</p>
-               <div className="flex items-center gap-2">
-                 {detailHrefBase && (
-                   <Link
-                     href={`${detailHrefBase}/${pl.id}`}
-                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.08] text-[#a08a6a] text-[9px] font-mono uppercase tracking-widest hover:text-[#E8DCC8] hover:border-white/[0.16] transition-colors"
-                   >
-                     Open
-                     <ChevronRight size={11} />
-                   </Link>
-                 )}
-                 {/* Buy entire project (only for the Projects strip) */}
-                 {onBuyProject && (pl as any).price_usd != null && Number((pl as any).price_usd) > 0 && (
-                   <button
-                     onClick={() => onBuyProject(pl as any)}
-                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4BFA0] text-black text-[9px] font-mono uppercase tracking-widest hover:bg-[#E8D8B8] transition-colors"
-                   >
-                     <ShoppingBag size={11} />
-                     Buy project — ${(pl as any).price_usd}
-                   </button>
-                 )}
-                 {/* Add All — Lease */}
-                 {pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
-                   <button
-                     onClick={() => {
-                       let added = 0;
-                       pl.tracks.forEach((t) => {
-                         const lp = priceFor(t, 'lease');
-                         if (lp == null) return;
-                         onAddToCart(t, 'lease');
-                         added++;
-                       });
-                       if (added > 0) toast.success(`${added} beat${added !== 1 ? 's' : ''} added to cart`);
-                     }}
-                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4BFA0]/30 text-[#D4BFA0] text-[9px] font-mono uppercase tracking-widest hover:bg-[#D4BFA0]/10 transition-colors"
-                   >
-                     <ShoppingBag size={11} />
-                     Add All — Lease
-                   </button>
-                 )}
-                 <button onClick={() => setExpandedId(null)} className="text-[#3a3328] hover:text-[#a08a6a] transition-colors">
-                   <X size={13} />
-                 </button>
-               </div>
+              <div className="flex items-center gap-2">
+                {detailHrefBase && (
+                  <Link
+                    href={`${detailHrefBase}/${pl.id}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.08] text-[#a08a6a] text-[9px] font-mono uppercase tracking-widest hover:text-[#E8DCC8] hover:border-white/[0.16] transition-colors"
+                  >
+                    Open
+                    <ChevronRight size={11} />
+                  </Link>
+                )}
+                {/* Buy entire project (only for the Projects strip) */}
+                {onBuyProject && (pl as any).price_usd != null && Number((pl as any).price_usd) > 0 && (
+                  <button
+                    onClick={() => onBuyProject(pl as any)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4BFA0] text-black text-[9px] font-mono uppercase tracking-widest hover:bg-[#E8D8B8] transition-colors"
+                  >
+                    <ShoppingBag size={11} />
+                    Buy project — ${(pl as any).price_usd}
+                  </button>
+                )}
+                {/* Add All — Lease */}
+                {pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
+                  <button
+                    onClick={() => {
+                      let added = 0;
+                      pl.tracks.forEach((t) => {
+                        const lp = priceFor(t, 'lease');
+                        if (lp == null) return;
+                        onAddToCart(t, 'lease');
+                        added++;
+                      });
+                      if (added > 0) toast.success(`${added} beat${added !== 1 ? 's' : ''} added to cart`);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4BFA0]/30 text-[#D4BFA0] text-[9px] font-mono uppercase tracking-widest hover:bg-[#D4BFA0]/10 transition-colors"
+                  >
+                    <ShoppingBag size={11} />
+                    Add All — Lease
+                  </button>
+                )}
+                <button onClick={() => setExpandedId(null)} className="text-[#3a3328] hover:text-[#a08a6a] transition-colors">
+                  <X size={13} />
+                </button>
+              </div>
 
             </div>
             <div className="divide-y divide-[#1a160f]">
@@ -1851,9 +1861,8 @@ function FeaturedPlaylistsStrip({
                   <div key={t.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-[#16130e] transition-colors ${isCur ? 'bg-[#16130e]' : ''}`}>
                     <button
                       onClick={() => { if (pl) onPlay(t, pl); }}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                        isCur ? 'bg-[#D4BFA0] text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'
-                      }`}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors ${isCur ? 'bg-[#D4BFA0] text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'
+                        }`}
                     >
                       {isCur && isPlaying
                         ? <Pause size={10} fill="currentColor" />
@@ -1976,41 +1985,41 @@ function FreeDownloadModal({
             <p className="text-[11px] text-[#5a5142]">Check your downloads folder.</p>
           </div>
         ) : (
-        <>
-        <p className="text-[11px] text-[#6a5d4a] mb-4 leading-relaxed">
-          Enter your email to get the download. We'll occasionally send new releases — no spam.
-        </p>
+          <>
+            <p className="text-[11px] text-[#6a5d4a] mb-4 leading-relaxed">
+              Enter your email to get the download. We'll occasionally send new releases — no spam.
+            </p>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name (optional)"
-            className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
-          />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="your@email.com *"
-            required
-            className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
-          />
-          {error && (
-            <p className="text-[11px] text-red-400 bg-red-400/5 border border-red-400/20 rounded px-3 py-2">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[12px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: accentColor }}
-          >
-            {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-            {submitting ? 'Preparing…' : 'Download Free'}
-          </button>
-        </form>
-        </>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name (optional)"
+                className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
+              />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com *"
+                required
+                className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
+              />
+              {error && (
+                <p className="text-[11px] text-red-400 bg-red-400/5 border border-red-400/20 rounded px-3 py-2">{error}</p>
+              )}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[12px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: accentColor }}
+              >
+                {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                {submitting ? 'Preparing…' : 'Download Free'}
+              </button>
+            </form>
+          </>
         )}
       </div>
     </div>
@@ -2030,9 +2039,9 @@ function StoreContactForm({ creator, accentColor }: { creator: CreatorProfile | 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
-  const nameErr   = touched.name    && !name.trim()    ? 'Name is required'    : null;
-  const emailErr  = touched.email   && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Valid email required' : null;
-  const msgErr    = touched.message && !message.trim() ? 'Message is required' : null;
+  const nameErr = touched.name && !name.trim() ? 'Name is required' : null;
+  const emailErr = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Valid email required' : null;
+  const msgErr = touched.message && !message.trim() ? 'Message is required' : null;
   const canSubmit = !sending && name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && message.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
