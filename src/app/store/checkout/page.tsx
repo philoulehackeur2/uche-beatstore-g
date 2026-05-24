@@ -62,7 +62,12 @@ function CheckoutContent() {
           return;
         }
 
-        checkoutInstance = await (stripe as any).initEmbeddedCheckout({
+        // `initEmbeddedCheckout` was removed in @stripe/stripe-js >= 9.x;
+        // current method for sessions created server-side with
+        // `ui_mode: 'embedded_page'` is `createEmbeddedCheckoutPage`.
+        // Verified against node_modules/@stripe/stripe-js@9.5.0 type
+        // declarations — only `createEmbeddedCheckoutPage` is exported.
+        checkoutInstance = await (stripe as any).createEmbeddedCheckoutPage({
           clientSecret,
         });
         

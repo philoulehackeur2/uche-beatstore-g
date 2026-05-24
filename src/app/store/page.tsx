@@ -159,6 +159,14 @@ function StorePage() {
   const [freeOnly, setFreeOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [newThisWeek, setNewThisWeek] = useState(false);
+  // Deeper facets — sentinel pattern (0/99999) so we can detect "not yet
+  // initialised" vs "user set a real range". Same approach as bpmMin/Max.
+  const [moodFilter, setMoodFilter] = useState('');
+  const [scaleFilter, setScaleFilter] = useState<'' | 'major' | 'minor'>('');
+  const [durationBucket, setDurationBucket] = useState<'' | 'short' | 'medium' | 'long'>('');
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(99999);
+  const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('newest');
   const wishlist = useWishlist();
 
   // Debounced search
@@ -244,6 +252,14 @@ function StorePage() {
     return Array.from(genres).sort();
   }, [tracks]);
 
+  const availableMoods = useMemo(() => {
+    const moods = new Set<string>();
+    tracks.forEach((t) => {
+      (t.tags ?? []).filter((tag) => tag.category === 'mood').forEach((tag) => moods.add(tag.tag));
+    });
+    return Array.from(moods).sort();
+  }, [tracks]);
+
   const availableKeys = useMemo(() => {
     const keys = new Set(tracks.map((t) => t.key).filter(Boolean) as string[]);
     return Array.from(keys).sort();
@@ -267,18 +283,53 @@ function StorePage() {
   const effectiveBpmMin = bpmMin === 0 ? bpmRange.min : bpmMin;
   const effectiveBpmMax = bpmMax === 999 ? bpmRange.max : bpmMax;
 
+  // Price range — derived from resolved lease prices (track override → profile default).
+  const priceRange = useMemo(() => {
+    const prices = tracks
+      .map((t) => {
+        const override = t.lease_price_usd;
+        const dflt = creator?.license_lease_price_usd;
+        const p = override != null && Number(override) > 0
+          ? Number(override)
+          : dflt != null && Number(dflt) > 0 ? Number(dflt) : null;
+        return p;
+      })
+      .filter((p): p is number => p != null);
+    if (!prices.length) return { min: 0, max: 200 };
+    return { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) };
+  }, [tracks, creator?.license_lease_price_usd]);
+
+  useEffect(() => {
+    if (tracks.length > 0 && priceMin === 0 && priceMax === 99999) {
+      setPriceMin(priceRange.min);
+      setPriceMax(priceRange.max);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks.length]);
+
+  const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
+  const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
+  const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
+
   const hasActiveFilters =
-    genreFilter !== '' || keyFilter !== '' || freeOnly || favoritesOnly || newThisWeek ||
+    genreFilter !== '' || moodFilter !== '' || keyFilter !== '' || scaleFilter !== '' ||
+    freeOnly || favoritesOnly || newThisWeek || durationBucket !== '' ||
+    priceRangeActive ||
     effectiveBpmMin > bpmRange.min || effectiveBpmMax < bpmRange.max;
 
   const resetFilters = () => {
     setGenreFilter('');
+    setMoodFilter('');
     setKeyFilter('');
+    setScaleFilter('');
     setBpmMin(bpmRange.min);
     setBpmMax(bpmRange.max);
+    setPriceMin(priceRange.min);
+    setPriceMax(priceRange.max);
     setFreeOnly(false);
     setFavoritesOnly(false);
     setNewThisWeek(false);
+    setDurationBucket('');
     setSearch('');
     setDebouncedSearch('');
     setTypeFilter('all');
@@ -287,7 +338,7 @@ function StorePage() {
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return tracks.filter((t) => {
+    const result = tracks.filter((t) => {
       if (typeFilter === 'beats' && t.type !== 'beat' && t.type !== 'instrumental') return false;
       if (typeFilter !== 'all' && typeFilter !== 'beats' && t.type !== typeFilter) return false;
       if (freeOnly && !t.free_download_enabled) return false;
@@ -296,13 +347,31 @@ function StorePage() {
         const created = t.created_at ? new Date(t.created_at).getTime() : 0;
         if (created < weekAgo) return false;
       }
+      if (priceRangeActive) {
+        const lp = t.lease_price_usd ?? creator?.license_lease_price_usd ?? null;
+        const p = lp != null && Number(lp) > 0 ? Number(lp) : null;
+        if (p == null || p < effectivePriceMin || p > effectivePriceMax) return false;
+      }
       if (t.bpm != null && (t.bpm < effectiveBpmMin || t.bpm > effectiveBpmMax)) return false;
       if (keyFilter && (t.key ?? '').toLowerCase() !== keyFilter.toLowerCase()) return false;
+      if (scaleFilter && (t.scale ?? '').toLowerCase() !== scaleFilter) return false;
+      if (durationBucket) {
+        const d = t.duration_seconds ?? 0;
+        if (durationBucket === 'short' && d >= 120) return false;
+        if (durationBucket === 'medium' && (d < 120 || d > 240)) return false;
+        if (durationBucket === 'long' && d <= 240) return false;
+      }
       if (genreFilter) {
         const hasGenre = (t.tags ?? []).some(
           (tag) => tag.category === 'genre' && tag.tag.toLowerCase() === genreFilter.toLowerCase(),
         );
         if (!hasGenre) return false;
+      }
+      if (moodFilter) {
+        const hasMood = (t.tags ?? []).some(
+          (tag) => tag.category === 'mood' && tag.tag.toLowerCase() === moodFilter.toLowerCase(),
+        );
+        if (!hasMood) return false;
       }
       if (!q) return true;
       return (
@@ -313,7 +382,36 @@ function StorePage() {
         (t.tags ?? []).some((tag) => tag.tag.toLowerCase().includes(q))
       );
     });
-  }, [tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek, effectiveBpmMin, effectiveBpmMax, keyFilter, genreFilter, wishlist.ids]);
+
+    // Sort applied after filtering so the count is stable.
+    const priceOf = (t: StoreTrack) => {
+      const lease = t.lease_price_usd ?? creator?.license_lease_price_usd ?? null;
+      return lease != null && Number(lease) > 0 ? Number(lease) : Infinity;
+    };
+    const sorted = [...result];
+    switch (sortBy) {
+      case 'bpm-asc':   sorted.sort((a, b) => (a.bpm ?? Infinity) - (b.bpm ?? Infinity)); break;
+      case 'bpm-desc':  sorted.sort((a, b) => (b.bpm ?? -Infinity) - (a.bpm ?? -Infinity)); break;
+      case 'price-asc': sorted.sort((a, b) => priceOf(a) - priceOf(b)); break;
+      case 'price-desc':sorted.sort((a, b) => priceOf(b) - priceOf(a)); break;
+      case 'title':     sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case 'popular':
+        // Lightweight proxy until a real popularity column exists: rating
+        // dominates, BPM nudges ties, title break for determinism.
+        sorted.sort((a, b) => {
+          const score = (t: StoreTrack) => (t.rating ?? 0) * 100 + (t.bpm ?? 0);
+          const diff = score(b) - score(a);
+          return diff !== 0 ? diff : a.title.localeCompare(b.title);
+        });
+        break;
+      case 'newest':
+      default:
+        sorted.sort((a, b) =>
+          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+        );
+    }
+    return sorted;
+  }, [tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek, priceRangeActive, effectivePriceMin, effectivePriceMax, effectiveBpmMin, effectiveBpmMax, keyFilter, scaleFilter, durationBucket, genreFilter, moodFilter, sortBy, creator?.license_lease_price_usd, wishlist.ids]);
 
   const handlePlay = (t: StoreTrack) => {
     if (currentTrack?.id === t.id) { togglePlay(); return; }
@@ -604,15 +702,25 @@ function StorePage() {
         <StoreSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          totalResults={filtered.length}
           genreFilter={genreFilter}
           setGenreFilter={setGenreFilter}
+          moodFilter={moodFilter}
+          setMoodFilter={setMoodFilter}
           keyFilter={keyFilter}
           setKeyFilter={setKeyFilter}
+          scaleFilter={scaleFilter}
+          setScaleFilter={setScaleFilter}
           bpmMin={bpmMin}
           setBpmMin={setBpmMin}
           bpmMax={bpmMax}
           setBpmMax={setBpmMax}
           bpmRange={bpmRange}
+          priceMin={priceMin}
+          setPriceMin={setPriceMin}
+          priceMax={priceMax}
+          setPriceMax={setPriceMax}
+          priceRange={priceRange}
           typeFilter={typeFilter}
           setTypeFilter={setTypeFilter}
           freeOnly={freeOnly}
@@ -622,9 +730,14 @@ function StorePage() {
           favoritesCount={wishlist.count}
           newThisWeek={newThisWeek}
           setNewThisWeek={setNewThisWeek}
+          durationBucket={durationBucket}
+          setDurationBucket={setDurationBucket}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
           hasActiveFilters={hasActiveFilters}
           onReset={resetFilters}
           availableGenres={availableGenres}
+          availableMoods={availableMoods}
           availableKeys={availableKeys}
           accentColor={accentColor}
         />
@@ -789,6 +902,87 @@ function BeatListRowSkeleton() {
 
 /* ─── Sidebar ────────────────────────────────────────────────── */
 
+// Active-filter chip — Amazon-style "applied refinements" pill at the
+// top of the sidebar so users always see what's narrowing their results.
+function ActiveChip({
+  label, onClear, accentColor,
+}: { label: string; onClear: () => void; accentColor: string }) {
+  return (
+    <button
+      onClick={onClear}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] text-black hover:opacity-90 transition-opacity"
+      style={{ backgroundColor: accentColor }}
+      aria-label={`Remove filter: ${label}`}
+    >
+      {label}
+      <X size={9} strokeWidth={2.5} />
+    </button>
+  );
+}
+
+// Collapsible facet section — Amazon left-rail pattern. Count chip in
+// the header reflects how many of this facet's filters are active so
+// users see at-a-glance which sections are doing work.
+function FacetSection({
+  title, count, defaultOpen = true, children,
+}: {
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-[#1a160f] first:border-t-0 pt-3 first:pt-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between text-left mb-2 group"
+      >
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] group-hover:text-[#E8DCC8] transition-colors">
+          {title}
+          {count != null && count > 0 && (
+            <span className="ml-1.5 text-[#5a5142]">({count})</span>
+          )}
+        </span>
+        <ChevronDown
+          size={11}
+          className={`text-[#5a5142] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+        />
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+}
+
+// "Show more" wrapper that caps long facet lists at N items with an
+// expand toggle — Amazon's "+ Show all".
+function ShowMoreList({ items, max = 6 }: { items: React.ReactNode[]; max?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  if (items.length <= max) return <>{items}</>;
+  const visible = expanded ? items : items.slice(0, max);
+  return (
+    <>
+      {visible}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#D4BFA0] transition-colors mt-1.5 self-start"
+      >
+        {expanded ? '− Show less' : `+ Show all ${items.length}`}
+      </button>
+    </>
+  );
+}
+
+const SORT_LABELS: Record<string, string> = {
+  newest: 'Newest first',
+  popular: 'Popular first',
+  'bpm-asc': 'BPM: low → high',
+  'bpm-desc': 'BPM: high → low',
+  'price-asc': 'Price: low → high',
+  'price-desc': 'Price: high → low',
+  title: 'A → Z',
+};
+
 function StoreSidebar({
   open, onClose,
   genreFilter, setGenreFilter,
@@ -799,8 +993,14 @@ function StoreSidebar({
   freeOnly, setFreeOnly,
   favoritesOnly, setFavoritesOnly, favoritesCount,
   newThisWeek, setNewThisWeek,
+  moodFilter, setMoodFilter,
+  scaleFilter, setScaleFilter,
+  durationBucket, setDurationBucket,
+  sortBy, setSortBy,
+  priceMin, setPriceMin, priceMax, setPriceMax, priceRange,
+  totalResults,
   hasActiveFilters, onReset,
-  availableGenres, availableKeys,
+  availableGenres, availableMoods, availableKeys,
   accentColor,
 }: {
   open: boolean;
@@ -823,14 +1023,30 @@ function StoreSidebar({
   favoritesCount: number;
   newThisWeek: boolean;
   setNewThisWeek: (v: boolean) => void;
+  moodFilter: string;
+  setMoodFilter: (v: string) => void;
+  scaleFilter: '' | 'major' | 'minor';
+  setScaleFilter: (v: '' | 'major' | 'minor') => void;
+  durationBucket: '' | 'short' | 'medium' | 'long';
+  setDurationBucket: (v: '' | 'short' | 'medium' | 'long') => void;
+  sortBy: 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title';
+  setSortBy: (v: 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title') => void;
+  priceMin: number;
+  setPriceMin: (v: number) => void;
+  priceMax: number;
+  setPriceMax: (v: number) => void;
+  priceRange: { min: number; max: number };
+  totalResults: number;
   hasActiveFilters: boolean;
   onReset: () => void;
   availableGenres: string[];
+  availableMoods: string[];
   availableKeys: string[];
   accentColor: string;
 }) {
-  const effectiveMin = bpmMin === 0 ? bpmRange.min : bpmMin;
-  const effectiveMax = bpmMax === 999 ? bpmRange.max : bpmMax;
+  const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
+  const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
+  const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
   const PillButton = ({
     active, onClick, children,
   }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
@@ -846,22 +1062,90 @@ function StoreSidebar({
     </button>
   );
 
+  const effectiveMin = bpmMin === 0 ? bpmRange.min : bpmMin;
+  const effectiveMax = bpmMax === 999 ? bpmRange.max : bpmMax;
+  const bpmRangeActive = effectiveMin > bpmRange.min || effectiveMax < bpmRange.max;
+
   const content = (
-    <div className="flex flex-col gap-6 p-5">
-      {/* Header */}
+    <div className="flex flex-col gap-5 p-5">
+      {/* Header with live result count */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">
           <Sliders size={11} />
-          Filters
+          Refine
+          <span className="text-[#3a3328] tabular-nums">· {totalResults}</span>
         </div>
         <button onClick={onClose} className="lg:hidden text-[#4a4338] hover:text-white transition-colors">
           <X size={14} />
         </button>
       </div>
 
+      {/* Sort — promoted to the top: highest-frequency choice */}
+      <FacetSection title="Sort by" defaultOpen>
+        <div className="relative">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="w-full appearance-none bg-[#0a0907] border border-[#1f1a13] rounded-lg pl-3 pr-8 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono"
+          >
+            {Object.entries(SORT_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5a5142] pointer-events-none" />
+        </div>
+      </FacetSection>
+
+      {/* Applied refinements — chip cluster (Amazon pattern) */}
+      {hasActiveFilters && (
+        <div className="rounded-lg border border-[#D4BFA0]/15 bg-[#D4BFA0]/[0.04] p-2.5">
+          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-1.5">
+            Applied
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {typeFilter !== 'all' && (
+              <ActiveChip label={typeFilter} onClear={() => setTypeFilter('all')} accentColor={accentColor} />
+            )}
+            {genreFilter && <ActiveChip label={genreFilter} onClear={() => setGenreFilter('')} accentColor={accentColor} />}
+            {moodFilter && <ActiveChip label={moodFilter} onClear={() => setMoodFilter('')} accentColor={accentColor} />}
+            {keyFilter && <ActiveChip label={`Key: ${keyFilter}`} onClear={() => setKeyFilter('')} accentColor={accentColor} />}
+            {scaleFilter && <ActiveChip label={scaleFilter} onClear={() => setScaleFilter('')} accentColor={accentColor} />}
+            {bpmRangeActive && (
+              <ActiveChip
+                label={`${effectiveMin}–${effectiveMax} BPM`}
+                onClear={() => { setBpmMin(bpmRange.min); setBpmMax(bpmRange.max); }}
+                accentColor={accentColor}
+              />
+            )}
+            {priceRangeActive && (
+              <ActiveChip
+                label={`$${effectivePriceMin}–$${effectivePriceMax}`}
+                onClear={() => { setPriceMin(priceRange.min); setPriceMax(priceRange.max); }}
+                accentColor={accentColor}
+              />
+            )}
+            {durationBucket && (
+              <ActiveChip
+                label={durationBucket === 'short' ? '< 2min' : durationBucket === 'medium' ? '2–4min' : '4min +'}
+                onClear={() => setDurationBucket('')}
+                accentColor={accentColor}
+              />
+            )}
+            {freeOnly && <ActiveChip label="Free only" onClear={() => setFreeOnly(false)} accentColor={accentColor} />}
+            {favoritesOnly && <ActiveChip label="Favorites" onClear={() => setFavoritesOnly(false)} accentColor={accentColor} />}
+            {newThisWeek && <ActiveChip label="New this week" onClear={() => setNewThisWeek(false)} accentColor={accentColor} />}
+          </div>
+          <button
+            onClick={onReset}
+            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+          >
+            <RotateCcw size={9} /> Clear all
+          </button>
+        </div>
+      )}
+
       {/* Type */}
-      <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-2">Type</p>
+      <FacetSection title="Type">
         <div className="flex flex-wrap gap-1.5">
           {TYPE_FILTERS.map((f) => (
             <PillButton key={f} active={typeFilter === f} onClick={() => setTypeFilter(f)}>
@@ -869,46 +1153,84 @@ function StoreSidebar({
             </PillButton>
           ))}
         </div>
-      </div>
+      </FacetSection>
 
       {/* Genre */}
       {availableGenres.length > 0 && (
-        <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-2">Genre</p>
+        <FacetSection title="Genre" count={genreFilter ? 1 : 0}>
           <div className="flex flex-wrap gap-1.5">
-            <PillButton active={genreFilter === ''} onClick={() => setGenreFilter('')}>All</PillButton>
-            {availableGenres.map((g) => (
-              <PillButton key={g} active={genreFilter === g} onClick={() => setGenreFilter(genreFilter === g ? '' : g)}>
-                {g}
-              </PillButton>
-            ))}
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={genreFilter === ''} onClick={() => setGenreFilter('')}>All</PillButton>,
+                ...availableGenres.map((g) => (
+                  <PillButton key={g} active={genreFilter === g} onClick={() => setGenreFilter(genreFilter === g ? '' : g)}>
+                    {g}
+                  </PillButton>
+                )),
+              ]}
+            />
           </div>
-        </div>
+        </FacetSection>
+      )}
+
+      {/* Mood */}
+      {availableMoods.length > 0 && (
+        <FacetSection title="Mood" count={moodFilter ? 1 : 0}>
+          <div className="flex flex-wrap gap-1.5">
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={moodFilter === ''} onClick={() => setMoodFilter('')}>Any</PillButton>,
+                ...availableMoods.map((m) => (
+                  <PillButton key={m} active={moodFilter === m} onClick={() => setMoodFilter(moodFilter === m ? '' : m)}>
+                    {m}
+                  </PillButton>
+                )),
+              ]}
+            />
+          </div>
+        </FacetSection>
       )}
 
       {/* Key */}
       {availableKeys.length > 0 && (
-        <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-2">Key</p>
+        <FacetSection title="Key" count={keyFilter ? 1 : 0} defaultOpen={false}>
           <div className="flex flex-wrap gap-1.5">
-            <PillButton active={keyFilter === ''} onClick={() => setKeyFilter('')}>Any</PillButton>
-            {availableKeys.map((k) => (
-              <PillButton key={k} active={keyFilter === k} onClick={() => setKeyFilter(keyFilter === k ? '' : k)}>
-                {k}
-              </PillButton>
-            ))}
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={keyFilter === ''} onClick={() => setKeyFilter('')}>Any</PillButton>,
+                ...availableKeys.map((k) => (
+                  <PillButton key={k} active={keyFilter === k} onClick={() => setKeyFilter(keyFilter === k ? '' : k)}>
+                    {k}
+                  </PillButton>
+                )),
+              ]}
+            />
           </div>
-        </div>
+        </FacetSection>
       )}
+
+      {/* Scale */}
+      <FacetSection title="Scale" count={scaleFilter ? 1 : 0} defaultOpen={false}>
+        <div className="flex gap-1.5">
+          {(['', 'major', 'minor'] as const).map((s) => (
+            <PillButton key={s || 'any'} active={scaleFilter === s} onClick={() => setScaleFilter(s)}>
+              {s || 'Any'}
+            </PillButton>
+          ))}
+        </div>
+      </FacetSection>
 
       {/* BPM dual sliders */}
       {bpmRange.min < bpmRange.max && (
-        <div>
+        <FacetSection title="BPM range" count={bpmRangeActive ? 1 : 0}>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">BPM range</p>
+            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: hasActiveFilters ? accentColor : '#4a4338' }}
+              style={{ color: bpmRangeActive ? accentColor : '#4a4338' }}
             >
               {effectiveMin}–{effectiveMax}
             </span>
@@ -941,8 +1263,61 @@ function StoreSidebar({
               />
             </div>
           </div>
-        </div>
+        </FacetSection>
       )}
+
+      {/* Price range */}
+      {priceRange.min < priceRange.max && (
+        <FacetSection title="Price (lease)" count={priceRangeActive ? 1 : 0} defaultOpen={false}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
+            <span
+              className="text-[11px] font-mono font-bold tabular-nums"
+              style={{ color: priceRangeActive ? accentColor : '#4a4338' }}
+            >
+              ${effectivePriceMin}–${effectivePriceMax}
+            </span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">min</span>
+              <input
+                type="range"
+                min={priceRange.min}
+                max={priceRange.max}
+                step={1}
+                value={effectivePriceMin}
+                onChange={(e) => setPriceMin(Math.min(Number(e.target.value), effectivePriceMax - 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">max</span>
+              <input
+                type="range"
+                min={priceRange.min}
+                max={priceRange.max}
+                step={1}
+                value={effectivePriceMax}
+                onChange={(e) => setPriceMax(Math.max(Number(e.target.value), effectivePriceMin + 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+          </div>
+        </FacetSection>
+      )}
+
+      {/* Duration */}
+      <FacetSection title="Duration" count={durationBucket ? 1 : 0} defaultOpen={false}>
+        <div className="flex flex-wrap gap-1.5">
+          <PillButton active={durationBucket === ''} onClick={() => setDurationBucket('')}>Any</PillButton>
+          <PillButton active={durationBucket === 'short'} onClick={() => setDurationBucket(durationBucket === 'short' ? '' : 'short')}>&lt; 2 min</PillButton>
+          <PillButton active={durationBucket === 'medium'} onClick={() => setDurationBucket(durationBucket === 'medium' ? '' : 'medium')}>2–4 min</PillButton>
+          <PillButton active={durationBucket === 'long'} onClick={() => setDurationBucket(durationBucket === 'long' ? '' : 'long')}>4 min +</PillButton>
+        </div>
+      </FacetSection>
 
       {/* Free only toggle */}
       <button
