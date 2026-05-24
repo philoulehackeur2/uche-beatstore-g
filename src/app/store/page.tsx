@@ -19,6 +19,8 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier as LicenseTierImport } from '@/components/store/LicenseSelector';
 import { MusicArtwork } from '@/components/store/MusicArtwork';
 import { ParticleText } from '@/components/store/ParticleText';
+import { useWishlist } from '@/hooks/useWishlist';
+import { Sparkles } from 'lucide-react';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -155,6 +157,9 @@ function StorePage() {
   const [bpmMin, setBpmMin] = useState(0);   // 0 = sentinel (not yet set)
   const [bpmMax, setBpmMax] = useState(999); // 999 = sentinel (not yet set)
   const [freeOnly, setFreeOnly] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [newThisWeek, setNewThisWeek] = useState(false);
+  const wishlist = useWishlist();
 
   // Debounced search
   const [search, setSearch] = useState('');
@@ -172,7 +177,7 @@ function StorePage() {
   // Free download modal
   const [freeDownloadTrack, setFreeDownloadTrack] = useState<StoreTrack | null>(null);
 
-  const { items, addItem, clearCart, setIsOpen } = useCart();
+  const { items, addItem, addItems, clearCart, setIsOpen } = useCart();
   const { currentTrack, isPlaying, setTrack, togglePlay, setQueue, progress } = usePlayer();
 
   const searchParams = useSearchParams();
@@ -263,7 +268,7 @@ function StorePage() {
   const effectiveBpmMax = bpmMax === 999 ? bpmRange.max : bpmMax;
 
   const hasActiveFilters =
-    genreFilter !== '' || keyFilter !== '' || freeOnly ||
+    genreFilter !== '' || keyFilter !== '' || freeOnly || favoritesOnly || newThisWeek ||
     effectiveBpmMin > bpmRange.min || effectiveBpmMax < bpmRange.max;
 
   const resetFilters = () => {
@@ -272,6 +277,8 @@ function StorePage() {
     setBpmMin(bpmRange.min);
     setBpmMax(bpmRange.max);
     setFreeOnly(false);
+    setFavoritesOnly(false);
+    setNewThisWeek(false);
     setSearch('');
     setDebouncedSearch('');
     setTypeFilter('all');
@@ -279,10 +286,16 @@ function StorePage() {
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return tracks.filter((t) => {
       if (typeFilter === 'beats' && t.type !== 'beat' && t.type !== 'instrumental') return false;
       if (typeFilter !== 'all' && typeFilter !== 'beats' && t.type !== typeFilter) return false;
       if (freeOnly && !t.free_download_enabled) return false;
+      if (favoritesOnly && !wishlist.has(t.id)) return false;
+      if (newThisWeek) {
+        const created = t.created_at ? new Date(t.created_at).getTime() : 0;
+        if (created < weekAgo) return false;
+      }
       if (t.bpm != null && (t.bpm < effectiveBpmMin || t.bpm > effectiveBpmMax)) return false;
       if (keyFilter && (t.key ?? '').toLowerCase() !== keyFilter.toLowerCase()) return false;
       if (genreFilter) {
@@ -300,7 +313,7 @@ function StorePage() {
         (t.tags ?? []).some((tag) => tag.tag.toLowerCase().includes(q))
       );
     });
-  }, [tracks, debouncedSearch, typeFilter, freeOnly, effectiveBpmMin, effectiveBpmMax, keyFilter, genreFilter]);
+  }, [tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek, effectiveBpmMin, effectiveBpmMax, keyFilter, genreFilter, wishlist.ids]);
 
   const handlePlay = (t: StoreTrack) => {
     if (currentTrack?.id === t.id) { togglePlay(); return; }
@@ -326,6 +339,27 @@ function StorePage() {
       is_exclusive: type === 'exclusive',
     });
     toast.success(`Added: ${t.title} (${type})`);
+  };
+
+  const addAllToCart = (trackList: PlaylistTrackItem[], type: 'lease' | 'exclusive') => {
+    const pairs: Array<{ track: Track; license: import('@/hooks/useCart').CartLicense }> = [];
+    for (const t of trackList) {
+      const price = priceFor(t as unknown as StoreTrack, type);
+      if (price == null) continue;
+      pairs.push({
+        track: { ...t, user_id: '', stems_status: 'none', created_at: '' } as Track,
+        license: {
+          id: `${type}-${t.id}`,
+          name: type === 'lease' ? 'Lease' : 'Exclusive',
+          price_usd: price,
+          file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+          is_exclusive: type === 'exclusive',
+        },
+      });
+    }
+    if (pairs.length === 0) { toast.error(`No ${type} price set for any track`); return; }
+    addItems(pairs);
+    toast.success(`${pairs.length} beat${pairs.length !== 1 ? 's' : ''} added to cart`);
   };
 
   const handleCopyLink = () => {
@@ -359,20 +393,6 @@ function StorePage() {
   const accentColor = creator?.accent_color || '#D4BFA0';
   const textColor = creator?.text_color_primary || '#E8DCC8';
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
-
-  if (!loading && creator?.store_enabled === false) {
-    return (
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-        <div className="text-center px-6 max-w-sm">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#3a3328] mb-4">Beat Store</p>
-          <h1 className="text-2xl font-bold text-[#E8DCC8] mb-3">
-            {creator?.display_name || 'Coming soon'}
-          </h1>
-          <p className="text-[12px] text-[#5a5142]">The store is under construction. Check back soon.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -441,6 +461,7 @@ function StorePage() {
                 });
                 toast.success(`Added: ${t.title} (${type})`);
               }}
+              onAddAllToCart={addAllToCart}
             />
           )}
           {featuredProjects.length > 0 && (
@@ -473,6 +494,7 @@ function StorePage() {
                 });
                 toast.success(`Added: ${t.title} (${type})`);
               }}
+              onAddAllToCart={addAllToCart}
               onBuyProject={handleBuyProject}
             />
 
@@ -513,27 +535,19 @@ function StorePage() {
             />
           </div>
 
-          {/* Track count */}
-          {!loading && (
-            <span className="hidden md:block text-[10px] font-mono text-[#4a4338] whitespace-nowrap tabular-nums shrink-0">
-              {filtered.length} {filtered.length === 1 ? 'beat' : 'beats'}
-            </span>
-          )}
-
-          {/* Type filters */}
-          <div className="hidden sm:flex items-center gap-1">
-            {TYPE_FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setTypeFilter(f)}
-                className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-black' : 'bg-transparent text-[#6a5d4a] hover:text-[#E8DCC8]'
-                  }`}
-                style={typeFilter === f ? { backgroundColor: accentColor } : {}}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+          {/* Sub-type filters */}
+          <div className="hidden md:flex items-center gap-1">
+              {TYPE_FILTERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTypeFilter(f)}
+                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#E8DCC8] border border-[#D4BFA0]/40 bg-[#D4BFA0]/10' : 'bg-transparent text-[#4a4338] hover:text-[#a08a6a]'
+                    }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
 
           <div className="flex-1" />
 
@@ -603,6 +617,11 @@ function StorePage() {
           setTypeFilter={setTypeFilter}
           freeOnly={freeOnly}
           setFreeOnly={setFreeOnly}
+          favoritesOnly={favoritesOnly}
+          setFavoritesOnly={setFavoritesOnly}
+          favoritesCount={wishlist.count}
+          newThisWeek={newThisWeek}
+          setNewThisWeek={setNewThisWeek}
           hasActiveFilters={hasActiveFilters}
           onReset={resetFilters}
           availableGenres={availableGenres}
@@ -610,11 +629,11 @@ function StorePage() {
           accentColor={accentColor}
         />
 
-        {/* Beat listing */}
+        {/* Main content */}
         <div className="flex-1 min-w-0">
           {loading ? (
             viewMode === 'grid' ? (
-              <div className="track-masonry">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 6 }).map((_, i) => <BeatCardSkeleton key={i} />)}
               </div>
             ) : (
@@ -638,24 +657,26 @@ function StorePage() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="track-masonry">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((t) => (
-                <BeatCard
-                  key={t.id}
-                  track={t}
-                  allTracks={filtered}
-                  priceLease={priceFor(t, 'lease')}
-                  priceExclusive={priceFor(t, 'exclusive')}
-                  isCurrent={currentTrack?.id === t.id}
-                  isPlaying={isPlaying && currentTrack?.id === t.id}
-                  isPreview={previewTrack?.id === t.id}
-                  onPlay={() => handlePlay(t)}
-                  onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                  onAddLease={() => addToCart(t, 'lease')}
-                  onAddExclusive={() => addToCart(t, 'exclusive')}
-                  onFreeDownload={() => setFreeDownloadTrack(t)}
-                  accentColor={accentColor}
-                />
+                  <BeatCard
+                    key={t.id}
+                    track={t}
+                    allTracks={filtered}
+                    priceLease={priceFor(t, 'lease')}
+                    priceExclusive={priceFor(t, 'exclusive')}
+                    isCurrent={currentTrack?.id === t.id}
+                    isPlaying={isPlaying && currentTrack?.id === t.id}
+                    isPreview={previewTrack?.id === t.id}
+                    onPlay={() => handlePlay(t)}
+                    onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+                    onAddLease={() => addToCart(t, 'lease')}
+                    onAddExclusive={() => addToCart(t, 'exclusive')}
+                    onFreeDownload={() => setFreeDownloadTrack(t)}
+                    accentColor={accentColor}
+                    isWishlisted={wishlist.has(t.id)}
+                    onToggleWishlist={() => wishlist.toggle(t.id)}
+                  />
               ))}
             </div>
           ) : (
@@ -776,6 +797,8 @@ function StoreSidebar({
   bpmMax, setBpmMax, bpmRange,
   typeFilter, setTypeFilter,
   freeOnly, setFreeOnly,
+  favoritesOnly, setFavoritesOnly, favoritesCount,
+  newThisWeek, setNewThisWeek,
   hasActiveFilters, onReset,
   availableGenres, availableKeys,
   accentColor,
@@ -795,6 +818,11 @@ function StoreSidebar({
   setTypeFilter: (v: TypeFilter) => void;
   freeOnly: boolean;
   setFreeOnly: (v: boolean) => void;
+  favoritesOnly: boolean;
+  setFavoritesOnly: (v: boolean) => void;
+  favoritesCount: number;
+  newThisWeek: boolean;
+  setNewThisWeek: (v: boolean) => void;
   hasActiveFilters: boolean;
   onReset: () => void;
   availableGenres: string[];
@@ -933,6 +961,42 @@ function StoreSidebar({
         </span>
       </button>
 
+      {/* Favorites only — shows wishlist count for the cap. */}
+      <button
+        onClick={() => setFavoritesOnly(!favoritesOnly)}
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${favoritesOnly
+            ? 'border-[#c8a84b]/40 text-[#c8a84b] bg-[#c8a84b]/[0.08]'
+            : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
+          }`}
+      >
+        <div className="flex items-center gap-2">
+          <Heart size={11} fill={favoritesOnly ? 'currentColor' : 'none'} />
+          <span className="text-[10px] font-mono uppercase tracking-wider">Favorites only</span>
+        </div>
+        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#c8a84b]' : 'text-[#3a3328]'}`}>
+          {favoritesCount}
+        </span>
+      </button>
+
+      {/* New this week */}
+      <button
+        onClick={() => setNewThisWeek(!newThisWeek)}
+        className="flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all"
+        style={
+          newThisWeek
+            ? { borderColor: `${accentColor}66`, color: accentColor, backgroundColor: `${accentColor}14` }
+            : { borderColor: '#1f1a13', color: '#6a5d4a' }
+        }
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles size={11} />
+          <span className="text-[10px] font-mono uppercase tracking-wider">New this week</span>
+        </div>
+        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#3a3328' }}>
+          {newThisWeek ? 'ON' : 'OFF'}
+        </span>
+      </button>
+
       {/* Reset */}
       <button
         onClick={onReset}
@@ -1018,6 +1082,7 @@ function TagChips({ tags, max = 3, accentGenre = false }: { tags: TrackTag[]; ma
 function BeatCard({
   track, allTracks, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
+  isWishlisted, onToggleWishlist,
 }: {
   track: StoreTrack;
   allTracks: StoreTrack[];
@@ -1032,8 +1097,19 @@ function BeatCard({
   onAddExclusive: () => void;
   onFreeDownload: () => void;
   accentColor: string;
+  isWishlisted?: boolean;
+  onToggleWishlist?: () => void;
 }) {
-  const similar = useMemo(() => getSimilarTracks(track, allTracks), [track, allTracks]);
+  // Exclusive purchase is reachable from the preview drawer, not the
+  // grid card hover overlay (we only surface lease price to keep chrome
+  // minimal). Caller still passes the handler; we accept and ignore.
+  void onAddExclusive;
+
+  // Similar-beats strip at the bottom of each card. Bounded list so the
+  // useMemo cost is trivial even on big catalogues.
+  const similar = useMemo(() => getSimilarTracks(track, allTracks, 5), [track, allTracks]);
+  const keyLabel = track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null;
+  const showOverlay = isCurrent || isPreview; // pinned-visible states
 
   return (
     <div
@@ -1053,17 +1129,9 @@ function BeatCard({
               : {}
       }
     >
-      {/* Cover art + vinyl. Outer wrapper is overflow-visible so the
-          vinyl can peek out past the cover's rounded clip without
-          breaking the card's outer rounded corners (the parent card
-          still has overflow-hidden). Inner wrapper keeps the cover
-          image rounded + clipped. */}
-      <div
-        className="relative w-full aspect-square shrink-0 cursor-pointer"
-        onClick={onPreview}
-      >
-        {/* Vinyl — sits behind the cover, slides out on group-hover via
-            globals.css `.vinyl-slide`. Skipped in reduced-motion. */}
+      <div className="relative w-full aspect-square">
+        {/* Vinyl — absolute inset-0, sits behind the cover and slides
+            out on group-hover via globals.css `.vinyl-slide`. */}
         <MusicArtwork
           artist={null}
           music={track.title}
@@ -1073,10 +1141,14 @@ function BeatCard({
           onTogglePlay={onPlay}
         />
 
-        {/* Cover image — z-10 so it sits on top of the vinyl until hover */}
-        <div className="absolute inset-0 z-10 rounded-none overflow-hidden bg-[#0a0907] pointer-events-none">
+        <div className="relative z-10 w-full h-full bg-[#0a0907] overflow-hidden">
           {track.cover_url ? (
-            <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+            <img
+              loading="lazy"
+              src={track.cover_url}
+              alt=""
+              className="block w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
               <Music size={36} />
@@ -1103,6 +1175,27 @@ function BeatCard({
             Free
           </div>
         )}
+
+        {/* Price chip — always visible on cover art for instant scanability */}
+        {!track.free_download_enabled && (priceLease != null || priceExclusive != null) && (
+          <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1 pointer-events-none">
+            {priceLease != null && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/60 text-[#E8DCC8] border border-white/10 backdrop-blur-sm">
+                ${priceLease}
+              </span>
+            )}
+            {priceExclusive != null && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold text-black backdrop-blur-sm"
+                style={{ backgroundColor: `${accentColor}E6` }}
+              >
+                Ex
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Currently-playing dot — small persistent indicator. */}
         {isCurrent && (
           <div className="absolute top-8 left-2 z-20 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse pointer-events-none" />
         )}
@@ -1168,13 +1261,20 @@ function BeatCard({
                   {priceExclusive != null ? `$${priceExclusive.toLocaleString()}` : '—'}
                 </span>
               </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onPreview(); }}
-                className="w-9 h-9 rounded-md bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] flex items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] transition-all shrink-0"
-                title="Preview & license details"
-              >
-                <Heart size={13} />
-              </button>
+              {onToggleWishlist && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
+                  aria-pressed={!!isWishlisted}
+                  className={`w-9 h-9 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                    isWishlisted
+                      ? 'bg-[#c8a84b]/15 border-[#c8a84b]/40 text-[#c8a84b]'
+                      : 'bg-white/[0.04] border-white/[0.06] text-[#5a5142] hover:bg-white/[0.08] hover:text-[#E8DCC8]'
+                  }`}
+                  title={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Heart size={13} fill={isWishlisted ? 'currentColor' : 'none'} />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1315,40 +1415,41 @@ function BeatListRow({
         )}
 
         {/* Prices */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {track.free_download_enabled ? (
             <button
               onClick={onFreeDownload}
-              className="px-2.5 py-1.5 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[10px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
+              className="px-3 py-2 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[10px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
             >
-              Free
+              Free Download
             </button>
           ) : (
             <>
               <button
                 onClick={onAddLease}
                 disabled={priceLease == null}
-                className="px-2.5 py-1.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#E8DCC8] text-[11px] font-bold hover:bg-white/[0.08] transition-colors disabled:opacity-30"
+                className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#E8DCC8] text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex flex-col items-center leading-none"
               >
-                {priceLease != null ? `$${priceLease}` : '—'}
-                <span className="hidden sm:inline text-[9px] font-mono text-[#6a5d4a] ml-1">L</span>
+                <span>{priceLease != null ? `$${priceLease}` : '—'}</span>
+                <span className="text-[7px] font-mono text-[#6a5d4a] mt-0.5 uppercase tracking-wider">Lease</span>
               </button>
               <button
                 onClick={onAddExclusive}
                 disabled={priceExclusive == null}
-                className="px-2.5 py-1.5 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30"
+                className="px-3 py-2 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 flex flex-col items-center leading-none"
                 style={{ backgroundColor: accentColor }}
               >
-                {priceExclusive != null ? `$${priceExclusive}` : '—'}
+                <span>{priceExclusive != null ? `$${priceExclusive}` : '—'}</span>
+                <span className="text-[7px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
               </button>
             </>
           )}
           <button
             onClick={onPreview}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-[#4a4338] hover:text-[#E8DCC8] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[#4a4338] hover:text-[#E8DCC8] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
             title="Preview"
           >
-            <ExternalLink size={10} />
+            <ExternalLink size={11} />
           </button>
         </div>
       </div>
@@ -1424,8 +1525,6 @@ function BeatPreviewDrawer({
         ? { id: 'exclusive', name: 'Exclusive', price_usd: priceExclusive, file_types: ['MP3', 'WAV', 'STEMS'], is_exclusive: true }
         : null,
     ].filter(Boolean) as LicenseTier[];
-
-  const selectedTier = activeLicenses.find((l) => l.id === selectedLicense) ?? activeLicenses[0];
 
   return (
     <>
@@ -1583,29 +1682,41 @@ function BeatPreviewDrawer({
           </div>
         </div>
 
-        {/* Sticky add-to-cart bar */}
+        {/* Sticky action bar — always shows both lease + exclusive when available */}
         {!track.free_download_enabled && (
           <div className="shrink-0 border-t border-[#1f1a13] bg-[#0c0a08] px-5 py-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Selected</p>
-                <p className="text-[12px] font-semibold text-[#E8DCC8] truncate">{selectedTier?.name ?? '—'}</p>
-              </div>
-              <p className="text-[20px] font-bold tabular-nums shrink-0" style={{ color: accentColor }}>
-                {selectedTier ? (selectedTier.is_free ? 'Free' : `$${Number(selectedTier.price_usd).toLocaleString()}`) : '—'}
-              </p>
+            <div className="flex items-center gap-2">
+              {priceLease != null && (
+                <button
+                  onClick={onAddLease}
+                  className="flex-1 py-3 rounded-xl text-[#E8DCC8] text-[11px] font-bold uppercase tracking-widest transition-all hover:bg-white/[0.08] active:scale-[0.99] flex flex-col items-center justify-center gap-0.5 border border-white/[0.10] bg-white/[0.04]"
+                >
+                  <span className="text-[9px] font-mono text-[#6a5d4a] tracking-wider">Lease</span>
+                  <span className="flex items-center gap-1">
+                    <ShoppingBag size={12} />
+                    ${priceLease.toLocaleString()}
+                  </span>
+                </button>
+              )}
+              {priceExclusive != null && (
+                <button
+                  onClick={onAddExclusive}
+                  className="flex-1 py-3 rounded-xl text-black text-[11px] font-bold uppercase tracking-widest transition-all hover:opacity-90 active:scale-[0.99] flex flex-col items-center justify-center gap-0.5"
+                  style={{ background: `linear-gradient(to right, ${accentColor}, #c5a880)` }}
+                >
+                  <span className="text-[9px] font-mono text-black/60 tracking-wider">Exclusive</span>
+                  <span className="flex items-center gap-1">
+                    <ShoppingBag size={12} />
+                    ${priceExclusive.toLocaleString()}
+                  </span>
+                </button>
+              )}
+              {priceLease == null && priceExclusive == null && (
+                <div className="w-full py-3 rounded-xl border border-white/[0.06] bg-white/[0.03] text-center">
+                  <p className="text-[11px] text-[#5a5142]">Not available for purchase</p>
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => {
-                if (selectedTier?.is_exclusive) onAddExclusive();
-                else onAddLease();
-              }}
-              className="w-full py-3.5 rounded-xl text-black text-[12px] font-bold uppercase tracking-widest transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2"
-              style={{ background: `linear-gradient(to right, ${accentColor}, #c5a880)` }}
-            >
-              <ShoppingBag size={14} />
-              Add to cart
-            </button>
           </div>
         )}
       </div>
@@ -1755,6 +1866,7 @@ function ArtistBioBlock({ creator, trackCount, accentColor }: { creator: Creator
 function FeaturedPlaylistsStrip({
   label = 'Featured Playlists',
   playlists, currentTrack, isPlaying, onPlay, priceFor, onAddToCart,
+  onAddAllToCart,
   detailHrefBase,
   onBuyProject,
 }: {
@@ -1765,6 +1877,8 @@ function FeaturedPlaylistsStrip({
   onPlay: (t: PlaylistTrackItem, playlist: FeaturedPlaylist) => void;
   priceFor: (t: PlaylistTrackItem, type: 'lease' | 'exclusive') => number | null;
   onAddToCart: (t: PlaylistTrackItem, type: 'lease' | 'exclusive') => void;
+  /** Bulk add all tracks in a playlist/project. */
+  onAddAllToCart?: (tracks: PlaylistTrackItem[], type: 'lease' | 'exclusive') => void;
   /** When set, expanded view shows "Open" link at `${detailHrefBase}/${pl.id}`. */
   detailHrefBase?: string;
   /** Optional handler for buying an entire project (only passed for the Projects strip) */
@@ -1828,22 +1942,23 @@ function FeaturedPlaylistsStrip({
                   </button>
                 )}
                 {/* Add All — Lease */}
-                {pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
+                {onAddAllToCart && pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
                   <button
-                    onClick={() => {
-                      let added = 0;
-                      pl.tracks.forEach((t) => {
-                        const lp = priceFor(t, 'lease');
-                        if (lp == null) return;
-                        onAddToCart(t, 'lease');
-                        added++;
-                      });
-                      if (added > 0) toast.success(`${added} beat${added !== 1 ? 's' : ''} added to cart`);
-                    }}
+                    onClick={() => onAddAllToCart(pl.tracks, 'lease')}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4BFA0]/30 text-[#D4BFA0] text-[9px] font-mono uppercase tracking-widest hover:bg-[#D4BFA0]/10 transition-colors"
                   >
                     <ShoppingBag size={11} />
                     Add All — Lease
+                  </button>
+                )}
+                {/* Add All — Exclusive */}
+                {onAddAllToCart && pl.tracks.some((t) => priceFor(t, 'exclusive') != null) && (
+                  <button
+                    onClick={() => onAddAllToCart(pl.tracks, 'exclusive')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D4BFA0] text-black text-[9px] font-mono uppercase tracking-widest hover:bg-[#E8D8B8] transition-colors"
+                  >
+                    <ShoppingBag size={11} />
+                    Add All — Exclusive
                   </button>
                 )}
                 <button onClick={() => setExpandedId(null)} className="text-[#3a3328] hover:text-[#a08a6a] transition-colors">
