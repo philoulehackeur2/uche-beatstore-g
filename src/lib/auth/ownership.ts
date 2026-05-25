@@ -82,3 +82,23 @@ export async function requireUser(): Promise<
   }
   return { ok: true, userId: user.id, admin: createServiceClient() };
 }
+
+/**
+ * Validate a UUID before interpolating it into a PostgREST `.or()`
+ * filter string. PostgREST treats commas inside `.or(...)` as
+ * separators between conditions, so any comma in the value (or any
+ * other PostgREST-special char that sneaks in via a bad caller) would
+ * silently break the filter.
+ *
+ * `auth.users.id` and our owned-row PKs are UUIDs, so the strict shape
+ * is the safest bound. Returns the id when it matches, null when it
+ * doesn't (caller should treat null as "skip the scope clause").
+ *
+ * Use everywhere we build a PostgREST `.or('user_id.eq.${id},…')`
+ * string by hand — even if today's source of `id` looks safe.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function safeSellerId(id: string | null | undefined): string | null {
+  if (!id || !UUID_RE.test(id)) return null;
+  return id;
+}

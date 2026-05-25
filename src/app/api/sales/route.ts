@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { parsePurchaseLineItems } from '@/lib/contracts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,31 +48,29 @@ export async function GET() {
     }
 
     // ── Project bundle purchases (project_access_links) ───────────────────
-    // Two-step fetch instead of a join: lets us scope by user_id on projects
-    // (the access_links row itself doesn't store seller_user_id).
-    const { data: ownedProjects } = await admin
-      .from('projects')
-      .select('id, name')
-      .eq('user_id', userId);
+    // Single query now that migration 049 denormalised seller_user_id
+    // onto project_access_links. We still pull the producer's owned
+    // projects for the name lookup + the price fallback (legacy rows
+    // pre-migration-044 lack amount_usd).
+    const { data: links, error: alErr } = await admin
+      .from('project_access_links')
+      .select('id, project_id, buyer_email, stripe_session_id, amount_usd, created_at, expires_at')
+      .eq('seller_user_id', userId)
+      .order('created_at', { ascending: false });
+    if (alErr) throw alErr;
+    const accessLinks = links ?? [];
 
+    const referencedProjectIds = [...new Set(accessLinks.map((a: any) => a.project_id))];
     const projectById: Record<string, string> = {};
-    const projectIds: string[] = [];
-    for (const p of (ownedProjects ?? []) as Array<{ id: string; name: string }>) {
-      projectById[p.id] = p.name;
-      projectIds.push(p.id);
-    }
-
-    // Frozen amount_usd was added in migration 044; older access_links
-    // rows have it null and we fall back to projects.price_usd below.
-    let accessLinks: any[] = [];
-    if (projectIds.length > 0) {
-      const { data: links, error: alErr } = await admin
-        .from('project_access_links')
-        .select('id, project_id, buyer_email, stripe_session_id, amount_usd, created_at, expires_at')
-        .in('project_id', projectIds)
-        .order('created_at', { ascending: false });
-      if (alErr) throw alErr;
-      accessLinks = links ?? [];
+    const projectIds: string[] = referencedProjectIds;
+    if (referencedProjectIds.length > 0) {
+      const { data: projRows } = await admin
+        .from('projects')
+        .select('id, name')
+        .in('id', referencedProjectIds);
+      for (const p of (projRows ?? []) as Array<{ id: string; name: string }>) {
+        projectById[p.id] = p.name;
+      }
     }
 
     // Fallback for legacy access_links that pre-date migration 044.
@@ -90,8 +89,11 @@ export async function GET() {
     const trackSales = (purchases ?? []).map((p: any) => {
       // line_items is the canonical per-line breakdown; fall back to track_ids
       // for older rows written before line_items was introduced.
-      const items: Array<{ track_id: string; license_type?: string }> = Array.isArray(p.line_items)
-        ? p.line_items
+      // Zod-parse line_items so we don't trust raw webhook JSON.
+      // Falls back to building items from track_ids for pre-line_items rows.
+      const parsed = parsePurchaseLineItems(p.line_items);
+      const items: Array<{ track_id: string; license_type?: string }> = parsed.length > 0
+        ? parsed
         : (Array.isArray(p.track_ids) ? p.track_ids.map((id: string) => ({ track_id: id })) : []);
       const titles = items
         .map((i) => titleByTrack[i.track_id])

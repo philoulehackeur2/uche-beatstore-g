@@ -107,8 +107,10 @@ export async function GET(
       project: { ...safeProject, cover_url: sanitizeUrl(safeProject.cover_url) },
       tracks,
       creator,
+      // buyer_email intentionally NOT returned. The token IS the
+      // auth, so anyone holding the URL would see the original
+      // buyer's address. Page reads `access.granted_at` only.
       access: {
-        buyer_email: access.buyer_email,
         granted_at: access.created_at,
       },
     });

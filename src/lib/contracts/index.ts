@@ -179,3 +179,31 @@ export const BeatSendPatchBodySchema = z.object({
   message: z.string().max(5000).optional(),
 });
 export type BeatSendPatchBody = z.infer<typeof BeatSendPatchBodySchema>;
+
+// ── License purchases ──────────────────────────────────────────────────
+// license_purchases.line_items is a JSON column the Stripe webhook writes
+// from cart_items metadata. Stripe metadata caps each value at 500 chars
+// so cart_items is also size-capped at insert. These schemas let
+// consumers (/api/sales, /api/analytics, future delivery checks) validate
+// rows on read instead of trusting whatever the webhook last wrote.
+
+export const PurchaseLineItemSchema = z.object({
+  track_id: z.string().min(1),
+  license_id: z.string().min(1),
+  license_type: z.enum(['lease', 'exclusive']),
+});
+export type PurchaseLineItem = z.infer<typeof PurchaseLineItemSchema>;
+
+export const PurchaseLineItemsSchema = z.array(PurchaseLineItemSchema);
+
+/**
+ * Safe parser for the `line_items` JSON column. Returns an empty array
+ * for any malformed row so callers don't have to wrap their reads in
+ * try/catch. Logs unknown shapes once via the caller's logger.
+ */
+export function parsePurchaseLineItems(raw: unknown): PurchaseLineItem[] {
+  const parsed = PurchaseLineItemsSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  // Older rows can be `null` or use a different shape; treat as empty.
+  return [];
+}

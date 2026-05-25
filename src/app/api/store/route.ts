@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
-import { createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -18,18 +18,8 @@ function sanitizeUrl(url: string | null | undefined): string | null {
   return url.replace(/^(https?:\/\/)+/, 'https://');
 }
 
-/**
- * Validate a seller user_id before interpolating it into a Postgrest
- * `.or()` filter string. PostgREST uses commas to separate the
- * conditions inside `.or(...)`, so any comma in the value would
- * silently break the filter. Restricting to the strict UUID v4 shape
- * is the safest bound — auth.users.id is always a UUID anyway.
- */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function safeSellerId(id: string | null | undefined): string | null {
-  if (!id || !UUID_RE.test(id)) return null;
-  return id;
-}
+// `safeSellerId` now lives in @/lib/auth/ownership so every PostgREST
+// `.or()` interpolation site can import it. See lib for full rationale.
 
 /**
  * GET /api/store

@@ -133,6 +133,9 @@ describe('GET /api/store/projects/access/[token]', () => {
     expect(body.tracks).toHaveLength(1);
     expect(body.tracks[0].audio_url).toBe('https://r2/a.mp3');
     expect(body.tracks[0].wav_url).toBe('https://r2/a.wav');
-    expect(body.access.buyer_email).toBe('b@x.io');
+    // Regression (B2-19): buyer_email no longer in response to avoid
+    // leaking PII to anyone who shares the access URL.
+    expect(body.access).not.toHaveProperty('buyer_email');
+    expect(body.access.granted_at).toBeDefined();
   });
 });

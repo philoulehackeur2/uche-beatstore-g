@@ -47,7 +47,7 @@ interface AccessCreator {
 }
 
 interface AccessInfo {
-  buyer_email: string;
+  buyer_email?: string;   // legacy; no longer populated post-mig 049 audit (B2-19)
   granted_at: string;
 }
 
@@ -129,9 +129,7 @@ export default function ProjectAccessPage({
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-semibold text-[#6DC6A4]">Purchase verified</p>
             <p className="text-[10px] text-[#5a5142] mt-0.5">
-              {access?.buyer_email ? <>Access granted to {access.buyer_email}.</> : 'You have full bundle access.'}
-              {' '}
-              Keep this link private.
+              You have full bundle access. Keep this link private — anyone holding it can download these files.
             </p>
           </div>
         </div>

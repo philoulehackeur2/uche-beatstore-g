@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { parsePurchaseLineItems } from '@/lib/contracts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,24 +43,21 @@ export async function GET() {
       (ownedProjects ?? []).map((p: any) => [p.id, p.name as string]),
     );
 
-    let projectSales: any[] = [];
-    if (projectIds.length > 0) {
-      const { data: links } = await admin
-        .from('project_access_links')
-        .select('id, project_id, buyer_email, amount_usd, created_at')
-        .in('project_id', projectIds)
-        .order('created_at', { ascending: false });
-      projectSales = links ?? [];
-    }
+    // Project sales scoped by the denormalised seller_user_id (mig 049).
+    const { data: projLinks } = await admin
+      .from('project_access_links')
+      .select('id, project_id, buyer_email, amount_usd, created_at')
+      .eq('seller_user_id', userId)
+      .order('created_at', { ascending: false });
+    const projectSales = projLinks ?? [];
 
-    // 3. Plays — share_plays counts every public listen via share links.
-    //    Scope by share tokens issued by this user.
+    // 3. Plays. Two sources merged:
+    //    a) share_plays — DM'd share-link plays, scoped by share_links the user owns.
+    //    b) store_plays — public storefront plays (mig 049), scoped by seller_user_id.
+    //    The combined number is what /analytics actually reports.
     let playsByTrack: Record<string, number> = {};
     let totalPlays = 0;
     try {
-      // Pull share tokens the user owns, then plays whose link_token
-      // matches. Two queries instead of a join keeps this resilient to
-      // missing-FK setups.
       const { data: links } = await admin
         .from('share_links')
         .select('token')
@@ -78,7 +76,21 @@ export async function GET() {
         }
       }
     } catch {
-      // share_plays + share_links are optional enrichment; non-fatal.
+      // share_plays optional; non-fatal.
+    }
+    try {
+      const { data: storePlays } = await admin
+        .from('store_plays')
+        .select('track_id')
+        .eq('seller_user_id', userId);
+      for (const row of (storePlays ?? []) as any[]) {
+        totalPlays++;
+        if (row.track_id) {
+          playsByTrack[row.track_id] = (playsByTrack[row.track_id] ?? 0) + 1;
+        }
+      }
+    } catch {
+      // store_plays table may not exist yet (mig 049 unapplied); non-fatal.
     }
 
     // 4. Build by-track leaderboard. Pull titles for all tracks that show
@@ -103,8 +115,9 @@ export async function GET() {
     for (const p of (purchases ?? []) as any[]) {
       const amount = Number(p.amount_usd ?? 0);
       grossTrack += amount;
-      const items: Array<{ track_id: string }> = Array.isArray(p.line_items)
-        ? p.line_items
+      const parsed = parsePurchaseLineItems(p.line_items);
+      const items: Array<{ track_id: string }> = parsed.length > 0
+        ? parsed
         : Array.isArray(p.track_ids)
           ? p.track_ids.map((id: string) => ({ track_id: id }))
           : [];
@@ -160,9 +173,7 @@ export async function GET() {
     // 6. Recent activity (across both kinds).
     const recentSales = [
       ...((purchases ?? []) as any[]).slice(0, 10).map((p) => {
-        const items: Array<{ track_id: string }> = Array.isArray(p.line_items)
-          ? p.line_items
-          : [];
+        const items = parsePurchaseLineItems(p.line_items);
         const titles = items.map((i) => titleByTrack[i.track_id]).filter(Boolean) as string[];
         return {
           kind: 'track' as const,

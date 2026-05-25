@@ -68,3 +68,4 @@ Thumbs.db
 node_modules/
 .next/
 stem-service/.venv/
+*.code-workspace

@@ -403,6 +403,17 @@ function StorePage() {
     if (currentTrack?.id === t.id) { togglePlay(); return; }
     setQueue(filtered as Track[]);
     setTrack(t as Track);
+    // Fire-and-forget store-play telemetry. /api/store/play is rate-limited
+    // server-side (60s window per ipHash+track), 200s on failure so a bad
+    // network never breaks the listening UX.
+    void fetch('/api/store/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        track_id: t.id,
+        source: viewMode === 'grid' ? 'store-grid' : 'store-list',
+      }),
+    }).catch(() => undefined);
   };
 
   const priceFor = (t: StoreTrack, type: 'lease' | 'exclusive'): number | null => {

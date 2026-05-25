@@ -85,10 +85,10 @@ describe('GET /api/sales', () => {
 
   it('returns an empty feed for a brand-new producer', async () => {
     mockRequireUser.mockResolvedValue({ ok: true, userId: 'seller-1', admin: adminMock() });
-    // license_purchases
+    // 1. license_purchases — none
     mockFromQueue.push(eqOrderResult([]));
-    // projects (owned list — no projects, so the access_links + price_usd fetches are skipped)
-    mockFromQueue.push(eqResult([]));
+    // 2. project_access_links by seller_user_id — none (mig 049 denormalised)
+    mockFromQueue.push(eqOrderResult([]));
     const mod = await loadRoute();
     const res = await mod.GET();
     expect(res.status).toBe(200);
@@ -104,10 +104,8 @@ describe('GET /api/sales', () => {
 
     // 1. license_purchases — none
     mockFromQueue.push(eqOrderResult([]));
-    // 2. projects (owned) — one project, current price $19
-    mockFromQueue.push(eqResult([{ id: 'proj-1', name: 'Bundle' }]));
-    // 3. project_access_links (in / order) — one sale frozen at $99
-    mockFromQueue.push(inOrderResult([
+    // 2. project_access_links — one sale, scoped by seller_user_id (mig 049)
+    mockFromQueue.push(eqOrderResult([
       {
         id: 'access-1',
         project_id: 'proj-1',
@@ -118,6 +116,8 @@ describe('GET /api/sales', () => {
         expires_at: null,
       },
     ]));
+    // 3. projects (name lookup for the referenced project_ids)
+    mockFromQueue.push(inResult([{ id: 'proj-1', name: 'Bundle' }]));
     // 4. projects price_usd lookup — current price is $19 (lowered post-sale)
     mockFromQueue.push(inResult([{ id: 'proj-1', price_usd: 19 }]));
 
@@ -136,8 +136,7 @@ describe('GET /api/sales', () => {
     mockRequireUser.mockResolvedValue({ ok: true, userId: 'seller-1', admin: adminMock() });
 
     mockFromQueue.push(eqOrderResult([]));
-    mockFromQueue.push(eqResult([{ id: 'proj-1', name: 'Bundle' }]));
-    mockFromQueue.push(inOrderResult([
+    mockFromQueue.push(eqOrderResult([
       {
         id: 'access-1',
         project_id: 'proj-1',
@@ -148,6 +147,7 @@ describe('GET /api/sales', () => {
         expires_at: null,
       },
     ]));
+    mockFromQueue.push(inResult([{ id: 'proj-1', name: 'Bundle' }]));
     mockFromQueue.push(inResult([{ id: 'proj-1', price_usd: 19 }]));
 
     const mod = await loadRoute();
@@ -174,12 +174,10 @@ describe('GET /api/sales', () => {
         created_at: '2026-01-01T00:00:00Z',
       },
     ]));
-    // 2. tracks hydration
+    // 2. tracks hydration (license-purchases path)
     mockFromQueue.push(inResult([{ id: 'track-a', title: 'Track A' }]));
-    // 3. projects (owned)
-    mockFromQueue.push(eqResult([{ id: 'proj-1', name: 'Bundle' }]));
-    // 4. project_access_links — newer sale
-    mockFromQueue.push(inOrderResult([
+    // 3. project_access_links (by seller_user_id, mig 049) — newer sale
+    mockFromQueue.push(eqOrderResult([
       {
         id: 'access-1',
         project_id: 'proj-1',
@@ -190,6 +188,8 @@ describe('GET /api/sales', () => {
         expires_at: null,
       },
     ]));
+    // 4. projects (name lookup from referenced project_ids)
+    mockFromQueue.push(inResult([{ id: 'proj-1', name: 'Bundle' }]));
     // 5. projects price_usd lookup
     mockFromQueue.push(inResult([{ id: 'proj-1', price_usd: 99 }]));
 
