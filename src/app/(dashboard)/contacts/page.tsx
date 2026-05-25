@@ -42,6 +42,8 @@ async function loadInitialData(): Promise<{
     //      is strict — fine, but we may as well filter explicitly so the
     //      DB doesn't have to evaluate the policy per row.
     const admin = createServiceClient();
+    // Parallelise — beat_sends is scoped via contacts!inner(user_id) so it
+    // no longer needs contactIds from the first query (one round-trip each).
     const [contactsRes, sendsRes] = await Promise.all([
       admin
         .from('contacts')
@@ -50,8 +52,8 @@ async function loadInitialData(): Promise<{
         .order('created_at', { ascending: false }),
       admin
         .from('beat_sends')
-        .select('*, contact:contacts!inner(user_id)')
-        .or(`user_id.eq.${user.id},user_id.is.null`, { referencedTable: 'contacts' })
+        .select('*, contacts!inner(user_id)')
+        .eq('contacts.user_id', user.id)
         .order('sent_at', { ascending: false }),
     ]);
 

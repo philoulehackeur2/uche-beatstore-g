@@ -29,14 +29,13 @@ function StoreLayoutInner({ children }: { children: React.ReactNode }) {
       <PlayerBar />
       <MediaSessionBridge />
       <FloatingCartButton />
-      {isOpen && (
-        <CartDrawer
-          onClose={() => setIsOpen(false)}
-          items={items}
-          removeItem={removeItem}
-          total={cartTotal()}
-        />
-      )}
+      <CartDrawer
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        items={items}
+        removeItem={removeItem}
+        total={cartTotal()}
+      />
     </div>
   );
 }

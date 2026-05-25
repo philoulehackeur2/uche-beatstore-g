@@ -16,7 +16,9 @@ interface WishlistState {
   clear: () => void;
 }
 
-const store = create<WishlistState>()(
+// Exported so tests + non-React callers can read/write the wishlist via
+// `useWishlistStore.getState()` without needing a React renderer.
+export const useWishlistStore = create<WishlistState>()(
   persist(
     (set, get) => ({
       ids: [],
@@ -29,6 +31,7 @@ const store = create<WishlistState>()(
     { name: 'antigravity-wishlist' },
   ),
 );
+const store = useWishlistStore;
 
 export function useWishlist(): {
   ids: Set<string>;

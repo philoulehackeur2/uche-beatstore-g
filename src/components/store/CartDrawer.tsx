@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, X, Music, Loader2 } from 'lucide-react';
+import { ShoppingCart, X, Music, Loader2, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
 import type { Track } from '@/lib/types';
@@ -26,15 +26,17 @@ interface CartItem {
 }
 
 interface CartDrawerProps {
+  open: boolean;
   onClose: () => void;
   items: CartItem[];
   removeItem: (id: string) => void;
   total: number;
 }
 
-export function CartDrawer({ onClose, items, removeItem, total }: CartDrawerProps) {
+export function CartDrawer({ open, onClose, items, removeItem, total }: CartDrawerProps) {
   const router = useRouter();
   const [buyerEmail, setBuyerEmail] = useState('');
+  const [promoCode, setPromoCode] = useState('');
 
   // Hydrate email from localStorage on mount
   useEffect(() => {
@@ -47,23 +49,35 @@ export function CartDrawer({ onClose, items, removeItem, total }: CartDrawerProp
   const handleCheckout = () => {
     if (items.length === 0) return;
     onClose();
+    const params = new URLSearchParams();
     if (buyerEmail.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail.trim())) {
-      router.push(`/store/checkout?email=${encodeURIComponent(buyerEmail.trim())}`);
-    } else {
-      router.push('/store/checkout');
+      params.set('email', buyerEmail.trim());
     }
+    if (promoCode.trim()) {
+      params.set('promo', promoCode.trim().toUpperCase());
+    }
+    const qs = params.toString();
+    router.push(`/store/checkout${qs ? `?${qs}` : ''}`);
   };
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — pointer-events toggled so it doesn't block interaction when closed */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
+        className={`fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!open}
       />
 
-      {/* Drawer */}
-      <aside className="fixed top-0 right-0 bottom-0 z-[90] w-full sm:w-[420px] bg-gradient-to-b from-[#101012]/95 via-[#0a0907]/95 to-[#0a0907]/95 backdrop-blur-2xl border-l border-white/[0.06] shadow-[-12px_0_40px_rgba(0,0,0,0.5)] flex flex-col animate-in slide-in-from-right duration-300">
+      {/* Drawer — always mounted, translate-x for slide animation */}
+      <aside
+        className={`fixed top-0 right-0 bottom-0 z-[90] w-full sm:w-[420px] bg-gradient-to-b from-[#101012]/95 via-[#0a0907]/95 to-[#0a0907]/95 backdrop-blur-2xl border-l border-white/[0.06] shadow-[-12px_0_40px_rgba(0,0,0,0.5)] flex flex-col transition-transform duration-300 ${
+          open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+        }`}
+        aria-hidden={!open}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
           <h2 className="text-[12px] font-mono uppercase tracking-[0.2em] text-[#E8DCC8] flex items-center gap-2">
@@ -125,6 +139,13 @@ export function CartDrawer({ onClose, items, removeItem, total }: CartDrawerProp
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
             className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md py-2.5 px-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+          />
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="Promo code"
+            className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md py-2.5 px-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] uppercase"
           />
           <button
             onClick={handleCheckout}

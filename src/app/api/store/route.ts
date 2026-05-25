@@ -48,7 +48,50 @@ export async function GET() {
       const tracks = (getAll('tracks') as any[]).filter((t) => t.store_listed === true);
       const profiles = (getAll('creator_profiles' as any) as any[]) || [];
       const creator = profiles[0] ?? null;
-      return NextResponse.json({ creator, tracks, featuredPlaylists: [] });
+
+      // Featured playlists + projects from the local store so devs without
+      // Supabase configured still see meaningful data on /store.
+      const allPlaylists = (getAll('playlists' as any) as any[]) || [];
+      const playlistTracks = (getAll('playlist_tracks' as any) as any[]) || [];
+      const featuredPlaylistRows = allPlaylists
+        .filter((pl) => pl.store_featured === true)
+        .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+      const featuredPlaylists = featuredPlaylistRows.map((pl) => {
+        const plTrackIds = playlistTracks
+          .filter((j) => j.playlist_id === pl.id)
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map((j) => j.track_id);
+        const plTracks = tracks.filter((t) => plTrackIds.includes(t.id));
+        return { id: pl.id, name: pl.name, cover_url: pl.cover_url ?? null, store_order: pl.store_order ?? null, tracks: plTracks };
+      });
+
+      const allProjects = (getAll('projects' as any) as any[]) || [];
+      const projectTracks = (getAll('project_tracks' as any) as any[]) || [];
+      const featuredProjectRows = allProjects
+        .filter((p) => p.store_featured === true)
+        .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+      const featuredProjects = featuredProjectRows.map((proj) => {
+        const projTrackIds = projectTracks
+          .filter((j) => j.project_id === proj.id)
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map((j) => j.track_id);
+        const projTracks = tracks.filter((t) => projTrackIds.includes(t.id));
+        return {
+          id: proj.id,
+          name: proj.name,
+          cover_url: proj.cover_url ?? null,
+          description: proj.description ?? null,
+          price_usd: proj.price_usd ?? null,
+          store_order: proj.store_order ?? null,
+          tracks: projTracks,
+        };
+      });
+
+      const localResponse = NextResponse.json({ creator, tracks, featuredPlaylists, featuredProjects, licenses: [] });
+      // Same caching policy as the Supabase path: short s-maxage so newly
+      // listed tracks appear within ~30s for CDN-cached visitors.
+      localResponse.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+      return localResponse;
     }
 
     const admin = createServiceClient();
@@ -336,7 +379,12 @@ export async function GET() {
       wav_url: wavByTrack[rest.id] ?? null,
     }));
 
-    return NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, featuredProjects, licenses });
+    // Public catalogue → CDN-cacheable. Short s-maxage so newly listed
+    // tracks appear within ~30s; stale-while-revalidate keeps perceived
+    // latency low while the cache refills.
+    const response = NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, featuredProjects, licenses });
+    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return response;
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

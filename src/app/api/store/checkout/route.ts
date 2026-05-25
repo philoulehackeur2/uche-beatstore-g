@@ -10,6 +10,83 @@ const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface PromoTerms {
+  code: string;
+  discountPercent: number;
+  discountAmount: number;
+}
+
+async function resolvePromo(
+  admin: ReturnType<typeof createServiceClient>,
+  code: string,
+  sellerUserId: string | undefined,
+): Promise<{ valid: false; error: string } | { valid: true; terms: PromoTerms | null }> {
+  if (!code) return { valid: true, terms: null };
+
+  const { data: row } = await admin
+    .from('promo_codes')
+    .select('*')
+    .ilike('code', code)
+    .maybeSingle();
+
+  if (!row) return { valid: false, error: 'Invalid promo code' };
+  if (!row.active) return { valid: false, error: 'Promo code is no longer active' };
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return { valid: false, error: 'Promo code has expired' };
+  if (row.max_uses != null && row.uses_count >= row.max_uses) return { valid: false, error: 'Promo code usage limit reached' };
+  if (sellerUserId && row.user_id !== sellerUserId) return { valid: false, error: 'Promo code not valid for this seller' };
+
+  return {
+    valid: true,
+    terms: {
+      code: row.code,
+      discountPercent: Number(row.discount_percent ?? 0),
+      discountAmount: Number(row.discount_amount ?? 0),
+    },
+  };
+}
+
+function applyDiscount(
+  lineItems: Array<{ price_data: { unit_amount: number; product_data: { name: string } }; quantity: number }>,
+  promo: PromoTerms | null,
+): { discountedItems: typeof lineItems; discountTotalCents: number } {
+  if (!promo || (promo.discountPercent <= 0 && promo.discountAmount <= 0)) {
+    return { discountedItems: lineItems, discountTotalCents: 0 };
+  }
+
+  const originalTotalCents = lineItems.reduce((sum, li) => sum + li.price_data.unit_amount, 0);
+
+  if (promo.discountPercent > 0) {
+    const discountedItems = lineItems.map((li) => ({
+      ...li,
+      price_data: {
+        ...li.price_data,
+        unit_amount: Math.max(1, Math.round(li.price_data.unit_amount * (1 - promo.discountPercent / 100))),
+      },
+    }));
+    const newTotal = discountedItems.reduce((sum, li) => sum + li.price_data.unit_amount, 0);
+    return { discountedItems, discountTotalCents: originalTotalCents - newTotal };
+  }
+
+  // Flat amount discount — distribute proportionally across line items
+  const discountCents = Math.min(Math.round(promo.discountAmount * 100), originalTotalCents - 1);
+  let remaining = discountCents;
+  const discountedItems = lineItems.map((li, idx) => {
+    if (remaining <= 0) return li;
+    const share = Math.round((li.price_data.unit_amount / originalTotalCents) * discountCents);
+    const actualDiscount = idx === lineItems.length - 1 ? remaining : Math.min(share, remaining);
+    remaining -= actualDiscount;
+    return {
+      ...li,
+      price_data: {
+        ...li.price_data,
+        unit_amount: Math.max(1, li.price_data.unit_amount - actualDiscount),
+      },
+    };
+  });
+
+  return { discountedItems, discountTotalCents: discountCents };
+}
+
 /**
  * POST /api/store/checkout
  *   body (track mode):   { buyer_email, items: [{track_id, license_id?, license_type?}] }
@@ -35,6 +112,7 @@ export async function POST(req: NextRequest) {
     const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
     const rawItems: any[] = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
+    const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
 
     if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
@@ -73,21 +151,34 @@ export async function POST(req: NextRequest) {
 
       const sellerUserId = (project as any).user_id as string | undefined;
 
+      // Validate promo code
+      let promo: PromoTerms | null = null;
+      if (promoCode) {
+        const promoRes = await resolvePromo(admin, promoCode, sellerUserId);
+        if (!promoRes.valid) {
+          return NextResponse.json({ error: promoRes.error }, { status: 400 });
+        }
+        promo = promoRes.terms;
+      }
+
       const APP_URL = getAppUrl();
       const stripe = getStripe();
+
+      const lineItems = [{
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.max(1, Math.round(price * 100)),
+          product_data: { name: `Full Project — ${project.name || 'Untitled'}` },
+        },
+        quantity: 1,
+      }];
+      const { discountedItems } = applyDiscount(lineItems, promo);
 
       const session = await stripe.checkout.sessions.create({
         ui_mode: 'embedded_page',
         mode: 'payment',
         customer_email: buyerEmail,
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            unit_amount: Math.round(price * 100),
-            product_data: { name: `Full Project — ${project.name || 'Untitled'}` },
-          },
-          quantity: 1,
-        }],
+        line_items: discountedItems,
         metadata: {
           purchase_kind: 'project',
           source_surface: 'store',
@@ -95,11 +186,17 @@ export async function POST(req: NextRequest) {
           seller_user_id: sellerUserId ?? '',
           buyer_email: buyerEmail,
           content_id: project.id,
+          promo_code: promo?.code ?? '',
         },
         return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
       } as any);
 
-      log.info('project checkout session created', { session_id: session.id, project_id: project.id });
+      // Increment promo usage
+      if (promo) {
+        await admin.rpc('increment_promo_uses', { code: promo.code });
+      }
+
+      log.info('project checkout session created', { session_id: session.id, project_id: project.id, promo: promo?.code ?? null });
       return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
     }
 
@@ -133,6 +230,16 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
       profileLease = profile?.license_lease_price_usd ?? null;
       profileExclusive = profile?.license_exclusive_price_usd ?? null;
+    }
+
+    // Validate promo code for this seller
+    let promo: PromoTerms | null = null;
+    if (promoCode) {
+      const promoRes = await resolvePromo(admin, promoCode, sellerUserId);
+      if (!promoRes.valid) {
+        return NextResponse.json({ error: promoRes.error }, { status: 400 });
+      }
+      promo = promoRes.terms;
     }
 
     // ── Resolve custom license rows ──────────────────────────────────────────
@@ -260,6 +367,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid items to charge' }, { status: 400 });
     }
 
+    // Apply promo discount before creating Stripe session
+    const { discountedItems } = applyDiscount(lineItems, promo);
+
     // ── Create Stripe Embedded Checkout Session ──────────────────────────────
     const APP_URL = getAppUrl();
     const stripe = getStripe();
@@ -271,7 +381,7 @@ export async function POST(req: NextRequest) {
       ui_mode: 'embedded_page',
       mode: 'payment',
       customer_email: buyerEmail,
-      line_items: lineItems,
+      line_items: discountedItems,
       metadata: {
         // Routing / fulfillment discriminators
         purchase_kind: 'track_license',
@@ -285,11 +395,17 @@ export async function POST(req: NextRequest) {
         buyer_email: buyerEmail,
         // Full cart (capped at 25 items to stay within Stripe 500-char limit)
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
+        promo_code: promo?.code ?? '',
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
     } as any);
 
-    log.info('store checkout session created', { session_id: session.id, items: cartItemsMeta.length });
+    // Increment promo usage
+    if (promo) {
+      await admin.rpc('increment_promo_uses', { code: promo.code });
+    }
+
+    log.info('store checkout session created', { session_id: session.id, items: cartItemsMeta.length, promo: promo?.code ?? null });
     return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
   } catch (err) {
     log.error('store checkout failed', { error: errorMessage(err) });
