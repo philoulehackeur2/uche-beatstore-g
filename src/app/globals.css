@@ -249,6 +249,60 @@ body {
   }
 }
 
+/* ── Cosmos-style scroll for /store ────────────────────────────────────
+   Three small things mimic the cosmos.so feel without a JS smooth-scroll
+   library:
+     1. `scroll-behavior: smooth` on the html root — eases anchor jumps.
+     2. Subtle overscroll-contain so wheel events don't bubble + cause
+        page-level rubber-banding on macOS.
+     3. View-timeline driven fade-in-up on every masonry card. Cards
+        animate as they enter the viewport without React listeners.
+        `animation-timeline` is widely supported on modern engines
+        (Chromium 115+, Safari 26+). Reduced-motion users get the
+        finished state instantly, no animation. */
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+@keyframes cosmosFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.track-masonry > * {
+  animation: cosmosFadeInUp 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Chromium / Safari with view-timeline replays the animation as the
+   card enters the scroll viewport — that's what gives the slow,
+   per-card cascade feel. Older engines fall back to the one-shot
+   animation above on first paint. */
+@supports (animation-timeline: view()) {
+  .track-masonry > * {
+    animation: cosmosFadeInUp linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 25%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-masonry > * {
+    animation: none;
+  }
+}
+
 /* MusicPortfolio */
 @keyframes blink {
   50% {

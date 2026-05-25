@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Play, Pause, ShoppingCart, Music, Clock, Gauge,
   Music2, Check, X, Loader2, ExternalLink, Globe, Mail,
-  AtSign, Download, ChevronRight, Tag, Link2,
+  AtSign, Download, ChevronRight, Tag, Link2, Share2,
 } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -365,9 +365,47 @@ export default function StoreProductPage({
           <div className="flex flex-col gap-6">
             {/* Title + meta */}
             <div>
-              <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight tracking-tight">
-                {track.title}
-              </h1>
+              <div className="flex items-start justify-between gap-4">
+                <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight tracking-tight">
+                  {track.title}
+                </h1>
+                {/* Share — uses Web Share API on mobile/supported browsers,
+                    falls back to clipboard copy + toast on desktop. */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (typeof window === 'undefined') return;
+                    const nav = window.navigator as Navigator & {
+                      share?: (d: ShareData) => Promise<void>;
+                    };
+                    const url = window.location.href;
+                    const shareData: ShareData = {
+                      title: track.title,
+                      text: `${track.title}${creator?.display_name ? ` — prod. ${creator.display_name}` : ''}`,
+                      url,
+                    };
+                    if (typeof nav.share === 'function') {
+                      try {
+                        await nav.share(shareData);
+                        return;
+                      } catch {
+                        // user cancelled or share blocked — fall through to clipboard
+                      }
+                    }
+                    try {
+                      await nav.clipboard.writeText(url);
+                      toast.success('Link copied');
+                    } catch {
+                      toast.error('Could not share', 'Copy the URL manually.');
+                    }
+                  }}
+                  aria-label="Share this beat"
+                  title="Share"
+                  className="shrink-0 w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08] hover:border-white/[0.16] transition-colors"
+                >
+                  <Share2 size={14} />
+                </button>
+              </div>
               {creator?.display_name && (
                 <p className="mt-1 text-[13px] text-[#6a5d4a]">
                   prod. {creator.display_name}
