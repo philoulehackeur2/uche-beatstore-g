@@ -176,10 +176,12 @@ interface TrackRow {
 function StorePreview({
   profile,
   featuredPlaylists,
+  featuredProjects,
   tracks,
 }: {
   profile: ProfileForm;
   featuredPlaylists: PlaylistRow[];
+  featuredProjects: ProjectRow[];
   tracks: PreviewTrack[];
 }) {
   const accent = profile.accent_color || '#D4BFA0';
@@ -246,6 +248,33 @@ function StorePreview({
                     : <ListMusic size={14} className="text-[#3a3328]" />}
                 </div>
                 <p className="text-[7px] text-[#6a5d4a] truncate leading-tight">{pl.name}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Featured projects — bundle tiles with their price */}
+      {featuredProjects.length > 0 && (
+        <div className="px-4 py-3 border-t border-[#1a160f]">
+          <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Featured Projects</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {featuredProjects.map((pr) => (
+              <div key={pr.id} className="shrink-0 w-14">
+                <div className="w-14 h-14 rounded-lg bg-[#1a160f] border border-[#2d2620] overflow-hidden flex items-center justify-center mb-1 relative">
+                  {pr.cover_url
+                    ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                    : <Layers size={14} className="text-[#3a3328]" />}
+                  {pr.price_usd != null && Number(pr.price_usd) > 0 && (
+                    <span
+                      className="absolute bottom-0 left-0 right-0 text-[7px] font-mono font-bold py-0.5 text-center text-black"
+                      style={{ backgroundColor: accent }}
+                    >
+                      ${pr.price_usd}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[7px] text-[#6a5d4a] truncate leading-tight">{pr.name}</p>
               </div>
             ))}
           </div>
@@ -1471,6 +1500,7 @@ export default function StoreEditorPage() {
               <StorePreview
                 profile={form}
                 featuredPlaylists={featured}
+                featuredProjects={featuredProjects}
                 tracks={previewTracks}
               />
             </div>
