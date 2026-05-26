@@ -1,0 +1,541 @@
+'use client';
+
+import { useState } from 'react';
+import {
+  X, ChevronDown, Sliders, RotateCcw, Heart, Download,
+} from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { TYPE_FILTERS, type TypeFilter } from './types';
+
+/* ───────── Small atoms ───────── */
+
+function ActiveChip({
+  label, onClear, accentColor,
+}: { label: string; onClear: () => void; accentColor: string }) {
+  return (
+    <button
+      onClick={onClear}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] text-black hover:opacity-90 transition-opacity"
+      style={{ backgroundColor: accentColor }}
+      aria-label={`Remove filter: ${label}`}
+    >
+      {label}
+      <X size={9} strokeWidth={2.5} />
+    </button>
+  );
+}
+
+function FacetSection({
+  title, count, defaultOpen = true, children,
+}: {
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-[#1a160f] first:border-t-0 pt-3 first:pt-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between text-left mb-2 group"
+      >
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] group-hover:text-[#E8DCC8] transition-colors">
+          {title}
+          {count != null && count > 0 && (
+            <span className="ml-1.5 text-[#5a5142]">({count})</span>
+          )}
+        </span>
+        <ChevronDown
+          size={11}
+          className={`text-[#5a5142] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+        />
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+}
+
+function ShowMoreList({ items, max = 6 }: { items: React.ReactNode[]; max?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  if (items.length <= max) return <>{items}</>;
+  const visible = expanded ? items : items.slice(0, max);
+  return (
+    <>
+      {visible}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#D4BFA0] transition-colors mt-1.5 self-start"
+      >
+        {expanded ? '− Show less' : `+ Show all ${items.length}`}
+      </button>
+    </>
+  );
+}
+
+const SORT_LABELS: Record<string, string> = {
+  newest: 'Newest first',
+  popular: 'Popular first',
+  'bpm-asc': 'BPM: low → high',
+  'bpm-desc': 'BPM: high → low',
+  'price-asc': 'Price: low → high',
+  'price-desc': 'Price: high → low',
+  title: 'A → Z',
+};
+
+/* ───────── Main sidebar ───────── */
+
+type SortBy = 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title';
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  genreFilter: string;
+  setGenreFilter: (v: string) => void;
+  keyFilter: string;
+  setKeyFilter: (v: string) => void;
+  bpmMin: number;
+  setBpmMin: (v: number) => void;
+  bpmMax: number;
+  setBpmMax: (v: number) => void;
+  bpmRange: { min: number; max: number };
+  typeFilter: TypeFilter;
+  setTypeFilter: (v: TypeFilter) => void;
+  freeOnly: boolean;
+  setFreeOnly: (v: boolean) => void;
+  favoritesOnly: boolean;
+  setFavoritesOnly: (v: boolean) => void;
+  favoritesCount: number;
+  newThisWeek: boolean;
+  setNewThisWeek: (v: boolean) => void;
+  moodFilter: string;
+  setMoodFilter: (v: string) => void;
+  scaleFilter: '' | 'major' | 'minor';
+  setScaleFilter: (v: '' | 'major' | 'minor') => void;
+  durationBucket: '' | 'short' | 'medium' | 'long';
+  setDurationBucket: (v: '' | 'short' | 'medium' | 'long') => void;
+  sortBy: SortBy;
+  setSortBy: (v: SortBy) => void;
+  priceMin: number;
+  setPriceMin: (v: number) => void;
+  priceMax: number;
+  setPriceMax: (v: number) => void;
+  priceRange: { min: number; max: number };
+  totalResults: number;
+  hasActiveFilters: boolean;
+  onReset: () => void;
+  availableGenres: string[];
+  availableMoods: string[];
+  availableKeys: string[];
+  accentColor: string;
+}
+
+export function StoreSidebar(props: Props) {
+  const {
+    open, onClose,
+    genreFilter, setGenreFilter,
+    keyFilter, setKeyFilter,
+    bpmMin, setBpmMin,
+    bpmMax, setBpmMax, bpmRange,
+    typeFilter, setTypeFilter,
+    freeOnly, setFreeOnly,
+    favoritesOnly, setFavoritesOnly, favoritesCount,
+    newThisWeek, setNewThisWeek,
+    moodFilter, setMoodFilter,
+    scaleFilter, setScaleFilter,
+    durationBucket, setDurationBucket,
+    sortBy, setSortBy,
+    priceMin, setPriceMin, priceMax, setPriceMax, priceRange,
+    totalResults,
+    hasActiveFilters, onReset,
+    availableGenres, availableMoods, availableKeys,
+    accentColor,
+  } = props;
+
+  const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
+  const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
+  const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
+  const PillButton = ({
+    active, onClick, children,
+  }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded-full border transition-all whitespace-nowrap ${active
+          ? 'text-black border-[#D4BFA0]'
+          : 'bg-transparent text-[#6a5d4a] border-[#1f1a13] hover:border-[#D4BFA0]/30 hover:text-[#a08a6a]'
+        }`}
+      style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
+    >
+      {children}
+    </button>
+  );
+
+  const effectiveMin = bpmMin === 0 ? bpmRange.min : bpmMin;
+  const effectiveMax = bpmMax === 999 ? bpmRange.max : bpmMax;
+  const bpmRangeActive = effectiveMin > bpmRange.min || effectiveMax < bpmRange.max;
+
+  const content = (
+    <div className="flex flex-col gap-5 p-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">
+          <Sliders size={11} />
+          Refine
+          <span className="text-[#3a3328] tabular-nums">· {totalResults}</span>
+        </div>
+        <button onClick={onClose} className="lg:hidden text-[#4a4338] hover:text-white transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+
+      <FacetSection title="Sort by" defaultOpen>
+        <div className="relative">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            className="w-full appearance-none bg-[#0a0907] border border-[#1f1a13] rounded-lg pl-3 pr-8 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono"
+          >
+            {Object.entries(SORT_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5a5142] pointer-events-none" />
+        </div>
+      </FacetSection>
+
+      {hasActiveFilters && (
+        <div className="rounded-lg border border-[#D4BFA0]/15 bg-[#D4BFA0]/[0.04] p-2.5">
+          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-1.5">
+            Applied
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {typeFilter !== 'all' && (
+              <ActiveChip label={typeFilter} onClear={() => setTypeFilter('all')} accentColor={accentColor} />
+            )}
+            {genreFilter && <ActiveChip label={genreFilter} onClear={() => setGenreFilter('')} accentColor={accentColor} />}
+            {moodFilter && <ActiveChip label={moodFilter} onClear={() => setMoodFilter('')} accentColor={accentColor} />}
+            {keyFilter && <ActiveChip label={`Key: ${keyFilter}`} onClear={() => setKeyFilter('')} accentColor={accentColor} />}
+            {scaleFilter && <ActiveChip label={scaleFilter} onClear={() => setScaleFilter('')} accentColor={accentColor} />}
+            {bpmRangeActive && (
+              <ActiveChip
+                label={`${effectiveMin}–${effectiveMax} BPM`}
+                onClear={() => { setBpmMin(bpmRange.min); setBpmMax(bpmRange.max); }}
+                accentColor={accentColor}
+              />
+            )}
+            {priceRangeActive && (
+              <ActiveChip
+                label={`$${effectivePriceMin}–$${effectivePriceMax}`}
+                onClear={() => { setPriceMin(priceRange.min); setPriceMax(priceRange.max); }}
+                accentColor={accentColor}
+              />
+            )}
+            {durationBucket && (
+              <ActiveChip
+                label={durationBucket === 'short' ? '< 2min' : durationBucket === 'medium' ? '2–4min' : '4min +'}
+                onClear={() => setDurationBucket('')}
+                accentColor={accentColor}
+              />
+            )}
+            {freeOnly && <ActiveChip label="Free only" onClear={() => setFreeOnly(false)} accentColor={accentColor} />}
+            {favoritesOnly && <ActiveChip label="Favorites" onClear={() => setFavoritesOnly(false)} accentColor={accentColor} />}
+            {newThisWeek && <ActiveChip label="New this week" onClear={() => setNewThisWeek(false)} accentColor={accentColor} />}
+          </div>
+          <button
+            onClick={onReset}
+            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+          >
+            <RotateCcw size={9} /> Clear all
+          </button>
+        </div>
+      )}
+
+      <FacetSection title="Type">
+        <div className="flex flex-wrap gap-1.5">
+          {TYPE_FILTERS.map((f) => (
+            <PillButton key={f} active={typeFilter === f} onClick={() => setTypeFilter(f)}>
+              {f}
+            </PillButton>
+          ))}
+        </div>
+      </FacetSection>
+
+      {availableGenres.length > 0 && (
+        <FacetSection title="Genre" count={genreFilter ? 1 : 0}>
+          <div className="flex flex-wrap gap-1.5">
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={genreFilter === ''} onClick={() => setGenreFilter('')}>All</PillButton>,
+                ...availableGenres.map((g) => (
+                  <PillButton key={g} active={genreFilter === g} onClick={() => setGenreFilter(genreFilter === g ? '' : g)}>
+                    {g}
+                  </PillButton>
+                )),
+              ]}
+            />
+          </div>
+        </FacetSection>
+      )}
+
+      {availableMoods.length > 0 && (
+        <FacetSection title="Mood" count={moodFilter ? 1 : 0}>
+          <div className="flex flex-wrap gap-1.5">
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={moodFilter === ''} onClick={() => setMoodFilter('')}>Any</PillButton>,
+                ...availableMoods.map((m) => (
+                  <PillButton key={m} active={moodFilter === m} onClick={() => setMoodFilter(moodFilter === m ? '' : m)}>
+                    {m}
+                  </PillButton>
+                )),
+              ]}
+            />
+          </div>
+        </FacetSection>
+      )}
+
+      {availableKeys.length > 0 && (
+        <FacetSection title="Key" count={keyFilter ? 1 : 0} defaultOpen={false}>
+          <div className="flex flex-wrap gap-1.5">
+            <ShowMoreList
+              max={8}
+              items={[
+                <PillButton key="__all" active={keyFilter === ''} onClick={() => setKeyFilter('')}>Any</PillButton>,
+                ...availableKeys.map((k) => (
+                  <PillButton key={k} active={keyFilter === k} onClick={() => setKeyFilter(keyFilter === k ? '' : k)}>
+                    {k}
+                  </PillButton>
+                )),
+              ]}
+            />
+          </div>
+        </FacetSection>
+      )}
+
+      <FacetSection title="Scale" count={scaleFilter ? 1 : 0} defaultOpen={false}>
+        <div className="flex gap-1.5">
+          {(['', 'major', 'minor'] as const).map((s) => (
+            <PillButton key={s || 'any'} active={scaleFilter === s} onClick={() => setScaleFilter(s)}>
+              {s || 'Any'}
+            </PillButton>
+          ))}
+        </div>
+      </FacetSection>
+
+      {bpmRange.min < bpmRange.max && (
+        <FacetSection title="BPM range" count={bpmRangeActive ? 1 : 0}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
+            <span
+              className="text-[11px] font-mono font-bold tabular-nums"
+              style={{ color: bpmRangeActive ? accentColor : '#4a4338' }}
+            >
+              {effectiveMin}–{effectiveMax}
+            </span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">min</span>
+              <input
+                type="range"
+                min={bpmRange.min}
+                max={bpmRange.max}
+                step={1}
+                value={effectiveMin}
+                onChange={(e) => setBpmMin(Math.min(Number(e.target.value), effectiveMax - 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">max</span>
+              <input
+                type="range"
+                min={bpmRange.min}
+                max={bpmRange.max}
+                step={1}
+                value={effectiveMax}
+                onChange={(e) => setBpmMax(Math.max(Number(e.target.value), effectiveMin + 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+          </div>
+        </FacetSection>
+      )}
+
+      {priceRange.min < priceRange.max && (
+        <FacetSection title="Price (lease)" count={priceRangeActive ? 1 : 0} defaultOpen={false}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
+            <span
+              className="text-[11px] font-mono font-bold tabular-nums"
+              style={{ color: priceRangeActive ? accentColor : '#4a4338' }}
+            >
+              ${effectivePriceMin}–${effectivePriceMax}
+            </span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">min</span>
+              <input
+                type="range"
+                min={priceRange.min}
+                max={priceRange.max}
+                step={1}
+                value={effectivePriceMin}
+                onChange={(e) => setPriceMin(Math.min(Number(e.target.value), effectivePriceMax - 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">max</span>
+              <input
+                type="range"
+                min={priceRange.min}
+                max={priceRange.max}
+                step={1}
+                value={effectivePriceMax}
+                onChange={(e) => setPriceMax(Math.max(Number(e.target.value), effectivePriceMin + 1))}
+                className="flex-1 h-1 rounded"
+                style={{ accentColor }}
+              />
+            </div>
+          </div>
+        </FacetSection>
+      )}
+
+      <FacetSection title="Duration" count={durationBucket ? 1 : 0} defaultOpen={false}>
+        <div className="flex flex-wrap gap-1.5">
+          <PillButton active={durationBucket === ''} onClick={() => setDurationBucket('')}>Any</PillButton>
+          <PillButton active={durationBucket === 'short'} onClick={() => setDurationBucket(durationBucket === 'short' ? '' : 'short')}>&lt; 2 min</PillButton>
+          <PillButton active={durationBucket === 'medium'} onClick={() => setDurationBucket(durationBucket === 'medium' ? '' : 'medium')}>2–4 min</PillButton>
+          <PillButton active={durationBucket === 'long'} onClick={() => setDurationBucket(durationBucket === 'long' ? '' : 'long')}>4 min +</PillButton>
+        </div>
+      </FacetSection>
+
+      <button
+        onClick={() => setFreeOnly(!freeOnly)}
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${freeOnly
+            ? 'bg-[#0e1f17]/60 border-[#6DC6A4]/30 text-[#6DC6A4]'
+            : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
+          }`}
+      >
+        <div className="flex items-center gap-2">
+          <Download size={11} />
+          <span className="text-[10px] font-mono uppercase tracking-wider">Free only</span>
+        </div>
+        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#3a3328]'}`}>
+          {freeOnly ? 'ON' : 'OFF'}
+        </span>
+      </button>
+
+      <button
+        onClick={() => setFavoritesOnly(!favoritesOnly)}
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${favoritesOnly
+            ? 'border-[#c8a84b]/40 text-[#c8a84b] bg-[#c8a84b]/[0.08]'
+            : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
+          }`}
+      >
+        <div className="flex items-center gap-2">
+          <Heart size={11} fill={favoritesOnly ? 'currentColor' : 'none'} />
+          <span className="text-[10px] font-mono uppercase tracking-wider">Favorites only</span>
+        </div>
+        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#c8a84b]' : 'text-[#3a3328]'}`}>
+          {favoritesCount}
+        </span>
+      </button>
+
+      <button
+        onClick={() => setNewThisWeek(!newThisWeek)}
+        className="flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all"
+        style={
+          newThisWeek
+            ? { borderColor: `${accentColor}66`, color: accentColor, backgroundColor: `${accentColor}14` }
+            : { borderColor: '#1f1a13', color: '#6a5d4a' }
+        }
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles size={11} />
+          <span className="text-[10px] font-mono uppercase tracking-wider">New this week</span>
+        </div>
+        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#3a3328' }}>
+          {newThisWeek ? 'ON' : 'OFF'}
+        </span>
+      </button>
+
+      <button
+        onClick={onReset}
+        disabled={!hasActiveFilters}
+        className="flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#D4BFA0]/40 hover:text-[#D4BFA0] text-[#6a5d4a]"
+      >
+        <RotateCcw size={10} />
+        Reset filters
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      {open && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
+      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#0c0a08] border-t border-[#1f1a13] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-[#2d2620]" />
+        </div>
+        {content}
+      </div>
+
+      <div className="hidden lg:block w-56 shrink-0 sticky top-[57px] max-h-[calc(100vh-57px)] overflow-y-auto">
+        <div className="bg-[#0c0a08] border border-[#1f1a13] rounded-2xl overflow-hidden">
+          {content}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function BeatCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] overflow-hidden flex flex-col">
+      <div className="w-full aspect-square bg-[#1a160f] animate-pulse" />
+      <div className="p-4 flex flex-col gap-3">
+        <div className="h-3.5 bg-[#1f1a13] rounded animate-pulse w-3/4" />
+        <div className="flex gap-1">
+          <div className="h-4 w-12 bg-[#1a160f] rounded animate-pulse" />
+          <div className="h-4 w-10 bg-[#1a160f] rounded animate-pulse" />
+        </div>
+        <div className="h-9 bg-[#1a160f] rounded animate-pulse mt-1" />
+        <div className="mt-auto pt-2 flex gap-2">
+          <div className="flex-1 h-10 bg-[#1a160f] rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-[#1f1a13] rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BeatListRowSkeleton() {
+  return (
+    <div className="rounded-xl border border-[#1a160f] bg-[#14110d]">
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <div className="w-7 h-7 rounded-full bg-[#1a160f] animate-pulse shrink-0" />
+        <div className="w-10 h-10 rounded-lg bg-[#1a160f] animate-pulse shrink-0" />
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="h-3 bg-[#1f1a13] rounded animate-pulse w-2/3" />
+          <div className="h-2.5 bg-[#1a160f] rounded animate-pulse w-1/3" />
+        </div>
+        <div className="hidden md:flex gap-2 shrink-0">
+          <div className="h-8 w-14 bg-[#1a160f] rounded animate-pulse" />
+          <div className="h-8 w-14 bg-[#1f1a13] rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
