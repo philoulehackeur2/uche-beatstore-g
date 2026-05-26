@@ -28,6 +28,7 @@ interface Sale {
   stripe_session_id: string | null;
   status: 'paid' | 'refunded' | 'disputed' | 'failed' | 'expired';
   download_unlocked: boolean | null;
+  needs_stems_upload?: boolean;
   created_at: string;
 }
 
@@ -261,7 +262,17 @@ function SaleRow({ sale }: { sale: Sale }) {
       </span>
 
       <div className="min-w-0">
-        <p className="text-[12px] text-[#E8DCC8] truncate">{sale.item_label}</p>
+        <p className="text-[12px] text-[#E8DCC8] truncate flex items-center gap-2">
+          <span className="truncate">{sale.item_label}</span>
+          {sale.needs_stems_upload && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-amber-500/15 border border-amber-500/35 text-amber-300"
+              title="Buyer paid for exclusive — needs WAV/stems upload to complete delivery"
+            >
+              Awaiting stems
+            </span>
+          )}
+        </p>
         {sale.license_type && (
           <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
             {sale.license_type}

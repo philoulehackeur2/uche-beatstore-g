@@ -218,36 +218,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Not for sale: ${unlisted.join(', ')}` }, { status: 400 });
     }
 
-    // Exclusive gating — an exclusive purchase delivers the WAV + stems, so
-    // reject the session before reaching Stripe if the track has neither.
-    // Buyers should never pay for a deliverable that doesn't exist.
-    const wantsExclusive = (kind: string | undefined, license: any) =>
-      license?.is_exclusive === true || kind === 'exclusive' || kind === 'exclusive-rights';
+    // Exclusive deliverable check — used to reject the session up front,
+    // now downgraded to a tag. Buyers can still pay for an exclusive even
+    // when the producer hasn't uploaded WAV/stems yet; the webhook flags
+    // the purchase with needs_stems_upload=true and emails the producer
+    // to deliver. Build the list of (track_id, title) pairs that are
+    // missing so the webhook + the buyer's confirmation copy can use it.
     const stemsReady = (stemsStatus: string | null | undefined) =>
       stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
-    const missingDeliverable = rawItems
+    const missingDeliverableTracks = rawItems
       .map((it) => {
+        if (it.license_type !== 'exclusive' && it.license_type !== 'exclusive-rights') return null;
         const track = (tracks as any[]).find((t) => t.id === it.track_id);
         if (!track) return null;
-        const license = rawItems.length > 0
-          ? null // we resolve license below; for now use raw flags only
-          : null;
-        const isExclusive = wantsExclusive(it.license_type, license);
-        if (!isExclusive) return null;
-        const hasWav = !!track.wav_url;
-        const hasStems = stemsReady(track.stems_status);
-        if (hasWav || hasStems) return null;
-        return track.title as string;
+        if (track.wav_url || stemsReady(track.stems_status)) return null;
+        return { id: track.id as string, title: track.title as string };
       })
-      .filter((t): t is string => !!t);
-    if (missingDeliverable.length > 0) {
-      return NextResponse.json(
-        {
-          error: `Exclusive license unavailable — these tracks have no WAV or stems uploaded yet: ${missingDeliverable.join(', ')}. Contact the producer or choose a lease.`,
-        },
-        { status: 400 },
-      );
-    }
+      .filter((x): x is { id: string; title: string } => !!x);
 
     // ── Creator profile (for legacy price fallback) ──────────────────────────
     const sellerUserId = (tracks[0] as any).user_id as string | undefined;
@@ -427,6 +414,10 @@ export async function POST(req: NextRequest) {
         // Full cart (capped at 25 items to stay within Stripe 500-char limit)
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
         promo_code: promo?.code ?? '',
+        // Exclusive purchases of tracks with no WAV / no ready stems —
+        // webhook reads this and flags the purchase + emails the
+        // producer to upload. Comma-separated track ids; "" when none.
+        stems_pending_track_ids: missingDeliverableTracks.map((t) => t.id).join(','),
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
     } as any);

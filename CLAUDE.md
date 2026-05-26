@@ -71,7 +71,7 @@ public/sw.js                 service worker (app shell only — audio uses Index
 - **Filter + sort logic lives in `lib/store/filters.ts`** (`filterAndSortTracks`) — pure function, Vitest-covered. Page useMemo delegates to it. Don't re-inline; the test suite is what catches AI revert wipes.
 - **Wishlist** — `useWishlist` (Zustand + localStorage, key `antigravity-wishlist`). Optional `isWishlisted` / `onToggleWishlist` props on `BeatCard` / `BandcampRemixCard` / `MusicPortfolio` rows.
 - **Cart** — `useCart` (Zustand + localStorage). `CartDrawer` stays mounted (`open` prop) instead of unmounting on close — preserves email + promo input across navigation.
-- **Exclusive license gating** — checkout rejects exclusive purchases of tracks without `wav_url` or ready `stems_status`. Buyers shouldn't pay for deliverables that don't exist.
+- **Exclusive stems-pending flow** — exclusive purchases of tracks without `wav_url` or ready `stems_status` are NOT rejected at checkout (changed from the old gate-the-sale policy). Checkout writes `metadata.stems_pending_track_ids` (CSV of affected track ids); the webhook flips `license_purchases.needs_stems_upload = true` (mig 052) and emails the producer to upload. `/sales` shows an "Awaiting stems" badge on those rows.
 
 **Stripe** — Two checkout surfaces:
 - Share-page checkout — `/api/share/[token]/checkout`, buy gated on `share.sales_enabled === true`.

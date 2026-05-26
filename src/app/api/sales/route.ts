@@ -24,7 +24,7 @@ export async function GET() {
     // ── License purchases (track licenses) ─────────────────────────────────
     const { data: purchases, error: lpErr } = await admin
       .from('license_purchases')
-      .select('id, buyer_email, track_ids, line_items, license_type, amount_usd, stripe_session_id, status, download_unlocked, created_at')
+      .select('id, buyer_email, track_ids, line_items, license_type, amount_usd, stripe_session_id, status, download_unlocked, needs_stems_upload, created_at')
       .eq('seller_user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -116,6 +116,7 @@ export async function GET() {
         stripe_session_id: p.stripe_session_id,
         status: p.status ?? 'paid',
         download_unlocked: p.download_unlocked ?? null,
+        needs_stems_upload: p.needs_stems_upload ?? false,
         created_at: p.created_at,
       };
     });

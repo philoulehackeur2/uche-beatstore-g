@@ -144,6 +144,101 @@ async function runFulfillment(params: {
     }
   }
 
+  // 2b. Stems-pending notice — exclusive purchase landed on a track with
+  // no WAV and no ready stems. Flag the purchase row so the producer's
+  // /sales dashboard can surface it, then email the producer so they
+  // can upload before the buyer gets impatient. Checkout writes the
+  // track ids into metadata.stems_pending_track_ids as CSV.
+  const stemsPendingCsv = meta.stems_pending_track_ids ?? '';
+  const stemsPendingIds = stemsPendingCsv
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (stemsPendingIds.length > 0) {
+    try {
+      await admin
+        .from('license_purchases')
+        .update({ needs_stems_upload: true })
+        .eq('id', purchaseId);
+    } catch (err) {
+      log.warn('needs_stems_upload flag set failed', { purchaseId, error: errorMessage(err) });
+    }
+
+    // Email the producer — needs RESEND + a contact_email on the
+    // creator_profiles row OR the auth user's email. Look those up.
+    if (process.env.RESEND_API_KEY && meta.seller_user_id) {
+      try {
+        // Pull contact_email first (preferred — buyer-facing producer
+        // address), fall back to the auth user's primary email.
+        const { data: prof } = await admin
+          .from('creator_profiles')
+          .select('contact_email, display_name')
+          .eq('user_id', meta.seller_user_id)
+          .maybeSingle();
+        let producerEmail = (prof as any)?.contact_email as string | null | undefined;
+        const producerName = (prof as any)?.display_name as string | null | undefined;
+        if (!producerEmail) {
+          const { data: userRes } = await admin.auth.admin.getUserById(meta.seller_user_id);
+          producerEmail = userRes?.user?.email ?? null;
+        }
+
+        if (producerEmail) {
+          // Pull titles for the affected tracks so the producer knows
+          // exactly what needs uploading
+          const { data: trackRows } = await admin
+            .from('tracks')
+            .select('id, title')
+            .in('id', stemsPendingIds);
+          const titles = (trackRows ?? []).map((t: any) => t.title || t.id);
+
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+            to: producerEmail,
+            subject: `Exclusive sold — upload stems for ${titles.length} track${titles.length === 1 ? '' : 's'}`,
+            html: `
+              <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
+                <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
+                  Action needed
+                </h1>
+                <p style="font-size: 15px; line-height: 1.7;">
+                  ${producerName ? `Hi ${producerName}, ` : ''}a buyer just purchased an exclusive license, but the track${titles.length === 1 ? "" : "s"} below ${titles.length === 1 ? "doesn't" : "don't"} have a WAV or finished stems on file yet. Please upload them so the buyer can complete their download.
+                </p>
+                <div style="margin: 24px 0; padding: 16px; background: #14110d; border-radius: 12px; border: 1px solid #1f1a13; font-size: 12px; color: #a08a6a; font-family: monospace; line-height: 1.8;">
+                  ${titles.map((t: string) => `• ${t}`).join('<br/>')}
+                </div>
+                <p style="font-size: 13px; color: #a08a6a;">
+                  Buyer: ${meta.buyer_email ?? 'unknown'} · Amount: $${((session.amount_total ?? 0) / 100).toFixed(2)}
+                </p>
+                <div style="margin-top: 32px;">
+                  <a href="${APP_URL}/library"
+                     style="background: #D4BFA0; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+                    Upload in Library
+                  </a>
+                </div>
+                <p style="margin-top: 32px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.25em;">
+                  This purchase is also flagged in /sales with an "Awaiting stems" badge.
+                </p>
+              </div>
+            `,
+          });
+          log.info('stems-pending producer email sent', {
+            purchaseId,
+            to: producerEmail,
+            trackIds: stemsPendingIds,
+          });
+        } else {
+          log.warn('stems-pending: no producer email on file', {
+            purchaseId,
+            seller_user_id: meta.seller_user_id,
+          });
+        }
+      } catch (err) {
+        log.warn('stems-pending producer email failed', { purchaseId, error: errorMessage(err) });
+      }
+    }
+  }
+
   // 3. Delivery email — guarded by fulfillment_email_sent flag to prevent duplicates
   if (process.env.RESEND_API_KEY && meta.buyer_email) {
     try {
