@@ -172,10 +172,11 @@ export default function MusicPortfolio({
         }, 4000);
     }, [prefersReduced]);
 
-    // Handle row hover — GSAP scramble on title
+    // Handle row hover — GSAP scramble on title (skipped in embedded mode,
+    // where the store wants readable, scannable titles, not a creative effect)
     const handleRowEnter = useCallback(
         (id: string) => {
-            if (prefersReduced) {
+            if (prefersReduced || variant === 'embedded') {
                 setHoveredId(id);
                 return;
             }
@@ -209,7 +210,7 @@ export default function MusicPortfolio({
                 });
             }
         },
-        [killIdle, prefersReduced],
+        [killIdle, prefersReduced, variant],
     );
 
     const handleRowLeave = useCallback(
@@ -397,7 +398,7 @@ export default function MusicPortfolio({
                                                 titleRefs.current.delete(track.id);
                                             }
                                         }}
-                                        className="block text-[13px] md:text-[15px] font-medium tracking-wide truncate font-heading"
+                                        className={`block text-[13px] md:text-[15px] font-medium tracking-wide truncate ${isEmbedded ? '' : 'font-heading'}`}
                                         data-original-text={track.title}
                                     >
                                         {track.title}
@@ -424,51 +425,65 @@ export default function MusicPortfolio({
                                     the bg gradient is most transparent so the
                                     hover cover image still reads through. */}
                                 {isEmbedded && (
-                                    <div className="hidden md:flex items-center gap-2 shrink-0 pointer-events-none">
-                                        {/* Tags — top 2 max */}
+                                    <div className="hidden md:flex items-center gap-2.5 shrink-0 pointer-events-none">
+                                        {/* Tags — top 2, accent on hover for readability */}
                                         {(track.tags ?? []).slice(0, 2).map((tag) => (
                                             <span
                                                 key={tag}
-                                                className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-[0.15em] text-[#6a5d4a] bg-[#1f1a13]/50 border border-[#1f1a13]"
+                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-[#a08a6a] bg-[#14110d]/80 border border-white/[0.08] backdrop-blur-sm"
                                             >
                                                 {tag}
                                             </span>
                                         ))}
                                         {/* Duration */}
                                         {track.durationSeconds != null && (
-                                            <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 text-right">
+                                            <span className="text-[11px] font-mono text-[#a08a6a] tabular-nums w-10 text-right">
                                                 {fmtDuration(track.durationSeconds)}
                                             </span>
                                         )}
-                                        {/* Price chip — Free wins over Lease */}
+                                        {/* Prices — Free or Lease + Excl side-by-side,
+                                            large enough to scan, with semantic colors.
+                                            "$X / Excl" feels readable at a glance. */}
                                         {track.freeDownload ? (
-                                            <span className="text-[10px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-2 py-0.5 rounded">
+                                            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/30 px-2.5 py-1 rounded-md">
                                                 Free
                                             </span>
-                                        ) : track.priceLease != null ? (
-                                            <span className="text-[11px] font-mono font-bold text-[#E8DCC8] tabular-nums w-12 text-right">
-                                                ${track.priceLease}
-                                            </span>
                                         ) : (
-                                            <span className="text-[10px] font-mono text-[#3a3328] w-12 text-right">—</span>
+                                            <div className="flex items-center gap-1.5">
+                                                {track.priceLease != null && (
+                                                    <span className="flex flex-col items-center px-2 py-1 rounded-md bg-white/[0.06] border border-white/[0.10] backdrop-blur-sm leading-none">
+                                                        <span className="text-[12px] font-bold text-[#E8DCC8] tabular-nums">${track.priceLease}</span>
+                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-0.5">Lease</span>
+                                                    </span>
+                                                )}
+                                                {track.priceExclusive != null && (
+                                                    <span
+                                                        className="flex flex-col items-center px-2 py-1 rounded-md leading-none"
+                                                        style={{ backgroundColor: '#D4BFA0', color: '#000' }}
+                                                    >
+                                                        <span className="text-[12px] font-bold tabular-nums">${track.priceExclusive}</span>
+                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
+                                                    </span>
+                                                )}
+                                                {track.priceLease == null && track.priceExclusive == null && (
+                                                    <span className="text-[11px] font-mono text-[#5a5142]">No price</span>
+                                                )}
+                                            </div>
                                         )}
-                                        {/* Wishlist heart — pointer-events-auto
-                                            overrides the cluster's none so the
-                                            tap only fires the toggle, not the
-                                            row's onTrackOpen / onTrackPlay. */}
+                                        {/* Wishlist heart */}
                                         {onToggleWishlist && (
                                             <button
                                                 type="button"
                                                 onClick={(e) => { e.stopPropagation(); onToggleWishlist(track.id); }}
                                                 aria-pressed={!!isWishlisted?.(track.id)}
                                                 title={isWishlisted?.(track.id) ? 'Remove from favorites' : 'Add to favorites'}
-                                                className={`pointer-events-auto w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                                                className={`pointer-events-auto w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                                                     isWishlisted?.(track.id)
                                                         ? 'text-[#c8a84b]'
-                                                        : 'text-[#3a3328] hover:text-[#a08a6a]'
+                                                        : 'text-[#5a5142] hover:text-[#a08a6a]'
                                                 }`}
                                             >
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill={isWishlisted?.(track.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill={isWishlisted?.(track.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                     <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5L12 21Z" />
                                                 </svg>
                                             </button>
