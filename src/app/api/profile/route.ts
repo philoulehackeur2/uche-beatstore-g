@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
       contact_email,
       accent_color,
       font_style,
+      seo_title,
+      seo_description,
+      og_image_url,
     } = body;
 
     const payload = {
@@ -56,6 +59,10 @@ export async function POST(req: NextRequest) {
       // Storefront theme (migration 034)
       accent_color: accent_color || '#D4BFA0',
       font_style: font_style || 'default',
+      // Storefront SEO + share card (migration 055)
+      seo_title: seo_title || null,
+      seo_description: seo_description || null,
+      og_image_url: og_image_url || null,
     };
 
     const result = await updateCreatorProfile(payload);

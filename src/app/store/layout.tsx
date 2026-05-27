@@ -1,45 +1,67 @@
-'use client';
+import type { Metadata } from 'next';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { isSupabaseConfigured } from '@/lib/local-store';
+import { getAppUrl } from '@/lib/env';
+import { StoreLayoutClient } from './StoreLayoutClient';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Shared layout for all /store/* routes.
- *
- * The dashboard group layout already wires PlayerBar + MediaSessionBridge,
- * but the store lives outside that group (no auth required). This layout
- * re-mounts them so audio preview works on the public storefront and
- * product pages just like it does inside the dashboard.
- *
- * CartDrawer + FloatingCartButton are rendered here so every store page
- * (grid, product, download portal) shares one cart without each page
- * needing its own drawer.
+ * Storefront-root metadata. Pulled from the populated creator_profile
+ * (migration 055 fields with sensible fallbacks). Consumed by social
+ * platforms when /store itself is shared — not when a specific track
+ * or producer page is shared, which already have their own metadata
+ * via their sibling layouts.
  */
+export async function generateMetadata(): Promise<Metadata> {
+  const fallback: Metadata = {
+    title: 'U2C Beatstore',
+    description: 'License beats, instrumentals, and project bundles from independent producers.',
+  };
+  if (!isSupabaseConfigured()) return fallback;
 
-import { PlayerBar } from '@/components/player/PlayerBar';
-import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
-import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
-import { useCart } from '@/hooks/useCart';
+  try {
+    const admin = createServiceClient();
+    const { data } = await admin
+      .from('creator_profiles')
+      .select('display_name, bio, hero_image_url, seo_title, seo_description, og_image_url')
+      .not('display_name', 'is', null)
+      .order('display_name', { ascending: true, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
 
-function StoreLayoutInner({ children }: { children: React.ReactNode }) {
-  const { items, removeItem, isOpen, setIsOpen, cartTotal } = useCart();
+    const c = data as any | null;
+    const title = c?.seo_title?.trim()
+      || (c?.display_name ? `${c.display_name} — Beat store` : fallback.title!);
+    const description = c?.seo_description?.trim()
+      || c?.bio?.trim()
+      || fallback.description!;
+    const ogImage = c?.og_image_url || c?.hero_image_url || null;
+    const url = `${getAppUrl()}/store`;
+    const images = ogImage ? [{ url: ogImage }] : undefined;
 
-  return (
-    <div className="min-h-screen">
-      <main className="pb-28">
-        {children}
-      </main>
-      <PlayerBar />
-      <MediaSessionBridge />
-      <FloatingCartButton />
-      <CartDrawer
-        open={isOpen}
-        onClose={() => setIsOpen(false)}
-        items={items}
-        removeItem={removeItem}
-        total={cartTotal()}
-      />
-    </div>
-  );
+    return {
+      title: title as string,
+      description: description as string,
+      openGraph: {
+        title: title as string,
+        description: description as string,
+        url,
+        images,
+        type: 'website',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: title as string,
+        description: description as string,
+        images: ogImage ? [ogImage] : undefined,
+      },
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
-  return <StoreLayoutInner>{children}</StoreLayoutInner>;
+  return <StoreLayoutClient>{children}</StoreLayoutClient>;
 }

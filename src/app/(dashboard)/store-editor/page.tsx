@@ -47,6 +47,10 @@ interface ProfileForm {
   license_lease_price_usd: string;
   license_exclusive_price_usd: string;
   license_notes: string;
+  // Migration 055 — storefront-root SEO + social share card
+  seo_title: string;
+  seo_description: string;
+  og_image_url: string;
 }
 
 interface PlaylistRow {
@@ -84,6 +88,9 @@ const EMPTY_PROFILE: ProfileForm = {
   license_lease_price_usd: '',
   license_exclusive_price_usd: '',
   license_notes: '',
+  seo_title: '',
+  seo_description: '',
+  og_image_url: '',
 };
 
 const ACCENT_PRESETS = [
@@ -137,10 +144,13 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <Label>{label}</Label>
+      {hint && (
+        <p className="-mt-1 mb-1.5 text-[10px] text-[#5a5142]">{hint}</p>
+      )}
       {children}
     </div>
   );
@@ -429,6 +439,9 @@ export default function StoreEditorPage() {
           license_lease_price_usd: p.license_lease_price_usd != null ? String(p.license_lease_price_usd) : '',
           license_exclusive_price_usd: p.license_exclusive_price_usd != null ? String(p.license_exclusive_price_usd) : '',
           license_notes: p.license_notes ?? '',
+          seo_title: p.seo_title ?? '',
+          seo_description: p.seo_description ?? '',
+          og_image_url: p.og_image_url ?? '',
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -673,6 +686,9 @@ export default function StoreEditorPage() {
         license_lease_price_usd: form.license_lease_price_usd !== '' ? parseFloat(form.license_lease_price_usd) : null,
         license_exclusive_price_usd: form.license_exclusive_price_usd !== '' ? parseFloat(form.license_exclusive_price_usd) : null,
         license_notes: form.license_notes || null,
+        seo_title: form.seo_title || null,
+        seo_description: form.seo_description || null,
+        og_image_url: form.og_image_url || null,
       };
 
       const profileRes = await fetch('/api/profile', {
@@ -1519,6 +1535,56 @@ export default function StoreEditorPage() {
                   placeholder="Shown to buyers on the checkout page — usage terms, credit requirements, etc."
                   className={textareaCls}
                 />
+              </Field>
+            </Section>
+
+            {/* SEO + share card — what shows when /store is shared on
+                social. Mig 055; consumed by /store/layout.tsx. */}
+            <Section
+              id="seo"
+              title="SEO &amp; Share Card"
+              icon={<ImageIcon size={15} />}
+              open={openSections.has('seo')}
+              onToggle={() => toggleSection('seo')}
+            >
+              <p className="text-[11px] text-[#5a5142]">
+                Controls how /store renders in iMessage, Twitter, Discord, and Google search results. All fields optional — if you leave them blank we use your display name + bio + hero image.
+              </p>
+              <Field label="Page title" hint="Shows in browser tabs + search results. Aim for 50–60 chars.">
+                <input
+                  type="text"
+                  value={form.seo_title}
+                  onChange={set('seo_title')}
+                  maxLength={70}
+                  placeholder={`${form.display_name || 'Producer'} — Beat store`}
+                  className={inputCls}
+                />
+                <p className="mt-1 text-[9px] font-mono text-[#3a3328] tabular-nums">{form.seo_title.length}/70</p>
+              </Field>
+              <Field label="Meta description" hint="One paragraph buyers see in social previews. 120–160 chars works best.">
+                <textarea
+                  value={form.seo_description}
+                  onChange={set('seo_description')}
+                  rows={3}
+                  maxLength={180}
+                  placeholder="Modern trap, afrobeats, and remix beats. License lease + exclusive direct, with bundle deals for full projects."
+                  className={textareaCls}
+                />
+                <p className="mt-1 text-[9px] font-mono text-[#3a3328] tabular-nums">{form.seo_description.length}/180</p>
+              </Field>
+              <Field label="Social share image (OG image)" hint="1200×630 PNG/JPG works best. Falls back to your hero image when blank.">
+                <input
+                  type="url"
+                  value={form.og_image_url}
+                  onChange={set('og_image_url')}
+                  placeholder="https://…/your-share-card.png"
+                  className={inputCls}
+                />
+                {form.og_image_url && (
+                  <div className="mt-2 rounded-lg overflow-hidden border border-[#1f1a13] max-w-md">
+                    <img src={form.og_image_url} alt="Share card preview" className="w-full h-auto" />
+                  </div>
+                )}
               </Field>
             </Section>
 
