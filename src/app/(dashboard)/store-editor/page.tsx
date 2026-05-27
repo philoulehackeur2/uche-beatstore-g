@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ShoppingBag, Star,
+  ShoppingBag, Star, Tag, Trash2,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -351,6 +351,27 @@ export default function StoreEditorPage() {
   const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [togglingTrack, setTogglingTrack] = useState<string | null>(null);
+
+  /* Promo codes (mig 047) */
+  interface PromoCode {
+    code: string;
+    discount_percent: number;
+    discount_amount: number;
+    max_uses: number | null;
+    uses_count: number;
+    active: boolean;
+    expires_at: string | null;
+    created_at: string;
+  }
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    kind: 'percent' as 'percent' | 'amount',
+    value: '',
+    max_uses: '',
+    expires_at: '',
+  });
+  const [promoCreating, setPromoCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
@@ -385,16 +406,18 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes, promoRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
           fetch('/api/store'),
           fetch('/api/tracks'),
           fetch('/api/projects'),
+          fetch('/api/promo-codes'),
         ]);
-        const [pd, pld, sd, td, prd] = await Promise.all([
-          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(),
+        const [pd, pld, sd, td, prd, promod] = await Promise.all([
+          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(), promoRes.json(),
         ]);
+        setPromoCodes(promod.codes ?? []);
         // Real published beats for the live preview
         setPreviewTracks((sd.tracks ?? []).slice(0, 6) as PreviewTrack[]);
 
@@ -661,6 +684,76 @@ export default function StoreEditorPage() {
         prev.map((t) => t.id === trackId ? { ...t, store_featured: currentlyFeatured } : t),
       );
       toast.error('Failed to update', err.message);
+    }
+  };
+
+  /* ── Promo code actions ── */
+  const createPromoCode = async () => {
+    if (!promoForm.code.trim()) {
+      toast.error('Pick a code');
+      return;
+    }
+    const value = parseFloat(promoForm.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error('Set a positive discount');
+      return;
+    }
+    setPromoCreating(true);
+    try {
+      const body: Record<string, unknown> = {
+        code: promoForm.code.trim().toUpperCase(),
+        [promoForm.kind === 'percent' ? 'discount_percent' : 'discount_amount']: value,
+      };
+      if (promoForm.max_uses) body.max_uses = parseInt(promoForm.max_uses, 10);
+      if (promoForm.expires_at) body.expires_at = new Date(promoForm.expires_at).toISOString();
+      const res = await fetch('/api/promo-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setPromoCodes((prev) => [data.code, ...prev]);
+      setPromoForm({ code: '', kind: 'percent', value: '', max_uses: '', expires_at: '' });
+      toast.success(`Code ${data.code.code} created`);
+    } catch (err: any) {
+      toast.error('Could not create code', err?.message ?? 'try again');
+    } finally {
+      setPromoCreating(false);
+    }
+  };
+  const togglePromoActive = async (code: string, nextActive: boolean) => {
+    // optimistic
+    setPromoCodes((prev) => prev.map((c) => c.code === code ? { ...c, active: nextActive } : c));
+    try {
+      const res = await fetch(`/api/promo-codes/${encodeURIComponent(code)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: nextActive }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setPromoCodes((prev) => prev.map((c) => c.code === code ? { ...c, active: !nextActive } : c));
+      toast.error('Could not update', err?.message ?? 'try again');
+    }
+  };
+  const deletePromoCode = async (code: string) => {
+    if (!confirm(`Delete promo code "${code}"? This can't be undone.`)) return;
+    const prev = promoCodes;
+    setPromoCodes((p) => p.filter((c) => c.code !== code));
+    try {
+      const res = await fetch(`/api/promo-codes/${encodeURIComponent(code)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      toast.success(`Deleted ${code}`);
+    } catch (err: any) {
+      setPromoCodes(prev);
+      toast.error('Could not delete', err?.message ?? 'try again');
     }
   };
 
@@ -1586,6 +1679,146 @@ export default function StoreEditorPage() {
                   </div>
                 )}
               </Field>
+            </Section>
+
+            {/* Discount codes — promo_codes (mig 047) */}
+            <Section
+              id="promo"
+              title="Discount Codes"
+              icon={<Tag size={15} />}
+              open={openSections.has('promo')}
+              onToggle={() => toggleSection('promo')}
+            >
+              <p className="text-[11px] text-[#5a5142]">
+                Create codes buyers can enter at checkout. Share them in DMs or auto-fill via <code className="font-mono text-[#a08a6a]">/store/checkout?promo=YOUR_CODE</code>.
+              </p>
+
+              {/* Create form */}
+              <div className="rounded-xl border border-[#1f1a13] bg-[#0c0a08] p-4 space-y-3">
+                <Field label="Code">
+                  <input
+                    type="text"
+                    value={promoForm.code}
+                    onChange={(e) => setPromoForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                    placeholder="SUMMER10"
+                    maxLength={40}
+                    className={inputCls}
+                  />
+                </Field>
+                <div className="grid grid-cols-[120px_1fr] gap-3">
+                  <Field label="Type">
+                    <select
+                      value={promoForm.kind}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, kind: e.target.value as 'percent' | 'amount' }))}
+                      className={inputCls}
+                    >
+                      <option value="percent">Percent off</option>
+                      <option value="amount">Flat amount off</option>
+                    </select>
+                  </Field>
+                  <Field label={promoForm.kind === 'percent' ? 'Percent (0–100)' : 'Amount (USD)'}>
+                    <input
+                      type="number"
+                      step={promoForm.kind === 'percent' ? '1' : '0.01'}
+                      min="0"
+                      max={promoForm.kind === 'percent' ? '100' : undefined}
+                      value={promoForm.value}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, value: e.target.value }))}
+                      placeholder={promoForm.kind === 'percent' ? '10' : '5.00'}
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Max uses" hint="Leave blank for unlimited.">
+                    <input
+                      type="number"
+                      min="1"
+                      value={promoForm.max_uses}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, max_uses: e.target.value }))}
+                      placeholder="∞"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Expires" hint="Optional cut-off.">
+                    <input
+                      type="datetime-local"
+                      value={promoForm.expires_at}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, expires_at: e.target.value }))}
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+                <button
+                  type="button"
+                  onClick={createPromoCode}
+                  disabled={promoCreating}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#D4BFA0] text-black text-[12px] font-bold uppercase tracking-wider hover:bg-[#E8D8B8] transition-colors disabled:opacity-50"
+                >
+                  {promoCreating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                  Create code
+                </button>
+              </div>
+
+              {/* Existing codes */}
+              {promoCodes.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">Active &amp; recent ({promoCodes.length})</p>
+                  {promoCodes.map((c) => {
+                    const expired = c.expires_at && new Date(c.expires_at).getTime() < Date.now();
+                    const capped = c.max_uses != null && c.uses_count >= c.max_uses;
+                    const dead = expired || capped || !c.active;
+                    const discountLabel = c.discount_percent > 0
+                      ? `${c.discount_percent}% off`
+                      : `$${c.discount_amount} off`;
+                    return (
+                      <div
+                        key={c.code}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                          dead ? 'bg-[#0a0907]/60 border-[#1a160f] opacity-65' : 'bg-[#0e140e] border-[#6DC6A4]/20'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <code className="text-[13px] font-mono font-bold text-[#E8DCC8] tracking-wide">{c.code}</code>
+                            <span className="text-[10px] font-mono text-[#a08a6a]">{discountLabel}</span>
+                            {expired && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-300">Expired</span>}
+                            {capped && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">Used up</span>}
+                            {!c.active && !expired && !capped && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#1a160f] border border-[#2d2620] text-[#5a5142]">Paused</span>}
+                          </div>
+                          <p className="text-[10px] font-mono text-[#5a5142] mt-0.5">
+                            {c.uses_count} / {c.max_uses ?? '∞'} uses
+                            {c.expires_at && ` · expires ${new Date(c.expires_at).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => togglePromoActive(c.code, !c.active)}
+                          disabled={!!expired || !!capped}
+                          title={c.active ? 'Pause this code' : 'Reactivate'}
+                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                            c.active && !expired && !capped ? 'bg-[#6DC6A4]' : 'bg-[#1f1a13]'
+                          } disabled:opacity-40`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+                            c.active && !expired && !capped ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                        <button
+                          onClick={() => deletePromoCode(c.code)}
+                          title="Delete"
+                          className="w-7 h-7 rounded-md border border-[#1f1a13] flex items-center justify-center text-[#5a5142] hover:text-red-400 hover:border-red-900/40 transition-colors"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-[#1f1a13] py-6 text-center text-[#5a5142] text-[12px]">
+                  No codes yet — make one above.
+                </div>
+              )}
             </Section>
 
             {/* ⑤ License Tiers */}
