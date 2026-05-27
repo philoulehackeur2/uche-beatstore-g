@@ -213,16 +213,17 @@ export default function StoreProjectPage({
               <h1 className="mt-1.5 text-3xl md:text-5xl font-semibold text-white leading-[1.05] tracking-tight font-heading break-words">
                 {project.name}
               </h1>
-              <div className="mt-3 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
-                {creator?.display_name && (
+              {creator?.display_name && (
+                <div className="mt-3">
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-white/85 font-medium hover:text-white transition-colors"
+                    className="text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-words"
                   >
                     {creator.display_name}
                   </Link>
-                )}
-                {creator?.display_name && <span className="text-white/30">·</span>}
+                </div>
+              )}
+              <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
                 <Headphones size={13} className="text-white/40" />
                 <span>{tracks.length} {tracks.length === 1 ? 'song' : 'songs'} Total</span>
                 {totalDuration > 0 && (
@@ -278,7 +279,7 @@ export default function StoreProjectPage({
               {project.description && (
                 <div className="px-6 md:px-10 py-6 border-b border-white/[0.05]">
                   <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-2">About this project</p>
-                  <p className="text-[13px] text-white/75 leading-relaxed whitespace-pre-line">
+                  <p className="text-[13px] text-[#a08a6a] leading-relaxed whitespace-pre-line max-w-3xl">
                     {project.description}
                   </p>
                 </div>

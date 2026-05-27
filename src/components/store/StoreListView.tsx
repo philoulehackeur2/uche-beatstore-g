@@ -17,7 +17,7 @@
 import { useMemo, useState } from 'react';
 import {
   Music, Play, Pause, Heart, MoreHorizontal, ShoppingBag, Copy,
-  Plus, Download, Headphones, Clock,
+  Plus, Download, Clock,
 } from 'lucide-react';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
@@ -75,10 +75,10 @@ export function StoreListView({
       />
 
       {/* Header row */}
-      <div className="relative hidden md:grid grid-cols-[44px_minmax(0,1.4fr)_minmax(0,1fr)_72px_240px_28px_28px] gap-4 px-5 md:px-7 py-3 border-b border-white/[0.05] text-[10px] font-mono uppercase tracking-[0.18em] text-white/40">
+      <div className="relative hidden md:grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-4 px-4 md:px-6 py-2.5 border-b border-white/[0.05] text-[10px] font-mono uppercase tracking-[0.18em] text-white/40">
         <span />
         <span>Title</span>
-        <span>Tag · Vibe</span>
+        <span>Tags · Rating</span>
         <span className="text-right">Time</span>
         <span className="text-right pr-1">Buy</span>
         <span />
@@ -94,10 +94,6 @@ export function StoreListView({
           const lp = priceFor(t, 'lease');
           const ep = priceFor(t, 'exclusive');
           const wishlisted = isWishlisted(t.id);
-          const topTag = (t.tags ?? []).find((x) => x.category === 'genre')?.tag
-            ?? (t.tags ?? []).find((x) => x.category === 'mood')?.tag
-            ?? t.type;
-
           return (
             <li
               key={t.id}
@@ -116,50 +112,68 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(0,1.4fr)_minmax(0,1fr)_72px_240px_28px_28px] gap-4 items-center px-5 md:px-7 py-3.5 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] md:grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-2 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
               <div
                 data-row-action
                 onClick={(e) => { e.stopPropagation(); onPlay(t); }}
-                className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#0a0907] border border-white/[0.06] shrink-0 cursor-pointer"
+                className="relative w-9 h-9 rounded-md overflow-hidden bg-[#0a0907] border border-white/[0.06] shrink-0 cursor-pointer"
               >
                 {t.cover_url
                   ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={13} /></div>}
                 {(isHov || isCur) && (
                   <span
                     aria-hidden
                     className="absolute inset-0 flex items-center justify-center bg-black/55 text-white"
                   >
                     {isCurPlaying
-                      ? <Pause size={13} fill="currentColor" />
-                      : <Play size={13} fill="currentColor" className="ml-0.5" />}
+                      ? <Pause size={12} fill="currentColor" />
+                      : <Play size={12} fill="currentColor" className="ml-0.5" />}
                   </span>
                 )}
               </div>
 
-              {/* Title */}
+              {/* Title — meta line shows BPM/key only (no type label) so the
+                  visible info is title + tags + rating + price. */}
               <div className="min-w-0">
                 <p
-                  className="text-[15px] truncate font-medium"
+                  className="text-[14px] truncate font-medium"
                   style={isCur || isPreview ? { color: accentColor } : { color: '#E8DCC8' }}
                 >
                   {t.title}
                 </p>
-                <p className="text-[11px] text-white/45 truncate uppercase tracking-[0.15em] font-mono">
-                  {t.type}{t.bpm ? ` · ${t.bpm} BPM` : ''}{t.key ? ` · ${t.key}${t.scale === 'minor' ? 'm' : ''}` : ''}
-                </p>
+                {(t.bpm != null || t.key) && (
+                  <p className="text-[10px] text-white/45 truncate uppercase tracking-[0.15em] font-mono">
+                    {[t.bpm ? `${t.bpm} BPM` : null, t.key ? `${t.key}${t.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
 
-              {/* Tag + vibe */}
-              <div className="hidden md:flex items-center gap-3 min-w-0">
-                <span className="truncate font-medium" style={{ color: accentColor }}>
-                  #{topTag}
-                </span>
+              {/* Tags + rating — surface the actual genre/mood tags (up to
+                  two) so the buyer sees the vibe at a glance, and the
+                  star rating next to them. Skip the bare track type
+                  (e.g. "instrumental") — it's noise here. */}
+              <div className="hidden md:flex items-center gap-2 min-w-0">
+                {(t.tags ?? [])
+                  .filter((x) => x.category === 'genre' || x.category === 'mood')
+                  .slice(0, 2)
+                  .map((tag) => (
+                    <span
+                      key={`${tag.category}-${tag.tag}`}
+                      className="text-[11px] truncate font-medium"
+                      style={{ color: tag.category === 'genre' ? accentColor : 'rgba(255,255,255,0.55)' }}
+                    >
+                      #{tag.tag}
+                    </span>
+                  ))}
+                {(t.tags ?? []).filter((x) => x.category === 'genre' || x.category === 'mood').length === 0 && (
+                  <span className="text-[10px] font-mono text-white/35 truncate">—</span>
+                )}
                 {t.rating != null && Number(t.rating) > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono text-[#c8a84b] shrink-0">
+                  <span className="flex items-center gap-0.5 text-[11px] font-mono text-[#c8a84b] shrink-0 ml-auto">
                     ★ {Number(t.rating).toFixed(1)}
                   </span>
                 )}
@@ -279,9 +293,6 @@ export function StoreListView({
           );
         })}
       </ul>
-      {/* Suppress unused-import linter while keeping the icon available if
-          we want to add a streamed-listens column later. */}
-      <span className="hidden"><Headphones aria-hidden /></span>
     </div>
   );
 }

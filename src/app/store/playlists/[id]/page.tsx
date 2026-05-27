@@ -294,16 +294,17 @@ export default function PlaylistPage({
               <h1 className="mt-1.5 text-3xl md:text-5xl font-semibold text-white leading-[1.05] tracking-tight font-heading break-words">
                 {playlist.name}
               </h1>
-              <div className="mt-3 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
-                {creator?.display_name && (
+              {creator?.display_name && (
+                <div className="mt-3">
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-white/85 font-medium hover:text-white transition-colors"
+                    className="text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-words"
                   >
                     {creator.display_name}
                   </Link>
-                )}
-                {creator?.display_name && <span className="text-white/30">·</span>}
+                </div>
+              )}
+              <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
                 <Headphones size={13} className="text-white/40" />
                 <span>{tracks.length} {tracks.length === 1 ? 'song' : 'songs'} Total</span>
                 {totalDuration > 0 && (
