@@ -14,6 +14,7 @@
 import { PlayerBar } from '@/components/player/PlayerBar';
 import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
 import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
+import { InstallAppButton } from '@/components/store/InstallAppButton';
 import { useCart } from '@/hooks/useCart';
 
 export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
       <PlayerBar />
       <MediaSessionBridge />
       <FloatingCartButton />
+      <InstallAppButton />
       <CartDrawer
         open={isOpen}
         onClose={() => setIsOpen(false)}

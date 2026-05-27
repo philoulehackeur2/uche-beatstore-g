@@ -3,7 +3,7 @@
   "name": "U2C Beatstore",
   "short_name": "Beatstore",
   "description": "U2C's beat library, projects, sends, and studio — all in one place.",
-  "start_url": "/library",
+  "start_url": "/store",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
