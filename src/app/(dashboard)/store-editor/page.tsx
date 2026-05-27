@@ -539,6 +539,55 @@ export default function StoreEditorPage() {
   };
   const handleProjectDragEnd = () => { projectDragIdx.current = null; };
 
+  /* ── Drag-reorder for listed beats (writes tracks.store_sort_order) ──
+     Only the live (store_listed=true) rows are draggable. Drafts keep
+     their position. After a drag ends, we PATCH every reordered row
+     with a 0-based store_sort_order so /store picks them up. */
+  const trackDragIdx = useRef<number | null>(null);
+  const handleTrackDragStart = (idx: number) => { trackDragIdx.current = idx; };
+  const handleTrackDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    const from = trackDragIdx.current;
+    if (from == null || from === idx) return;
+    setAllTracks((prev) => {
+      // Only reorder within the listed-track subset visible at top of the list.
+      const listed = prev.filter((t) => t.store_listed);
+      const drafts = prev.filter((t) => !t.store_listed);
+      if (from >= listed.length || idx >= listed.length) return prev;
+      const next = [...listed];
+      const [item] = next.splice(from, 1);
+      next.splice(idx, 0, item);
+      trackDragIdx.current = idx;
+      return [
+        ...next.map((t, i) => ({ ...t, store_sort_order: i })),
+        ...drafts,
+      ];
+    });
+  };
+  const handleTrackDragEnd = async () => {
+    const idx = trackDragIdx.current;
+    trackDragIdx.current = null;
+    if (idx == null) return;
+    // Persist the new order. We send a small PATCH per row — listed
+    // beats only — so the store_sort_order column on /store is the
+    // single source of truth.
+    const listed = allTracks.filter((t) => t.store_listed);
+    try {
+      await Promise.all(
+        listed.map((t) =>
+          fetch(`/api/tracks/${t.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store_sort_order: t.store_sort_order }),
+          }),
+        ),
+      );
+      toast.success('Beat order saved');
+    } catch (err: any) {
+      toast.error('Order save failed', err?.message ?? 'try again');
+    }
+  };
+
   /* ── Track listing toggle ── */
   const toggleTrackListed = async (trackId: string, currentlyListed: boolean) => {
     setTogglingTrack(trackId);
@@ -1347,22 +1396,40 @@ export default function StoreEditorPage() {
                 </div>
               ) : (
                 <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
-                  {allTracks
-                    .filter((t) =>
-                      !trackSearch.trim() ||
-                      t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
-                      (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
-                      String(t.bpm ?? '').includes(trackSearch),
-                    )
-                    .map((t) => (
+                  {(() => {
+                    // Index map (within the *listed* subset) so the drag
+                    // handlers know which slot a row occupies. Drafts are
+                    // appended below and not draggable.
+                    const listedIds: string[] = allTracks
+                      .filter((x) => x.store_listed)
+                      .map((x) => x.id);
+                    return allTracks
+                      .filter((t) =>
+                        !trackSearch.trim() ||
+                        t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
+                        (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
+                        String(t.bpm ?? '').includes(trackSearch),
+                      )
+                      .map((t) => {
+                        const listedIdx = listedIds.indexOf(t.id);
+                        const isListed = listedIdx >= 0;
+                        return (
                       <div
                         key={t.id}
+                        draggable={isListed}
+                        onDragStart={() => { if (isListed) handleTrackDragStart(listedIdx); }}
+                        onDragOver={(e) => { if (isListed) handleTrackDragOver(e, listedIdx); }}
+                        onDragEnd={handleTrackDragEnd}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
                           t.store_listed
-                            ? 'bg-[#0e140e] border-[#6DC6A4]/20 hover:border-[#6DC6A4]/35'
+                            ? 'bg-[#0e140e] border-[#6DC6A4]/20 hover:border-[#6DC6A4]/35 cursor-grab active:cursor-grabbing'
                             : 'bg-[#0a0907] border-[#1a160f] hover:border-[#1f1a13]'
                         }`}
                       >
+                        {/* Drag handle — only on listed rows */}
+                        {isListed && (
+                          <GripVertical size={13} className="text-[#3a3328] hover:text-[#6a5d4a] shrink-0" />
+                        )}
                         {/* Cover art */}
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#1a160f] border border-[#2d2620] shrink-0">
                           {t.cover_url
@@ -1428,7 +1495,9 @@ export default function StoreEditorPage() {
                           }`} />
                         </button>
                       </div>
-                    ))}
+                        );
+                      });
+                  })()}
                 </div>
               )}
             </Section>
