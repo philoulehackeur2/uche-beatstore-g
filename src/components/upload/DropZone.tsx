@@ -220,29 +220,24 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
             )}
           </div>
         ) : (
-          /* Default idle/drag state */
-          <div className="py-10 px-6 flex flex-col items-center justify-center text-center gap-5">
+          /* Default idle/drag state — compact single-row layout */
+          <div className="py-4 px-5 flex items-center gap-4 text-left">
             <div className={`
-              w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500
+              w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300
               ${isDragActive
-                ? 'bg-[#2A2418] text-[#D4BFA0] scale-110 shadow-[0_0_24px_rgba(212,191,160,0.15)]'
+                ? 'bg-[#2A2418] text-[#D4BFA0] scale-110'
                 : 'bg-[#1a160f] text-[#4a4338] group-hover:bg-[#2A2418] group-hover:text-[#D4BFA0]'}
             `}>
-              <Upload size={26} className="transition-transform group-hover:scale-110 duration-300" />
+              <Upload size={16} className="transition-transform group-hover:scale-110 duration-300" />
             </div>
-            <div>
-              <h3 className="text-[13px] font-black uppercase tracking-[0.25em] text-[#E8DCC8] mb-1">
-                {isDragActive ? 'Drop to ingest' : 'Deploy audio'}
-              </h3>
-              <p className="text-[9px] font-mono uppercase tracking-widest text-[#3a3328]">
-                WAV · FLAC · AIFF · MP3 · M4A · OGG · up to 500 MB
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#E8DCC8]">
+                {isDragActive ? 'Drop to ingest' : 'Drop beats or click to upload'}
+              </p>
+              <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">
+                WAV · FLAC · AIFF · MP3 · M4A · up to 500 MB
               </p>
             </div>
-            {/* Corner marks */}
-            <div className="absolute top-3 left-3 w-3 h-3 border-t border-l border-[#1f1a13] group-hover:border-[#D4BFA0]/20 transition-colors" />
-            <div className="absolute top-3 right-3 w-3 h-3 border-t border-r border-[#1f1a13] group-hover:border-[#D4BFA0]/20 transition-colors" />
-            <div className="absolute bottom-3 left-3 w-3 h-3 border-b border-l border-[#1f1a13] group-hover:border-[#D4BFA0]/20 transition-colors" />
-            <div className="absolute bottom-3 right-3 w-3 h-3 border-b border-r border-[#1f1a13] group-hover:border-[#D4BFA0]/20 transition-colors" />
           </div>
         )}
       </div>

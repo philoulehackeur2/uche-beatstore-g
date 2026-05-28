@@ -13,6 +13,11 @@ interface TeamMember {
   name: string;
 }
 
+interface Prefs {
+  lossless_exports: boolean;
+  auto_tagging: boolean;
+}
+
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -21,10 +26,43 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<'admin' | 'collaborator'>('collaborator');
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>({ lossless_exports: true, auto_tagging: false });
 
   useEffect(() => {
-    setLoading(false);
+    (async () => {
+      try {
+        const [teamRes, profileRes] = await Promise.all([
+          fetch('/api/team'),
+          fetch('/api/profile'),
+        ]);
+        if (teamRes.ok) {
+          const j = await teamRes.json();
+          setTeam(j.members ?? []);
+        }
+        if (profileRes.ok) {
+          const j = await profileRes.json();
+          const p = j.profile;
+          if (p) {
+            setPrefs({
+              lossless_exports: p.lossless_exports ?? true,
+              auto_tagging: p.auto_tagging ?? false,
+            });
+          }
+        }
+      } catch {/* silent */} finally {
+        setLoading(false);
+      }
+    })();
   }, []);
+
+  const savePrefs = async (next: Prefs) => {
+    setPrefs(next);
+    await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(next),
+    }).catch(() => undefined);
+  };
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,8 +231,18 @@ export default function SettingsPage() {
               <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#E8DCC8]">Preferences</h2>
             </div>
             <div className="border border-[#1a160f] rounded-2xl divide-y divide-[#161310] overflow-hidden">
-              <ToggleRow title="Lossless exports" description="Prefer WAV/AIFF for shared links" defaultOn />
-              <ToggleRow title="Auto-tagging" description="AI analysis tags on upload" defaultOn={false} />
+              <ToggleRow
+                title="Lossless exports"
+                description="Prefer WAV/AIFF for shared links"
+                on={prefs.lossless_exports}
+                onToggle={(v) => savePrefs({ ...prefs, lossless_exports: v })}
+              />
+              <ToggleRow
+                title="Auto-tagging"
+                description="AI analysis tags on upload"
+                on={prefs.auto_tagging}
+                onToggle={(v) => savePrefs({ ...prefs, auto_tagging: v })}
+              />
             </div>
           </section>
         </div>
@@ -204,10 +252,9 @@ export default function SettingsPage() {
   );
 }
 
-function ToggleRow({ title, description, defaultOn = false }: { title: string; description: string; defaultOn?: boolean }) {
-  const [on, setOn] = useState(defaultOn);
+function ToggleRow({ title, description, on, onToggle }: { title: string; description: string; on: boolean; onToggle: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between px-6 py-4 bg-[#14110d]/50 hover:bg-[#14110d] transition-colors cursor-pointer" onClick={() => setOn(!on)}>
+    <div className="flex items-center justify-between px-6 py-4 bg-[#14110d]/50 hover:bg-[#14110d] transition-colors cursor-pointer" onClick={() => onToggle(!on)}>
       <div>
         <p className="text-[12px] font-medium text-[#E8DCC8]">{title}</p>
         <p className="text-[10px] text-[#5a5142] mt-0.5">{description}</p>

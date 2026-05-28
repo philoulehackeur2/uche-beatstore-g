@@ -77,15 +77,15 @@ export default function AccountSignInPage() {
           Sign in or create account
         </h1>
         <p className="mt-3 text-[13px] text-[#a08a6a] leading-relaxed">
-          Enter your email — we'll send a one-tap sign-in link. Your purchases, favorites and playlists follow you across devices.
+          Enter your email and we'll send you a one-click sign-in. No password needed — first-time emails create your account automatically.
         </p>
 
         {sent ? (
           <div className="mt-8 rounded-2xl border border-[#6DC6A4]/25 bg-[#0e1f17]/40 px-5 py-6 text-center">
             <CheckCircle2 size={26} className="text-[#6DC6A4] mx-auto mb-3" />
-            <p className="text-[14px] font-medium text-[#E8DCC8] mb-1">Check your inbox</p>
+            <p className="text-[14px] font-medium text-[#E8DCC8] mb-1">Check your email</p>
             <p className="text-[11px] text-[#a08a6a] leading-relaxed">
-              We sent a sign-in link to <span className="text-[#E8DCC8]">{email.trim()}</span>. Click it on any device to land back in your account.
+              We sent a sign-in button to <span className="text-[#E8DCC8]">{email.trim()}</span>. Tap it on any device to open your account.
             </p>
             <button
               onClick={() => { setSent(false); setEmail(''); }}

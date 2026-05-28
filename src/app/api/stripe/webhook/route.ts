@@ -772,6 +772,26 @@ export async function POST(req: NextRequest) {
             items: resolvedLineItems.length,
             exclusive: hasAnyExclusive,
           });
+
+          // ── Notification insert ──────────────────────────────────
+          if (meta.seller_user_id) {
+            const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
+            const firstTitle = resolvedLineItems[0]?.title ?? 'beat';
+            const extra = resolvedLineItems.length > 1 ? ` +${resolvedLineItems.length - 1} more` : '';
+            await admin.from('notifications').insert({
+              user_id: meta.seller_user_id,
+              kind: 'purchase',
+              title: `New sale — ${firstTitle}${extra} ($${amountUsd})`,
+              body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
+              data: {
+                session_id: session.id,
+                amount_usd: parseFloat(amountUsd),
+                buyer_email: meta.buyer_email || session.customer_email,
+              },
+            }).then(({ error: ne }) => {
+              if (ne) log.warn('notification insert failed', { error: ne.message });
+            });
+          }
         }
         break;
       }
@@ -797,6 +817,30 @@ export async function POST(req: NextRequest) {
         // If refunding an exclusive, optionally re-list the track.
         // We do this on a best-effort basis — if the seller has already
         // manually relisted it, this is a no-op.
+        // ── Notification for refund / dispute ───────────────────────
+        try {
+          const { data: purchaseForNotif } = await admin
+            .from('license_purchases')
+            .select('seller_user_id, amount_usd, buyer_email')
+            .eq('stripe_payment_intent', charge.payment_intent)
+            .maybeSingle();
+          if ((purchaseForNotif as any)?.seller_user_id) {
+            const kindLabel = event.type === 'charge.refunded' ? 'refund' : 'dispute';
+            const amtLabel = `$${Number((purchaseForNotif as any).amount_usd ?? 0).toFixed(2)}`;
+            await admin.from('notifications').insert({
+              user_id: (purchaseForNotif as any).seller_user_id,
+              kind: kindLabel,
+              title: event.type === 'charge.refunded'
+                ? `Refund issued — ${amtLabel}`
+                : `Dispute opened — ${amtLabel}`,
+              body: (purchaseForNotif as any).buyer_email ?? undefined,
+              data: { payment_intent: charge.payment_intent, amount_usd: (purchaseForNotif as any).amount_usd },
+            });
+          }
+        } catch (ne) {
+          log.warn('notification insert failed on refund/dispute', { error: errorMessage(ne) });
+        }
+
         if (event.type === 'charge.refunded') {
           try {
             const { data: purchase } = await admin

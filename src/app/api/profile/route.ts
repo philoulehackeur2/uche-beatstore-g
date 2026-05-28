@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
       license_template_md,
       share_card_style,
       share_video_style,
+      lossless_exports,
+      auto_tagging,
     } = body;
 
     const payload = {
@@ -71,6 +73,9 @@ export async function POST(req: NextRequest) {
       // Share template styles (migration 062)
       share_card_style: share_card_style || null,
       share_video_style: share_video_style || null,
+      // Workspace preferences (migration 063)
+      ...(lossless_exports !== undefined && { lossless_exports: Boolean(lossless_exports) }),
+      ...(auto_tagging !== undefined && { auto_tagging: Boolean(auto_tagging) }),
     };
 
     const result = await updateCreatorProfile(payload);
