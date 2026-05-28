@@ -776,12 +776,12 @@ export async function POST(req: NextRequest) {
           // ── Notification insert ──────────────────────────────────
           if (meta.seller_user_id) {
             const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
-            const firstTitle = resolvedLineItems[0]?.title ?? 'beat';
-            const extra = resolvedLineItems.length > 1 ? ` +${resolvedLineItems.length - 1} more` : '';
+            const beatCount = resolvedLineItems.length;
+            const beatLabel = beatCount === 1 ? '1 beat' : `${beatCount} beats`;
             await admin.from('notifications').insert({
               user_id: meta.seller_user_id,
               kind: 'purchase',
-              title: `New sale — ${firstTitle}${extra} ($${amountUsd})`,
+              title: `New sale — ${beatLabel} ($${amountUsd})`,
               body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
               data: {
                 session_id: session.id,
