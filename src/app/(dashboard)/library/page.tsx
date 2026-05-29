@@ -467,70 +467,60 @@ export default function LibraryPage() {
             cover, only flatter and wider. Filter chips and the secondary
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
-        {/* ── Hero ───────────────────────────────────────────────── */}
-        <div className="relative mb-5 rounded-[28px] overflow-hidden border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] p-5 sm:p-7 transition-all duration-700">
+        {/* ── Hero — Spotify-style: large cover + blurred backdrop ── */}
+        <div className="relative mb-5 rounded-[28px] overflow-hidden border border-white/[0.06] shadow-[0_24px_60px_rgba(0,0,0,0.6)] transition-all duration-700" style={{ minHeight: 160 }}>
+          {/* Full-bleed blurred backdrop from cover art */}
           <div
-            className="absolute inset-0 z-0 bg-cover bg-center opacity-20 blur-3xl scale-110 transition-all duration-700"
-            style={{ backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')" }}
+            className="absolute inset-0 z-0 bg-cover bg-center scale-110 transition-all duration-700"
+            style={{
+              backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')",
+              filter: 'blur(48px) saturate(1.3)',
+              opacity: heroCoverUrl ? 0.55 : 0.3,
+            }}
           />
-          <div className="absolute inset-0 z-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(212,191,160,0.08) 0%, rgba(20,17,13,0.5) 60%, rgba(20,17,13,0.85) 100%)' }} />
+          {/* Dark overlay so text stays readable */}
+          <div className="absolute inset-0 z-0" style={{ background: 'linear-gradient(135deg, rgba(10,9,7,0.45) 0%, rgba(10,9,7,0.75) 60%, rgba(10,9,7,0.92) 100%)' }} />
 
-          <div className="relative z-10 flex items-center gap-5 md:gap-7">
-            {/* Vinyl — spins while playing, updates to currentTrack cover */}
-            <div className="relative w-[80px] h-[80px] sm:w-[108px] sm:h-[108px] rounded-full bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center">
+          <div className="relative z-10 flex items-end gap-5 md:gap-7 p-5 sm:p-7">
+            {/* Square cover tile — like Spotify playlist header */}
+            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/[0.08] bg-[#14110d] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
               {heroCoverUrl ? (
-                <>
-                  <img src={heroCoverUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none" />
-                  <div className="relative w-full h-full rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
-                    <div className="absolute inset-1 rounded-full border border-white/[0.03]" />
-                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
-                    <div className="absolute inset-5 rounded-full border border-white/[0.01]" />
-                    <div className={`w-[52%] aspect-square rounded-full overflow-hidden border-2 border-[#0a0907] relative ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
-                      <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-[#0a0907] border border-black/40 shadow-inner" style={{ width: 8, height: 8, top: '50%', left: '50%', transform: 'translate(-50%,-50%)', position: 'absolute' }} />
-                    </div>
-                  </div>
-                </>
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-[#D4BFA0]/20 to-[#3a2a8a]/20 flex items-center justify-center">
-                  <Disc3 size={28} className={`text-white/50 ${isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''}`} strokeWidth={1} />
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#D4BFA0]/20 to-[#1a1a3a]/30">
+                  <Disc3 size={36} className={`text-white/30 ${isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''}`} strokeWidth={0.75} />
                 </div>
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-1">
-                {currentTrack ? `Now playing` : 'Your workspace'}
+            <div className="flex-1 min-w-0 pb-1">
+              <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/50 mb-1.5">
+                {currentTrack ? 'Now playing' : 'Your workspace'}
               </p>
-              <h1 className="text-[26px] sm:text-[38px] font-bold tracking-tight text-white leading-none font-heading">
+              <h1 className="text-[24px] sm:text-[36px] md:text-[46px] font-bold tracking-tight text-white leading-none font-heading mb-2 drop-shadow-lg">
                 {currentTrack?.title ?? 'Home'}
               </h1>
-              {currentTrack ? (
-                <p className="text-[11px] font-mono text-[#a08a6a] mt-1">
-                  {currentTrack.bpm && `${currentTrack.bpm} BPM`}
-                  {currentTrack.bpm && currentTrack.key && ' · '}
-                  {currentTrack.key && `${currentTrack.key}${currentTrack.scale === 'minor' ? 'm' : ''}`}
-                </p>
-              ) : (
-                <p className="text-[11px] font-mono text-[#6a5d4a] mt-1">
-                  {tracks.length} track{tracks.length !== 1 ? 's' : ''}{totalDurationLabel && ` · ${totalDurationLabel}`}
-                </p>
-              )}
-              <div className="flex items-center gap-2 mt-4 flex-wrap">
-                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-2 px-5 py-2 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 transition-all">
-                  <Play size={12} fill="currentColor" className="ml-0.5" />
+              <p className="text-[11px] font-mono text-white/50 mb-4">
+                {currentTrack
+                  ? [currentTrack.bpm && `${currentTrack.bpm} BPM`, currentTrack.key && `${currentTrack.key}${currentTrack.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ')
+                  : `${tracks.length} track${tracks.length !== 1 ? 's' : ''}${totalDurationLabel ? ` · ${totalDurationLabel}` : ''}`}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black text-[12px] font-bold hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg">
+                  <Play size={13} fill="currentColor" className="ml-0.5" />
                   Play all
                 </button>
-                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.08] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.1] disabled:opacity-40 transition-colors">
+                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.10] border border-white/[0.12] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.18] disabled:opacity-40 transition-colors backdrop-blur-sm">
                   <Shuffle size={12} />
                   Shuffle
                 </button>
                 {stale.length > 0 && (
-                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] text-[12px] font-medium hover:text-[#E8D8B8] hover:border-[#D4BFA0]/30 disabled:opacity-40 transition-colors">
+                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[12px] font-medium hover:bg-white/[0.12] disabled:opacity-40 transition-colors">
                     {bulkAnalyzing ? <><Loader2 size={11} className="animate-spin" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={11} /><span>Analyze {stale.length}</span></>}
                   </button>
                 )}
-                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[11px] font-medium px-4 py-2 rounded-full transition-colors ml-auto ${selectMode ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]' : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8]'}`}>
+                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[11px] font-medium px-4 py-2.5 rounded-full transition-colors ml-auto backdrop-blur-sm ${selectMode ? 'bg-white/[0.15] border border-white/[0.20] text-white' : 'bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white'}`}>
                   {selectMode ? 'Done' : 'Select'}
                 </button>
               </div>
@@ -562,56 +552,58 @@ export default function LibraryPage() {
         {/* ── Dashboard — Spotify-style home content ────────────── */}
         <div className="mb-6 space-y-4">
 
-          {/* Row A: Large Spotify-style content tiles — 2 cols mobile, 4 desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {/* Row A: Spotify pinned-style grid — 2 per row on mobile, 4 on md */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {([
               {
                 href: '/store-editor',
                 label: 'Your Store',
-                sub: `${listedTracks.length} beats listed`,
-                icon: <Store size={16} />,
+                sub: `${listedTracks.length} listed`,
+                icon: <Store size={15} />,
                 accent: '#9d95e8',
                 cover: listedTracks.find((t: any) => t.cover_url)?.cover_url ?? null,
               },
               {
                 href: '/projects',
                 label: 'Projects',
-                sub: 'Active sessions',
-                icon: <FolderOpen size={16} />,
+                sub: 'Sessions',
+                icon: <FolderOpen size={15} />,
                 accent: '#D4BFA0',
-                cover: null,
+                cover: tracks.filter((t: any) => t.cover_url)[1]?.cover_url ?? null,
               },
               {
                 href: '/sales',
                 label: 'Sales',
-                sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} gross` : 'Revenue',
-                icon: <ShoppingBag size={16} />,
+                sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'Revenue',
+                icon: <ShoppingBag size={15} />,
                 accent: '#6DC6A4',
-                cover: null,
+                cover: tracks.filter((t: any) => t.cover_url)[2]?.cover_url ?? null,
               },
               {
                 href: '/analytics',
                 label: 'Analytics',
-                sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Stats & charts',
-                icon: <BarChart2 size={16} />,
+                sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Engagement',
+                icon: <BarChart2 size={15} />,
                 accent: '#c8a84b',
-                cover: null,
+                cover: tracks.filter((t: any) => t.cover_url)[3]?.cover_url ?? null,
               },
             ] as const).map(({ href, label, sub, icon, accent, cover }) => (
-              <Link key={href} href={href} className="group relative flex items-center gap-3 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1a160f] overflow-hidden transition-all hover:border-[#2d2620] hover:shadow-lg">
-                {/* Cover art or icon block */}
-                <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center overflow-hidden rounded-l-xl"
-                  style={{ backgroundColor: `${accent}22` }}>
+              <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-[#2d2620] hover:shadow-xl">
+                {/* Square cover — left quarter of the card */}
+                <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${accent}18` }}>
                   {cover
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={cover} alt="" className="w-full h-full object-cover" />
                     : <span style={{ color: accent }}>{icon}</span>}
                 </div>
-                <div className="flex-1 min-w-0 py-3 pr-3">
-                  <p className="text-[12px] font-semibold text-[#E8DCC8] truncate">{label}</p>
-                  <p className="text-[10px] font-mono text-[#5a5142] mt-0.5 truncate">{sub}</p>
+                <div className="flex-1 min-w-0 px-3 py-3.5">
+                  <p className="text-[12px] font-bold text-[#E8DCC8] truncate leading-tight">{label}</p>
+                  <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">{sub}</p>
                 </div>
-                <Play size={14} className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: accent }} fill="currentColor" />
+                {/* Hover play dot */}
+                <div className="absolute right-2.5 bottom-2.5 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100" style={{ backgroundColor: accent }}>
+                  <Play size={10} fill="#000" className="text-black ml-0.5" />
+                </div>
               </Link>
             ))}
           </div>

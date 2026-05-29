@@ -109,23 +109,26 @@ export default function SalesPage() {
   // ── Derived KPIs ───────────────────────────────────────────────
   const kpis = useMemo(() => {
     const now = Date.now();
-    const ms7  = 7  * 24 * 60 * 60 * 1000;
+    const ms7  =  7 * 24 * 60 * 60 * 1000;
     const ms30 = 30 * 24 * 60 * 60 * 1000;
+    const ms90 = 90 * 24 * 60 * 60 * 1000;
     const paid = sales.filter((s) => s.status === 'paid');
     const rev7  = paid.filter((s) => now - new Date(s.created_at).getTime() < ms7 ).reduce((a, s) => a + (s.amount_usd ?? 0), 0);
     const rev30 = paid.filter((s) => now - new Date(s.created_at).getTime() < ms30).reduce((a, s) => a + (s.amount_usd ?? 0), 0);
+    const rev90 = paid.filter((s) => now - new Date(s.created_at).getTime() < ms90).reduce((a, s) => a + (s.amount_usd ?? 0), 0);
     const leases     = paid.filter((s) => s.license_type === 'lease').length;
     const exclusives = paid.filter((s) => s.license_type === 'exclusive').length;
+    const avgSale    = paid.length > 0 ? paid.reduce((a, s) => a + (s.amount_usd ?? 0), 0) / paid.length : 0;
     // Top selling track by revenue
-    const trackRevMap: Record<string, { label: string; rev: number }> = {};
+    const trackRevMap: Record<string, { label: string; rev: number; count: number }> = {};
     for (const s of paid) {
-      if (s.kind === 'track' && s.item_label) {
+      if (s.item_label) {
         const k = s.item_label;
-        trackRevMap[k] = { label: k, rev: (trackRevMap[k]?.rev ?? 0) + (s.amount_usd ?? 0) };
+        trackRevMap[k] = { label: k, rev: (trackRevMap[k]?.rev ?? 0) + (s.amount_usd ?? 0), count: (trackRevMap[k]?.count ?? 0) + 1 };
       }
     }
     const topTrack = Object.values(trackRevMap).sort((a, b) => b.rev - a.rev)[0] ?? null;
-    return { rev7, rev30, leases, exclusives, topTrack };
+    return { rev7, rev30, rev90, leases, exclusives, avgSale, topTrack };
   }, [sales]);
 
   // ── Revenue sparkline (last 30 days by day) ────────────────────
@@ -152,18 +155,26 @@ export default function SalesPage() {
     <DashboardLayout>
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
         {/* ── Header ──────────────────────────────────────────────── */}
-        <div className="mb-6">
-          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">Dashboard</p>
-          <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Sales</h1>
+        <div className="flex items-start justify-between mb-6 gap-4">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">Dashboard</p>
+            <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Sales</h1>
+            <p className="text-[12px] text-[#6a5d4a] mt-1.5">Revenue, orders, and license breakdown.</p>
+          </div>
+          <Link href="/analytics" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
+            Plays & engagement →
+          </Link>
         </div>
 
-        {/* ── KPI strip ───────────────────────────────────────────── */}
+        {/* ── KPI strip — 4 cols on small, 8 on large ─────────────── */}
         {totals && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
             <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
-            <KpiCard label="Last 30 days" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
-            <KpiCard label="Last 7 days" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#c8a84b" />
-            <KpiCard label="Sales" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#a08a6a" />
+            <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
+            <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
+            <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#c8a84b" />
+            <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#a08a6a" />
+            <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
             <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" />
             <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" />
           </div>
