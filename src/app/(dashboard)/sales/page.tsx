@@ -13,7 +13,8 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Receipt, Music, Layers, ExternalLink, Search,
-  DollarSign, ShoppingBag, AlertCircle, Send,
+  DollarSign, ShoppingBag, AlertCircle, Send, TrendingUp,
+  ArrowUpRight, Tag, Crown,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 
@@ -105,27 +106,118 @@ export default function SalesPage() {
     });
   }, [sales, filter, search]);
 
+  // ── Derived KPIs ───────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const now = Date.now();
+    const ms7  = 7  * 24 * 60 * 60 * 1000;
+    const ms30 = 30 * 24 * 60 * 60 * 1000;
+    const paid = sales.filter((s) => s.status === 'paid');
+    const rev7  = paid.filter((s) => now - new Date(s.created_at).getTime() < ms7 ).reduce((a, s) => a + (s.amount_usd ?? 0), 0);
+    const rev30 = paid.filter((s) => now - new Date(s.created_at).getTime() < ms30).reduce((a, s) => a + (s.amount_usd ?? 0), 0);
+    const leases     = paid.filter((s) => s.license_type === 'lease').length;
+    const exclusives = paid.filter((s) => s.license_type === 'exclusive').length;
+    // Top selling track by revenue
+    const trackRevMap: Record<string, { label: string; rev: number }> = {};
+    for (const s of paid) {
+      if (s.kind === 'track' && s.item_label) {
+        const k = s.item_label;
+        trackRevMap[k] = { label: k, rev: (trackRevMap[k]?.rev ?? 0) + (s.amount_usd ?? 0) };
+      }
+    }
+    const topTrack = Object.values(trackRevMap).sort((a, b) => b.rev - a.rev)[0] ?? null;
+    return { rev7, rev30, leases, exclusives, topTrack };
+  }, [sales]);
+
+  // ── Revenue sparkline (last 30 days by day) ────────────────────
+  const sparkline = useMemo(() => {
+    const paid = sales.filter((s) => s.status === 'paid');
+    const map: Record<string, number> = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      map[d.toISOString().slice(0, 10)] = 0;
+    }
+    for (const s of paid) {
+      const d = new Date(s.created_at).toISOString().slice(0, 10);
+      if (d in map) map[d] = (map[d] ?? 0) + (s.amount_usd ?? 0);
+    }
+    const vals = Object.values(map);
+    const max = Math.max(1, ...vals);
+    const w = 400; const h = 52;
+    const step = w / Math.max(1, vals.length - 1);
+    const pts = vals.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * (h - 4)).toFixed(1)}`).join(' ');
+    return { pts, vals, max };
+  }, [sales]);
+
   return (
     <DashboardLayout>
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
-        {/* Header */}
-        <div className="mb-8">
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div className="mb-6">
           <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">Dashboard</p>
-          <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">
-            Sales
-          </h1>
-          <p className="text-[12px] text-[#6a5d4a] mt-1.5">
-            All completed purchases — track licenses and project bundles.
-          </p>
+          <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Sales</h1>
         </div>
 
-        {/* Totals strip */}
-        {totals && totals.count > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Revenue" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={14} />} />
-            <StatCard label="Sales" value={String(totals.count)} icon={<ShoppingBag size={14} />} />
-            <StatCard label="Tracks" value={String(totals.track_count)} icon={<Music size={14} />} />
-            <StatCard label="Projects" value={String(totals.project_count)} icon={<Layers size={14} />} />
+        {/* ── KPI strip ───────────────────────────────────────────── */}
+        {totals && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4">
+            <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
+            <KpiCard label="Last 30 days" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
+            <KpiCard label="Last 7 days" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#c8a84b" />
+            <KpiCard label="Sales" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#a08a6a" />
+            <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" />
+            <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" />
+          </div>
+        )}
+
+        {/* ── Sparkline + top track ────────────────────────────────── */}
+        {sales.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
+            {/* Revenue chart */}
+            <div className="sm:col-span-2 rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Revenue · last 30 days</p>
+              <svg viewBox={`0 0 400 52`} className="w-full" preserveAspectRatio="none" style={{ height: 52 }}>
+                <defs>
+                  <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6DC6A4" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#6DC6A4" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {/* Fill area */}
+                <polyline
+                  points={`0,52 ${sparkline.pts} 400,52`}
+                  fill="url(#sparkGrad)"
+                  stroke="none"
+                />
+                {/* Line */}
+                <polyline
+                  points={sparkline.pts}
+                  fill="none"
+                  stroke="#6DC6A4"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <p className="text-[9px] font-mono text-[#3a3328] mt-2">
+                {sparkline.vals.filter(Boolean).length} days with sales
+              </p>
+            </div>
+            {/* Top track */}
+            <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4 flex flex-col justify-between">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Top seller</p>
+              {kpis.topTrack ? (
+                <>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Crown size={16} className="text-[#c8a84b] shrink-0" />
+                    <p className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-snug">{kpis.topTrack.label}</p>
+                  </div>
+                  <p className="text-[20px] font-bold text-white tabular-nums mt-2">{fmtMoney(kpis.topTrack.rev)}</p>
+                  <p className="text-[9px] font-mono text-[#5a5142]">from track licenses</p>
+                </>
+              ) : (
+                <p className="text-[12px] text-[#5a5142]">No track sales yet</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -215,14 +307,14 @@ export default function SalesPage() {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+function KpiCard({ label, value, icon, accent = '#a08a6a' }: { label: string; value: string; icon: React.ReactNode; accent?: string }) {
   return (
-    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[#5a5142] mb-1">
+    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
+      <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
         {icon}
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em]">{label}</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">{label}</span>
       </div>
-      <p className="text-[18px] font-bold text-white tabular-nums">{value}</p>
+      <p className="text-[20px] font-bold text-white tabular-nums leading-none">{value}</p>
     </div>
   );
 }

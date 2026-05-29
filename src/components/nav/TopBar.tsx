@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
-  Disc3,
+  Home,
   Layers,
   ListMusic,
   Users,
@@ -61,7 +61,7 @@ function timeAgo(iso: string) {
 // Mobile drawer still has it for the same reason it has Offline:
 // long-tail destinations the user does want eventually.
 const NAV_ITEMS = [
-  { label: 'Library',   icon: Disc3,     href: '/library'   },
+  { label: 'Home',      icon: Home,      href: '/library'   },
   { label: 'Projects',  icon: Layers,    href: '/projects'  },
   { label: 'Playlists', icon: ListMusic, href: '/playlists' },
   { label: 'Studio',    icon: Sliders,   href: '/studio'    },

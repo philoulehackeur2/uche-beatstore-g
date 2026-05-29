@@ -8,8 +8,9 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
-  SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2, CalendarDays,
+  SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
+  Upload, PlusSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -466,143 +467,70 @@ export default function LibraryPage() {
             cover, only flatter and wider. Filter chips and the secondary
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
-        <div className="relative mb-6 sm:mb-8 rounded-[28px] overflow-hidden border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] p-4 sm:p-6 md:p-7 transition-all duration-700">
-          {/* Cover backdrop — same blur + accent gradient as the storefront
-              pages so /library reads as part of the same visual system. */}
+        {/* ── Hero ───────────────────────────────────────────────── */}
+        <div className="relative mb-5 rounded-[28px] overflow-hidden border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] p-5 sm:p-7 transition-all duration-700">
           <div
             className="absolute inset-0 z-0 bg-cover bg-center opacity-20 blur-3xl scale-110 transition-all duration-700"
             style={{ backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')" }}
           />
-          <div
-            className="absolute inset-0 z-0 pointer-events-none"
-            style={{
-              background: 'linear-gradient(180deg, rgba(212,191,160,0.10) 0%, rgba(20,17,13,0.4) 60%, rgba(20,17,13,0.7) 100%)',
-            }}
-          />
-          <div
-            className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-25 z-0 transition-all duration-700"
-            style={{ background: heroCoverUrl ? 'none' : 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
-          />
-          <div className="relative z-10 flex items-end gap-4 sm:gap-5 md:gap-7">
-            {/* Dynamic Miniature Vinyl Record Card */}
-            <div className="relative w-[88px] h-[88px] sm:w-[120px] sm:h-[120px] md:w-[140px] md:h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
+          <div className="absolute inset-0 z-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(212,191,160,0.08) 0%, rgba(20,17,13,0.5) 60%, rgba(20,17,13,0.85) 100%)' }} />
+
+          <div className="relative z-10 flex items-center gap-5 md:gap-7">
+            {/* Vinyl — spins while playing, updates to currentTrack cover */}
+            <div className="relative w-[80px] h-[80px] sm:w-[108px] sm:h-[108px] rounded-full bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center">
               {heroCoverUrl ? (
                 <>
-                  <img loading="lazy"
-                    src={heroCoverUrl}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none"
-                  />
-                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
-                    {/* Vinyl grooves */}
-                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
+                  <img src={heroCoverUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none" />
+                  <div className="relative w-full h-full rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
+                    <div className="absolute inset-1 rounded-full border border-white/[0.03]" />
                     <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
                     <div className="absolute inset-5 rounded-full border border-white/[0.01]" />
-                    <div className="absolute inset-7 rounded-full border border-white/[0.01]" />
-                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#0a0907] relative animate-[spin_10s_linear_infinite]">
-                      <img loading="lazy"
-                        src={heroCoverUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40 shadow-inner" />
+                    <div className={`w-[52%] aspect-square rounded-full overflow-hidden border-2 border-[#0a0907] relative ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
+                      <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-[#0a0907] border border-black/40 shadow-inner" style={{ width: 8, height: 8, top: '50%', left: '50%', transform: 'translate(-50%,-50%)', position: 'absolute' }} />
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-[#D4BFA0]/20 to-[#3a2a8a]/20 flex items-center justify-center relative">
-                  <div className="relative w-28 h-28 rounded-full bg-[#110e0c]/90 border border-black/50 shadow-inner flex items-center justify-center">
-                    <div className="absolute inset-1 rounded-full border border-white/[0.02]" />
-                    <div className="absolute inset-3 rounded-full border border-white/[0.02]" />
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#D4BFA0]/25 to-[#3a2a8a]/25 flex items-center justify-center text-white relative">
-                      <Disc3 size={24} className="text-white/80 animate-[spin_8s_linear_infinite]" strokeWidth={1.2} />
-                      <div className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#0a0907] border border-black/40" />
-                    </div>
-                  </div>
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-[#D4BFA0]/20 to-[#3a2a8a]/20 flex items-center justify-center">
+                  <Disc3 size={28} className={`text-white/50 ${isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''}`} strokeWidth={1} />
                 </div>
               )}
             </div>
+
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E8D8B8] mb-1 sm:mb-2">Vault</p>
-              <h1 className="text-[28px] sm:text-[40px] md:text-[56px] font-bold tracking-tight text-white leading-none mb-2 sm:mb-3 font-heading">Library</h1>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">
-                {tracks.length} track{tracks.length !== 1 ? 's' : ''}
-                {totalDurationLabel && <> · {totalDurationLabel}</>}
+              <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-1">
+                {currentTrack ? `Now playing` : 'Your workspace'}
               </p>
-              {/* Aggregate stat chips — only shown once there's data */}
-              {tracks.length > 0 && (
-                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  {libraryStats.avgBpm && (
-                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg tabular-nums">
-                      ⌀ {libraryStats.avgBpm} BPM
-                    </span>
-                  )}
-                  {libraryStats.topKey && (
-                    <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
-                      libraryStats.topKeyScale === 'minor'
-                        ? 'text-[#9d95e8] bg-[#1a1833]/50 border border-[#534AB7]/25'
-                        : 'text-[#c8a47a] bg-[#1f1a10]/50 border border-[#3d3020]/30'
-                    }`}>
-                      Top key: {libraryStats.topKey}
-                    </span>
-                  )}
-                  {libraryStats.topType && (
-                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg capitalize">
-                      Mostly {libraryStats.topType}s
-                    </span>
-                  )}
-                  {libraryStats.avgRating && (
-                    <span className="text-[10px] font-mono text-[#c8a84b] bg-[#1f1a0a]/50 border border-[#3a2f1f]/40 px-2.5 py-1 rounded-lg">
-                      ★ {libraryStats.avgRating} avg
-                    </span>
-                  )}
-                </div>
+              <h1 className="text-[26px] sm:text-[38px] font-bold tracking-tight text-white leading-none font-heading">
+                {currentTrack?.title ?? 'Home'}
+              </h1>
+              {currentTrack ? (
+                <p className="text-[11px] font-mono text-[#a08a6a] mt-1">
+                  {currentTrack.bpm && `${currentTrack.bpm} BPM`}
+                  {currentTrack.bpm && currentTrack.key && ' · '}
+                  {currentTrack.key && `${currentTrack.key}${currentTrack.scale === 'minor' ? 'm' : ''}`}
+                </p>
+              ) : (
+                <p className="text-[11px] font-mono text-[#6a5d4a] mt-1">
+                  {tracks.length} track{tracks.length !== 1 ? 's' : ''}{totalDurationLabel && ` · ${totalDurationLabel}`}
+                </p>
               )}
-              <div className="flex items-center gap-2 mt-4 sm:mt-5 flex-wrap">
-                <button
-                  onClick={playAll}
-                  disabled={!filtered.length}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
+              <div className="flex items-center gap-2 mt-4 flex-wrap">
+                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-2 px-5 py-2 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 transition-all">
                   <Play size={12} fill="currentColor" className="ml-0.5" />
-                  Play
+                  Play all
                 </button>
-                <button
-                  onClick={shuffleAll}
-                  disabled={!filtered.length}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.1] hover:border-white/[0.16] backdrop-blur-sm disabled:opacity-40 transition-colors"
-                >
+                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.08] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.1] disabled:opacity-40 transition-colors">
                   <Shuffle size={12} />
                   Shuffle
                 </button>
                 {stale.length > 0 && (
-                  <button
-                    onClick={runBulkAnalyze}
-                    disabled={!!bulkAnalyzing}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] text-[12px] font-medium hover:text-[#E8D8B8] hover:border-[#D4BFA0]/30 disabled:opacity-40 transition-colors"
-                    title="Run analysis on tracks missing intelligence fields"
-                  >
-                    {bulkAnalyzing ? (
-                      <>
-                        <Loader2 size={11} className="animate-spin" />
-                        <span>Analyzing {bulkAnalyzing.done}/{bulkAnalyzing.total}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={11} />
-                        <span>Analyze {stale.length}</span>
-                      </>
-                    )}
+                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] text-[12px] font-medium hover:text-[#E8D8B8] hover:border-[#D4BFA0]/30 disabled:opacity-40 transition-colors">
+                    {bulkAnalyzing ? <><Loader2 size={11} className="animate-spin" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={11} /><span>Analyze {stale.length}</span></>}
                   </button>
                 )}
-                <button
-                  onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-                  className={`text-[11px] font-medium px-4 py-2.5 rounded-full transition-colors ml-auto ${
-                    selectMode
-                      ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
-                      : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08]'
-                  }`}
-                >
+                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[11px] font-medium px-4 py-2 rounded-full transition-colors ml-auto ${selectMode ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]' : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8]'}`}>
                   {selectMode ? 'Done' : 'Select'}
                 </button>
               </div>
@@ -610,113 +538,150 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* ── Dashboard section ─────────────────────────────────────
-            Sits between the hero identity block and the track list.
-            Shows live analytics stats, quick-nav tiles for every
-            other major dashboard surface, and a "needs attention"
-            alert when store-listed tracks are missing key metadata. */}
-        <div className="mb-6 space-y-3">
+        {/* ── Quick actions ──────────────────────────────────────── */}
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          {[
+            { label: 'Upload beat', icon: <Upload size={13} />, action: () => document.querySelector<HTMLElement>('[data-dropzone]')?.click() ?? window.scrollTo({ top: 9999, behavior: 'smooth' }) },
+            { label: 'New playlist', icon: <PlusSquare size={13} />, href: '/playlists' },
+            { label: 'Store editor', icon: <Store size={13} />, href: '/store-editor' },
+            { label: 'View sales', icon: <ShoppingBag size={13} />, href: '/sales' },
+            { label: 'Analytics', icon: <BarChart2 size={13} />, href: '/analytics' },
+          ].map((item) =>
+            item.href ? (
+              <Link key={item.label} href={item.href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+                {item.icon}{item.label}
+              </Link>
+            ) : (
+              <button key={item.label} onClick={item.action} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+                {item.icon}{item.label}
+              </button>
+            )
+          )}
+        </div>
 
-          {/* Stats row — plays, sales, gross, store listed */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              {
-                label: 'Total plays',
-                value: analyticsStats != null ? String(analyticsStats.plays) : '—',
-                icon: <TrendingUp size={13} className="text-[#a08a6a]" />,
-              },
-              {
-                label: 'Sales',
-                value: analyticsStats != null ? String(analyticsStats.sales_count) : '—',
-                icon: <ShoppingBag size={13} className="text-[#6DC6A4]" />,
-              },
-              {
-                label: 'Gross',
-                value: analyticsStats != null
-                  ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                  : '—',
-                icon: <DollarSign size={13} className="text-[#c8a84b]" />,
-              },
-              {
-                label: 'Listed',
-                value: String(listedTracks.length),
-                icon: <Store size={13} className="text-[#9d95e8]" />,
-              },
-            ].map(({ label, value, icon }) => (
-              <div key={label} className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3 flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                  {icon}
-                </div>
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">{label}</p>
-                  <p className="text-[18px] font-bold text-white tabular-nums leading-tight mt-0.5">{value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* ── Dashboard — Spotify-style home content ────────────── */}
+        <div className="mb-6 space-y-4">
 
-          {/* Quick-nav tiles */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+          {/* Row A: Large Spotify-style content tiles — 2 cols mobile, 4 desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {([
-              { href: '/store-editor', label: 'Store', sub: `${listedTracks.length} listed`, icon: <Store size={18} />, color: 'text-[#9d95e8]', border: 'hover:border-[#9d95e8]/30' },
-              { href: '/projects', label: 'Projects', sub: 'Active sessions', icon: <FolderOpen size={18} />, color: 'text-[#D4BFA0]', border: 'hover:border-[#D4BFA0]/30' },
-              { href: '/playlists', label: 'Playlists', sub: 'Curated sets', icon: <ListMusic size={18} />, color: 'text-[#6DC6A4]', border: 'hover:border-[#6DC6A4]/30' },
-              { href: '/contacts', label: 'CRM', sub: 'Artists & labels', icon: <Users size={18} />, color: 'text-[#e8a06a]', border: 'hover:border-[#e8a06a]/30' },
-              { href: '/sales', label: 'Sales', sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} gross` : 'All orders', icon: <ShoppingBag size={18} />, color: 'text-[#c8a84b]', border: 'hover:border-[#c8a84b]/30' },
-              { href: '/analytics', label: 'Analytics', sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Stats & charts', icon: <BarChart2 size={18} />, color: 'text-[#a08a6a]', border: 'hover:border-[#a08a6a]/30' },
-            ] as const).map(({ href, label, sub, icon, color, border }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`group flex flex-col items-start gap-2 rounded-xl border border-[#1f1a13] bg-[#14110d] px-3.5 py-3.5 hover:bg-[#18140f] transition-all ${border}`}
-              >
-                <div className={`${color} transition-transform group-hover:scale-110 duration-150`}>{icon}</div>
-                <div className="w-full">
-                  <p className="text-[11px] font-semibold text-[#E8DCC8]">{label}</p>
+              {
+                href: '/store-editor',
+                label: 'Your Store',
+                sub: `${listedTracks.length} beats listed`,
+                icon: <Store size={16} />,
+                accent: '#9d95e8',
+                cover: listedTracks.find((t: any) => t.cover_url)?.cover_url ?? null,
+              },
+              {
+                href: '/projects',
+                label: 'Projects',
+                sub: 'Active sessions',
+                icon: <FolderOpen size={16} />,
+                accent: '#D4BFA0',
+                cover: null,
+              },
+              {
+                href: '/sales',
+                label: 'Sales',
+                sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} gross` : 'Revenue',
+                icon: <ShoppingBag size={16} />,
+                accent: '#6DC6A4',
+                cover: null,
+              },
+              {
+                href: '/analytics',
+                label: 'Analytics',
+                sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Stats & charts',
+                icon: <BarChart2 size={16} />,
+                accent: '#c8a84b',
+                cover: null,
+              },
+            ] as const).map(({ href, label, sub, icon, accent, cover }) => (
+              <Link key={href} href={href} className="group relative flex items-center gap-3 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1a160f] overflow-hidden transition-all hover:border-[#2d2620] hover:shadow-lg">
+                {/* Cover art or icon block */}
+                <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center overflow-hidden rounded-l-xl"
+                  style={{ backgroundColor: `${accent}22` }}>
+                  {cover
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={cover} alt="" className="w-full h-full object-cover" />
+                    : <span style={{ color: accent }}>{icon}</span>}
+                </div>
+                <div className="flex-1 min-w-0 py-3 pr-3">
+                  <p className="text-[12px] font-semibold text-[#E8DCC8] truncate">{label}</p>
                   <p className="text-[10px] font-mono text-[#5a5142] mt-0.5 truncate">{sub}</p>
                 </div>
-                <ArrowRight size={10} className={`${color} opacity-0 group-hover:opacity-60 transition-opacity self-end`} />
+                <Play size={14} className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: accent }} fill="currentColor" />
               </Link>
             ))}
           </div>
 
-          {/* Needs attention alert */}
-          {attentionCount > 0 && (
-            <Link
-              href="/store-editor"
-              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#3a2f1f]/50 bg-[#1f1510]/60 hover:bg-[#241a0e]/80 transition-colors group"
-            >
-              <AlertCircle size={14} className="text-[#c8a84b] shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-medium text-[#E8DCC8]">
-                  {attentionCount} store-listed beat{attentionCount === 1 ? '' : 's'} need attention
-                </p>
-                <p className="text-[10px] font-mono text-[#6a5d4a]">
-                  Missing cover, price, or BPM — fix in Store Editor
-                </p>
+          {/* Row B: Stats strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              { label: 'Plays', value: analyticsStats != null ? String(analyticsStats.plays) : '—', icon: <TrendingUp size={12} />, color: 'text-[#a08a6a]' },
+              { label: 'Sales', value: analyticsStats != null ? String(analyticsStats.sales_count) : '—', icon: <ShoppingBag size={12} />, color: 'text-[#6DC6A4]' },
+              { label: 'Gross', value: analyticsStats != null ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—', icon: <DollarSign size={12} />, color: 'text-[#c8a84b]' },
+              { label: 'In store', value: String(listedTracks.length), icon: <Store size={12} />, color: 'text-[#9d95e8]' },
+            ].map(({ label, value, icon, color }) => (
+              <div key={label} className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-2.5 flex items-center gap-3">
+                <span className={color}>{icon}</span>
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">{label}</p>
+                  <p className="text-[16px] font-bold text-white tabular-nums leading-tight">{value}</p>
+                </div>
               </div>
-              <ArrowRight size={12} className="text-[#c8a84b] shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-            </Link>
-          )}
+            ))}
+          </div>
+
+          {/* Row C: Nav shortcuts + attention */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {([
+              { href: '/playlists', label: 'Playlists', icon: <ListMusic size={12} /> },
+              { href: '/contacts', label: 'Contacts', icon: <Users size={12} /> },
+              { href: '/calendar', label: 'Calendar', icon: <TrendingUp size={12} /> },
+            ] as const).map(({ href, label, icon }) => (
+              <Link key={href} href={href} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
+                {icon}{label}<ArrowRight size={9} className="opacity-50" />
+              </Link>
+            ))}
+            {attentionCount > 0 && (
+              <Link href="/store-editor" className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#3a2f1f]/50 bg-[#1f1510]/60 text-[10px] font-mono text-[#c8a84b] hover:bg-[#241a0e]/80 transition-colors ml-auto">
+                <AlertCircle size={11} className="shrink-0" />
+                {attentionCount} beat{attentionCount === 1 ? '' : 's'} need attention
+              </Link>
+            )}
+          </div>
         </div>
 
-        {/* Filter chips strip — type tabs as pill chips, scrolls
-            horizontally on narrow viewports so it never wraps. Active
-            chip is solid white-on-dark for clear focus state. */}
+        {/* ── Library section header ─────────────────────────────── */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Music size={13} className="text-[#5a5142]" />
+            <h2 className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#a08a6a]">Library</h2>
+            <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">· {tracks.length}</span>
+          </div>
+        </div>
+
+        {/* Filter chips — Beat and Instrumental are mutually exclusive
+            single-type filters. "All" resets. */}
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-          {(['all', 'beat', 'instrumental', 'song', 'remix'] as const).map((t) => (
+          {([
+            { value: 'all',          label: 'All' },
+            { value: 'beat',         label: 'Beats' },
+            { value: 'instrumental', label: 'Instrumentals' },
+            { value: 'song',         label: 'Songs' },
+            { value: 'remix',        label: 'Remixes' },
+          ] as const).map(({ value, label }) => (
             <button
-              key={t}
-              onClick={() => {
-                setOfflineOnly(false);
-                setTypeFilter(t);
-              }}
-              className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors ${
-                typeFilter === t && !offlineOnly
+              key={value}
+              onClick={() => { setOfflineOnly(false); setTypeFilter(value); }}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
+                typeFilter === value && !offlineOnly
                   ? 'bg-white text-black'
                   : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
               }`}
-            >{t === 'all' ? 'All' : t}</button>
+            >{label}</button>
           ))}
           
           <button
