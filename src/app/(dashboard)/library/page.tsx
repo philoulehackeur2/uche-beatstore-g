@@ -10,11 +10,13 @@ import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
-  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown,
+  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
+import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
@@ -112,7 +114,7 @@ export default function LibraryPage() {
     if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
   }, []);
   useEffect(() => { localStorage.setItem('library-view', viewMode); }, [viewMode]);
-  const { setTrack, setQueue, currentTrack, isPlaying } = usePlayer();
+  const { setTrack, setQueue, currentTrack, isPlaying, history } = usePlayer();
   const router = useRouter();
 
   // ── New Release dropdown ─────────────────────────────────────────
@@ -176,12 +178,38 @@ export default function LibraryPage() {
 
   // Light analytics summary for the dashboard — plays, sales, gross.
   const [analyticsStats, setAnalyticsStats] = useState<{ plays: number; sales_count: number; gross_usd: number } | null>(null);
+  // Per-track play counts for "most played" sort in config rows
+  const [playsByTrack, setPlaysByTrack] = useState<Record<string, number>>({});
   useEffect(() => {
     fetch('/api/analytics')
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.totals) setAnalyticsStats(d.totals); })
+      .then((d) => {
+        if (d?.totals) setAnalyticsStats(d.totals);
+        if (d?.by_track) {
+          const map: Record<string, number> = {};
+          for (const row of d.by_track) map[row.track_id] = row.plays;
+          setPlaysByTrack(map);
+        }
+      })
       .catch(() => undefined);
   }, []);
+
+  // Playlists + projects for the home grid
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  useEffect(() => {
+    fetch('/api/playlists').then(r => r.ok ? r.json() : null).then(d => { if (d?.playlists) setPlaylists(d.playlists); }).catch(() => undefined);
+    fetch('/api/projects').then(r => r.ok ? r.json() : null).then(d => { if (d?.projects) setProjects(d.projects); }).catch(() => undefined);
+  }, []);
+
+  // ── Home filter chips (genre, state, type) ───────────────────────
+  // These are the lightweight filters shown on the Home page itself.
+  // They narrow ALL config rows at once without touching the full FilterBar.
+  const [homeGenre, setHomeGenre] = useState<string | null>(null);
+  const [homeStatus, setHomeStatus] = useState<string | null>(null);
+  const [homeType, setHomeType] = useState<string | null>(null);
+  const hasHomeFilters = homeGenre != null || homeStatus != null || homeType != null;
+  const clearHomeFilters = () => { setHomeGenre(null); setHomeStatus(null); setHomeType(null); };
 
   // Auto-refresh on track inserts/updates/deletes. Replaces the previous
   // "refresh only on user action" behavior — uploads from elsewhere or
@@ -282,46 +310,65 @@ export default function LibraryPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageTracks = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  // ── Sections for homepage-style browse ──────────────────────────
-  const sections = useMemo(() => {
-    const byDate = [...tracks].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    const result: Array<{ title: string; subtitle?: string; tracks: Track[] }> = [];
-
-    // Helper: get genres for a track from the nested track_tags
+  // ── Config-driven sections ────────────────────────────────────────
+  // Derives rendered rows from DEFAULT_HOME_ROWS, applying home filter
+  // chips and the analytics play counts for sort=plays.
+  const homeRows = useMemo(() => {
     const getGenres = (t: any): string[] =>
       (t.track_tags ?? []).filter((tt: any) => tt.category === 'genre').map((tt: any) => tt.tag);
 
-    // ── Recently added
-    const recentlyAdded = byDate.slice(0, 10);
-    if (recentlyAdded.length) result.push({ title: 'Recently Added', tracks: recentlyAdded });
-
-    // ── MAQ ideas — maquette/bare demos
-    const maq = tracks.filter((t) => t.status === 'maq').slice(0, 10);
-    if (maq.length) result.push({ title: 'MAQ — Maquette Ideas', subtitle: 'Stripped demos to develop', tracks: maq });
-
-    // ── WIP — in progress
-    const wip = tracks.filter((t) => t.status === 'needs_work').slice(0, 10);
-    if (wip.length) result.push({ title: 'WIP — In Progress', subtitle: 'Needs more work', tracks: wip });
-
-    // ── Finished & ready
-    const finished = tracks.filter((t) => t.status === 'finished').slice(0, 10);
-    if (finished.length) result.push({ title: 'Finished — Ready', subtitle: 'Polished and ready to share', tracks: finished });
-
-    // ── Genre rows — derive from track_tags
-    const TOP_GENRES = ['Drill', 'Trap', 'R&B', 'Afrobeats', 'Amapiano', 'Hip-hop', 'Lo-fi'];
-    for (const genre of TOP_GENRES) {
-      const genreTracks = tracks.filter((t) => getGenres(t).includes(genre)).slice(0, 10);
-      if (genreTracks.length >= 2) {
-        result.push({ title: genre, subtitle: `${genreTracks.length} track${genreTracks.length === 1 ? '' : 's'}`, tracks: genreTracks });
+    const applyTrackFilter = (cfg: HomeRowConfig): Track[] => {
+      const f = cfg.filter ?? {};
+      let pool = tracks.filter((t) => {
+        // Row-level filters
+        if (f.genres?.length && !f.genres.some(g => getGenres(t).includes(g))) return false;
+        if (f.statuses?.length && !f.statuses.includes(t.status as any)) return false;
+        if (f.types?.length && !f.types.includes(t.type)) return false;
+        if (f.storeListed && !(t as any).store_listed) return false;
+        if (f.notStoreListed && (t as any).store_listed) return false;
+        if (f.minRating != null && (t.rating ?? 0) < f.minRating) return false;
+        // Home filter chips (additive on top of row filter)
+        if (homeGenre && !getGenres(t).includes(homeGenre)) return false;
+        if (homeStatus && t.status !== homeStatus) return false;
+        if (homeType && t.type !== homeType) return false;
+        return true;
+      });
+      // Sort
+      switch (cfg.sortBy) {
+        case 'plays':    pool = [...pool].sort((a, b) => (playsByTrack[b.id] ?? 0) - (playsByTrack[a.id] ?? 0)); break;
+        case 'rating':   pool = [...pool].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)); break;
+        case 'alphabetical': pool = [...pool].sort((a, b) => a.title.localeCompare(b.title)); break;
+        default: pool = [...pool].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
       }
-    }
+      return pool.slice(0, cfg.maxItems ?? 10);
+    };
 
-    // ── In your store
-    const listed = tracks.filter((t: any) => t.store_listed).slice(0, 10);
-    if (listed.length) result.push({ title: 'In Your Store', subtitle: `${listed.length} listed`, tracks: listed });
-
-    return result;
-  }, [tracks]);
+    return DEFAULT_HOME_ROWS
+      .map((cfg) => {
+        if (cfg.source === 'recent') {
+          // "Recently played" comes from player history (Zustand persist)
+          return { cfg, tracks: [] as Track[], playlists: [] as any[], projects: [] as any[], isRecent: true };
+        }
+        if (cfg.source === 'playlists') {
+          const pl = [...playlists].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, cfg.maxItems ?? 8);
+          return { cfg, tracks: [] as Track[], playlists: pl, projects: [] as any[], isRecent: false };
+        }
+        if (cfg.source === 'projects') {
+          const pr = [...projects].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, cfg.maxItems ?? 8);
+          return { cfg, tracks: [] as Track[], playlists: [] as any[], projects: pr, isRecent: false };
+        }
+        // tracks
+        const rowTracks = applyTrackFilter(cfg);
+        return { cfg, tracks: rowTracks, playlists: [] as any[], projects: [] as any[], isRecent: false };
+      })
+      .filter((row) => {
+        if (row.isRecent) return true; // always show, content is from player state
+        if (row.cfg.source === 'tracks' && row.tracks.length === 0 && row.cfg.hideWhenEmpty) return false;
+        if (row.cfg.source === 'playlists' && row.playlists.length === 0) return false;
+        if (row.cfg.source === 'projects' && row.projects.length === 0) return false;
+        return true;
+      });
+  }, [tracks, playlists, projects, playsByTrack, homeGenre, homeStatus, homeType]);
 
   // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
@@ -808,38 +855,64 @@ export default function LibraryPage() {
 
         {/* ── Sections view (Browse mode) ────────────────────────── */}
         {browseMode === 'sections' && !loading && (
-          <div className="mb-6 space-y-6">
-            {sections.length === 0 ? (
-              <p className="text-[12px] text-[#5a5142] py-8 text-center">Upload your first track to see sections here.</p>
-            ) : sections.map((sec) => (
-              <div key={sec.title}>
-                <div className="flex items-center justify-between mb-2.5">
-                  <div>
-                    <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{sec.title}</h3>
-                    {(sec as any).subtitle && <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">{(sec as any).subtitle}</p>}
-                  </div>
-                  <button
-                    onClick={() => { setBrowseMode('all'); }}
-                    className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors"
-                  >See all →</button>
-                </div>
-                {/* Horizontal scrolling row of mini cards */}
-                <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
-                  {sec.tracks.map((t) => (
-                    <MiniTrackCard
-                      key={t.id}
-                      track={t}
-                      isCurrent={currentTrack?.id === t.id}
-                      isPlaying={isPlaying && currentTrack?.id === t.id}
-                      onPlay={() => { setTrack(t); setQueue(sec.tracks); }}
-                      onOpen={() => { setSelectedTrack(t); playTrack(t); }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-            {/* Upload zone in sections view too */}
-            <div className="pt-2">
+          <div className="mb-6 space-y-1">
+            {/* ── Home filter chips ────────────────────────────────── */}
+            <div className="flex items-center gap-2 flex-wrap mb-4 pb-3 border-b border-[#1a160f]">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] shrink-0">Filter rows:</span>
+              {/* Genre chips */}
+              {['Drill','Trap','R&B','Afrobeats','Amapiano','Hip-hop','Lo-fi'].map((g) => (
+                <button key={g} onClick={() => setHomeGenre(homeGenre === g ? null : g)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                    homeGenre === g ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  }`}>{g}</button>
+              ))}
+              <div className="w-px h-4 bg-[#1f1a13] mx-1 shrink-0" />
+              {/* State chips */}
+              {[
+                { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+                { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
+                { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
+              ].map(({ v, l, cls }) => (
+                <button key={v} onClick={() => setHomeStatus(homeStatus === v ? null : v)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${homeStatus === v ? cls : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'}`}
+                >{l}</button>
+              ))}
+              <div className="w-px h-4 bg-[#1f1a13] mx-1 shrink-0" />
+              {/* Type chips */}
+              {[{ v: 'beat', l: 'Beats' }, { v: 'instrumental', l: 'Instr.' }].map(({ v, l }) => (
+                <button key={v} onClick={() => setHomeType(homeType === v ? null : v)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                    homeType === v ? 'bg-white text-black border-white' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  }`}>{l}</button>
+              ))}
+              {hasHomeFilters && (
+                <button onClick={clearHomeFilters} className="flex items-center gap-1 text-[9px] font-mono text-[#5a5142] hover:text-[#E8DCC8] transition-colors ml-auto">
+                  <X size={10} />Clear
+                </button>
+              )}
+            </div>
+
+            {/* ── Config-driven rows ───────────────────────────────── */}
+            <div className="space-y-6">
+              {homeRows.map((row) => (
+                <HomeRow
+                  key={row.cfg.id}
+                  cfg={row.cfg}
+                  tracks={row.tracks}
+                  playlists={row.playlists}
+                  projects={row.projects}
+                  recentHistory={row.isRecent ? history : undefined}
+                  currentTrackId={currentTrack?.id ?? null}
+                  isPlaying={isPlaying}
+                  onPlayTrack={(t) => { setTrack(t); setQueue(row.tracks); }}
+                  onOpenTrack={(t) => { setSelectedTrack(t); playTrack(t); }}
+                  onSeeAll={() => setBrowseMode('all')}
+                />
+              ))}
+            </div>
+
+            {/* Upload zone */}
+            <div className="pt-4">
               <DropZone onUploadSuccess={fetchTracks} />
             </div>
           </div>
@@ -1282,6 +1355,118 @@ function MiniTrackCard({
       <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">
         {[track.bpm && `${track.bpm}`, track.key && `${track.key}${track.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ') || track.type || '—'}
       </p>
+    </div>
+  );
+}
+
+// ── MiniPlaylistCard ─────────────────────────────────────────────
+function MiniPlaylistCard({ playlist }: { playlist: any }) {
+  return (
+    <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group-hover:border-[#2d2620] mb-2 transition-all">
+        {playlist.cover_url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#0a0907]"><ListMusic size={24} className="text-[#9d95e8]/40" /></div>}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
+          <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+            <Play size={14} fill="white" className="text-white ml-0.5" />
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] font-medium truncate text-[#E8DCC8]">{playlist.name}</p>
+      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">{playlist.track_count ?? 0} tracks</p>
+    </Link>
+  );
+}
+
+// ── MiniProjectCard ──────────────────────────────────────────────
+function MiniProjectCard({ project }: { project: any }) {
+  return (
+    <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group-hover:border-[#2d2620] mb-2 transition-all">
+        {project.cover_url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1830] to-[#0a0907]"><FolderOpen size={24} className="text-[#D4BFA0]/30" /></div>}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
+          <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+            <ArrowRight size={14} className="text-white" />
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] font-medium truncate text-[#E8DCC8]">{project.name}</p>
+      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 capitalize">{project.status?.replace('_', ' ') ?? 'project'} · {project.track_count ?? 0} tracks</p>
+    </Link>
+  );
+}
+
+// ── HomeRow — one horizontal scrollable section ──────────────────
+function HomeRow({
+  cfg, tracks, playlists, projects, recentHistory,
+  currentTrackId, isPlaying, onPlayTrack, onOpenTrack, onSeeAll,
+}: {
+  cfg: HomeRowConfig;
+  tracks: Track[];
+  playlists: any[];
+  projects: any[];
+  recentHistory?: Track[];
+  currentTrackId: string | null;
+  isPlaying: boolean;
+  onPlayTrack: (t: Track) => void;
+  onOpenTrack: (t: Track) => void;
+  onSeeAll: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'right' ? 320 : -320, behavior: 'smooth' });
+  };
+
+  const isEmpty =
+    cfg.source === 'tracks' ? tracks.length === 0 :
+    cfg.source === 'playlists' ? playlists.length === 0 :
+    cfg.source === 'projects' ? projects.length === 0 :
+    (recentHistory?.length ?? 0) === 0;
+
+  if (isEmpty) return null;
+
+  return (
+    <div className="group/row">
+      <div className="flex items-center justify-between mb-2.5">
+        <div>
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{cfg.title}</h3>
+          {cfg.subtitle && <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">{cfg.subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => scroll('left')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#14110d] border border-[#1f1a13] items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all opacity-0 group-hover/row:opacity-100">
+            <ChevronLeft size={12} />
+          </button>
+          <button onClick={() => scroll('right')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#14110d] border border-[#1f1a13] items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all opacity-0 group-hover/row:opacity-100">
+            <ChevronRight size={12} />
+          </button>
+          {cfg.source === 'tracks' && (
+            <button onClick={onSeeAll} className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+              See all →
+            </button>
+          )}
+          {cfg.source === 'playlists' && <Link href="/playlists" className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">See all →</Link>}
+          {cfg.source === 'projects' && <Link href="/projects" className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">See all →</Link>}
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide scroll-smooth">
+        {cfg.source === 'recent' && recentHistory?.map((t) => (
+          <MiniTrackCard key={t.id} track={t} isCurrent={currentTrackId === t.id}
+            isPlaying={isPlaying && currentTrackId === t.id}
+            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)} />
+        ))}
+        {cfg.source === 'tracks' && tracks.map((t) => (
+          <MiniTrackCard key={t.id} track={t} isCurrent={currentTrackId === t.id}
+            isPlaying={isPlaying && currentTrackId === t.id}
+            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)} />
+        ))}
+        {cfg.source === 'playlists' && playlists.map((pl) => <MiniPlaylistCard key={pl.id} playlist={pl} />)}
+        {cfg.source === 'projects' && projects.map((pr) => <MiniProjectCard key={pr.id} project={pr} />)}
+      </div>
     </div>
   );
 }
