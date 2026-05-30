@@ -891,16 +891,10 @@ export default function StoreEditorPage() {
         throw new Error(j.error || `HTTP ${res.status}`);
       }
       toast.success(nextState ? 'Added to store ✓' : 'Removed from store');
-      // On first listing, announce the drop to followers. The endpoint is
-      // idempotent (drop_notified_at), so re-listing never re-spams.
-      if (nextState) {
-        fetch(`/api/tracks/${trackId}/announce`, { method: 'POST' })
-          .then((r) => r.ok ? r.json() : null)
-          .then((d) => {
-            if (d?.notified > 0) toast.success(`Notified ${d.notified} follower${d.notified === 1 ? '' : 's'}`);
-          })
-          .catch(() => undefined);
-      }
+      // Followers are notified by the hourly digest cron (one email covering
+      // everything newly listed) instead of one email per beat — so listing a
+      // batch never spams. drop_notified_at (NULL = pending) is the queue;
+      // the cron stamps it after the digest sends.
     } catch (err: any) {
       // Rollback
       setAllTracks((prev) =>

@@ -68,7 +68,7 @@ export function WavePlayer({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { isPlaying, setPlaying, setProgress, volume, currentTrack, setTrack,
-          seekTarget } = usePlayer();
+          seekTarget, duckGain } = usePlayer();
 
   // A WavePlayer is the "active" audio source for the app only when its
   // track matches the global current track — see header comment.
@@ -166,10 +166,10 @@ export function WavePlayer({
       setVolume(0);
       return;
     }
-    setVolume(volume * normGain);
+    setVolume(volume * normGain * duckGain);
     if (isPlaying) play();
     else pause();
-  }, [ready, isActiveAudio, isPlaying, volume, normGain, play, pause, setVolume]);
+  }, [ready, isActiveAudio, isPlaying, volume, normGain, duckGain, play, pause, setVolume]);
 
   // Consume seekTarget from the store — external components (store grid
   // waveform, share page) write a 0..1 fraction here to seek the active

@@ -21,10 +21,13 @@ export function VoiceTagPlayer() {
   const isPlaying = usePlayer((s) => s.isPlaying);
   const progress = usePlayer((s) => s.progress);
   const volume = usePlayer((s) => s.volume);
+  const setDuckGain = usePlayer((s) => s.setDuckGain);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastBucketRef = useRef<number>(-1);
   const trackIdRef = useRef<string | null>(null);
+  // Restore the beat volume when the tag finishes (or as a safety timeout).
+  const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tagUrl = (currentTrack as any)?.voice_tag_url as string | undefined;
   const interval = Math.max(5, Number((currentTrack as any)?.voice_tag_interval) || 20);
@@ -36,6 +39,8 @@ export function VoiceTagPlayer() {
       audioRef.current = new Audio();
       audioRef.current.preload = 'auto';
       audioRef.current.crossOrigin = 'anonymous';
+      // Restore the ducked beat the moment the tag finishes.
+      audioRef.current.addEventListener('ended', () => setDuckGain(1));
     }
     if (tagUrl && audioRef.current.src !== tagUrl) {
       audioRef.current.src = tagUrl;
@@ -63,17 +68,34 @@ export function VoiceTagPlayer() {
       lastBucketRef.current = bucket;
       const el = audioRef.current;
       if (el && el.src) {
-        try { el.currentTime = 0; el.play().catch(() => undefined); } catch { /* ignore */ }
+        try {
+          el.currentTime = 0;
+          el.play().then(() => {
+            // Duck the beat under the tag, then restore on `ended` (above)
+            // or after a safety window keyed to the tag length.
+            setDuckGain(0.35);
+            if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+            const ms = Math.max(800, Math.min(4000, (el.duration || 1.5) * 1000 + 150));
+            restoreTimerRef.current = setTimeout(() => setDuckGain(1), ms);
+          }).catch(() => undefined);
+        } catch { /* ignore */ }
       }
     }
-  }, [progress, isPlaying, tagUrl, interval, currentTrack]);
+  }, [progress, isPlaying, tagUrl, interval, currentTrack, setDuckGain]);
 
-  // Stop the tag if playback pauses.
+  // Stop the tag + un-duck if playback pauses.
   useEffect(() => {
-    if (!isPlaying && audioRef.current) {
-      try { audioRef.current.pause(); } catch { /* ignore */ }
+    if (!isPlaying) {
+      if (audioRef.current) { try { audioRef.current.pause(); } catch { /* ignore */ } }
+      setDuckGain(1);
     }
-  }, [isPlaying]);
+  }, [isPlaying, setDuckGain]);
+
+  // Safety: always restore the beat gain on unmount (e.g. leaving the store).
+  useEffect(() => () => {
+    if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    setDuckGain(1);
+  }, [setDuckGain]);
 
   return null;
 }

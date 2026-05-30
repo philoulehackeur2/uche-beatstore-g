@@ -21,6 +21,13 @@ interface PlayerState {
    * direct ref to the WaveSurfer instance.
    */
   seekTarget: number | null;
+  /**
+   * Transient playback gain multiplier (0..1) used to "duck" the beat under
+   * the voice-tag overlay on store previews. WavePlayer multiplies it into
+   * the engine volume. Default 1 (no ducking). VoiceTagPlayer dips it while
+   * the tag fires, then restores it.
+   */
+  duckGain: number;
 
   // Core controls
   setTrack: (track: Track) => void;
@@ -33,6 +40,8 @@ interface PlayerState {
   setPlaying: (isPlaying: boolean) => void;
   setProgress: (progress: number) => void;
   setVolume: (volume: number) => void;
+  /** Set the transient duck gain (0..1). Used by the voice-tag overlay. */
+  setDuckGain: (g: number) => void;
   /** Seek the active audio engine to a fraction 0..1 of the track. */
   seekTo: (fraction: number) => void;
 
@@ -70,6 +79,7 @@ export const usePlayer = create<PlayerState>()(
       shuffle: false,
       repeat: 'off',
       seekTarget: null,
+      duckGain: 1,
 
       setTrack: (track) => {
         const prev = get().currentTrack;
@@ -111,6 +121,7 @@ export const usePlayer = create<PlayerState>()(
       setPlaying: (isPlaying) => set({ isPlaying }),
       setProgress: (progress) => set({ progress }),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+      setDuckGain: (g) => set({ duckGain: Math.max(0, Math.min(1, g)) }),
       seekTo: (fraction) => set({ seekTarget: Math.max(0, Math.min(1, fraction)) }),
 
       next: () => {
