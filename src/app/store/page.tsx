@@ -9,9 +9,10 @@ import {
   Globe, X, CheckCircle2, XCircle, Link2, LayoutGrid,
   List, Mail, ChevronDown, Send, ListMusic, Sliders,
   Heart, ExternalLink, SlidersHorizontal, RotateCcw,
-  ShoppingBag, Download, ChevronRight, User,
+  ShoppingBag, Download, ChevronRight, User, Disc3,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { buildHarmonicOrder } from '@/lib/audio/harmonic';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -305,7 +306,24 @@ function StorePage() {
     return tracks.filter((t) => (t as any).store_featured === true).slice(0, 12);
   }, [tracks]);
 
+  // DJ Mode — order the visible catalogue into a continuous harmonic mix and play it.
+  const [djActive, setDjActive] = useState(false);
+  const handleDjMode = () => {
+    const playable = (filtered as Track[]).filter((t) => t.audio_url);
+    if (playable.length === 0) return;
+    const mix = buildHarmonicOrder(playable as any) as unknown as Track[];
+    setQueue(mix);
+    setTrack(mix[0]);
+    setDjActive(true);
+    toast.success('DJ Mode', `Continuous key-matched mix · ${mix.length} beats`);
+    void fetch('/api/store/play', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_id: mix[0].id, source: 'dj-mode' }),
+    }).catch(() => undefined);
+  };
+
   const handlePlay = (t: StoreTrack) => {
+    setDjActive(false);
     if (currentTrack?.id === t.id) { togglePlay(); return; }
     setQueue(filtered as Track[]);
     setTrack(t as Track);
@@ -579,6 +597,19 @@ function StorePage() {
               <List size={13} />
             </button>
           </div>
+
+          {/* DJ Mode — continuous harmonic-compatible mix of the catalogue */}
+          <button
+            onClick={handleDjMode}
+            title="Play a continuous, key-matched mix"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-mono uppercase tracking-wider transition-colors"
+            style={djActive
+              ? { backgroundColor: accentColor, color: '#0a0907', borderColor: accentColor }
+              : { borderColor: '#1f1a13', color: '#6a5d4a' }}
+          >
+            <Disc3 size={11} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
+            DJ Mode
+          </button>
 
           {/* AI Beat Match — drop a vocal, get matching beats */}
           <div className="hidden md:block">
