@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   RotateCcw,
   AlertTriangle,
+  Tag,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -42,6 +43,7 @@ function notifIcon(kind: string) {
   if (kind === 'purchase') return <ShoppingBag size={13} className="text-[#6DC6A4]" />;
   if (kind === 'refund') return <RotateCcw size={13} className="text-[#c8a84b]" />;
   if (kind === 'dispute') return <AlertTriangle size={13} className="text-red-400" />;
+  if (kind === 'buyer_offer') return <Tag size={13} className="text-[#D4BFA0]" />;
   return <Bell size={13} className="text-[#a08a6a]" />;
 }
 

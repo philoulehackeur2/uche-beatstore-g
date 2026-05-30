@@ -15,6 +15,16 @@ const nextConfig: NextConfig = {
   // @ts-ignore  middlewareClientMaxBodySize is a Next 16+ option not yet
   // in the TS types.
   middlewareClientMaxBodySize: '25mb',
+  // Cover art lives in Cloudflare R2's public bucket. Allowlist it so
+  // next/image can optimize (resize + AVIF/WebP) the storefront covers —
+  // the single biggest LCP win on the public store. r2.dev serves dev
+  // buckets; a custom domain would be added here too once wired.
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '*.r2.dev' },
+      { protocol: 'https', hostname: '*.r2.cloudflarestorage.com' },
+    ],
+  },
   serverExternalPackages: [
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { Music, Play, Pause, Heart, Download, ShoppingBag } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
 import type { StoreTrack } from './types';
@@ -84,10 +85,10 @@ export function BeatCard({
         className="relative w-full aspect-square cursor-pointer"
       >
         {track.cover_url ? (
-          <img
-            loading="lazy"
+          <CoverImage
             src={track.cover_url}
             alt=""
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
             className="block w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
         ) : (

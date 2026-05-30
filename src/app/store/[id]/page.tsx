@@ -9,6 +9,7 @@ import {
   AtSign, Download, ChevronRight, Tag, Link2,
 } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
@@ -202,6 +203,9 @@ export default function StoreProductPage({
     setIsOpen(true);
   };
 
+  // "Make an offer" — negotiation on exclusive beats.
+  const [offerOpen, setOfferOpen] = useState(false);
+
   const metaChips = [
     track.type && { label: TYPE_LABELS[track.type] ?? track.type, icon: Tag },
     track.bpm && { label: `${track.bpm} BPM`, icon: Gauge },
@@ -247,9 +251,11 @@ export default function StoreProductPage({
               className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group shadow-[0_16px_60px_rgba(0,0,0,0.6)]"
             >
               {track.cover_url ? (
-                <img
+                <CoverImage
                   src={track.cover_url}
                   alt={track.title}
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 480px"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                 />
               ) : (
@@ -459,6 +465,7 @@ export default function StoreProductPage({
                       key={tier.id}
                       tier={tier}
                       onAddToCart={() => handleAddToCart(tier)}
+                      onMakeOffer={tier.isExclusive ? () => setOfferOpen(true) : undefined}
                     />
                   ))}
                 </div>
@@ -547,6 +554,109 @@ export default function StoreProductPage({
           </section>
         )}
       </div>
+
+      {offerOpen && (
+        <OfferModal
+          trackId={track.id}
+          trackTitle={track.title}
+          accent={creator?.accent_color || '#D4BFA0'}
+          onClose={() => setOfferOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Offer Modal ──────────────────────────────────────────── */
+
+function OfferModal({
+  trackId,
+  trackTitle,
+  accent,
+  onClose,
+}: {
+  trackId: string;
+  trackTitle: string;
+  accent: string;
+  onClose: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [priceStr, setPriceStr] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const price = Number.parseFloat(priceStr);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const valid = emailValid && Number.isFinite(price) && price > 0;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/store/offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_id: trackId, buyer_email: email.trim(), offered_price_usd: price, message: message.trim() || undefined }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
+      setSent(true);
+    } catch (err: any) {
+      toast.error('Could not send offer', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em]" style={{ color: accent }}>Make an offer</p>
+            <h3 className="text-[15px] font-bold text-[#E8DCC8] mt-1 leading-tight">{trackTitle}</h3>
+          </div>
+          <button onClick={onClose} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors"><X size={16} /></button>
+        </div>
+
+        {sent ? (
+          <div className="text-center py-6">
+            <Check size={26} className="mx-auto mb-3" style={{ color: accent }} />
+            <p className="text-[13px] font-medium text-[#E8DCC8] mb-1">Offer sent</p>
+            <p className="text-[11px] text-[#6a5d4a] leading-relaxed">The producer will reply to your email if they want to negotiate.</p>
+            <button onClick={onClose} className="mt-5 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors">Close</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3" noValidate>
+            <div>
+              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your offer (USD)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[14px]">$</span>
+                <input type="number" min="1" step="1" value={priceStr} onChange={(e) => setPriceStr(e.target.value)} placeholder="500"
+                  className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] tabular-nums" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email"
+                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
+            </div>
+            <div>
+              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Message <span className="text-[#3a3328]">(optional)</span></label>
+              <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={2000} placeholder="What you'd use it for, timeline, etc."
+                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] resize-none" />
+            </div>
+            <button type="submit" disabled={!valid || submitting}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider text-black transition-all disabled:opacity-40"
+              style={{ backgroundColor: accent }}>
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Tag size={13} />}
+              Send offer
+            </button>
+            <p className="text-[9px] text-[#3a3328] text-center leading-relaxed">The producer is notified instantly and can reply to negotiate. No payment is taken now.</p>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
@@ -556,9 +666,11 @@ export default function StoreProductPage({
 function LicenseCard({
   tier,
   onAddToCart,
+  onMakeOffer,
 }: {
   tier: LicenseTier;
   onAddToCart: () => void;
+  onMakeOffer?: () => void;
 }) {
   return (
     <div
@@ -606,13 +718,24 @@ function LicenseCard({
       </ul>
 
       {/* CTA */}
-      <button
-        onClick={onAddToCart}
-        className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider transition-all mt-auto ${tier.buttonClass}`}
-      >
-        <ShoppingCart size={13} />
-        Add to Cart
-      </button>
+      <div className="mt-auto space-y-2">
+        <button
+          onClick={onAddToCart}
+          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${tier.buttonClass}`}
+        >
+          <ShoppingCart size={13} />
+          Add to Cart
+        </button>
+        {onMakeOffer && (
+          <button
+            onClick={onMakeOffer}
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-medium uppercase tracking-wider border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-all"
+          >
+            <Tag size={12} />
+            Make an offer
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -29,6 +29,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { Play, Pause } from 'lucide-react';
 import { audioSrc } from '@/lib/audio/url';
+import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { useRef } from 'react';
 import type { Track } from '@/lib/types';
@@ -150,6 +151,11 @@ export function WavePlayer({
     return () => clearTimeout(t);
   }, [failed, autoRetryTried]);
 
+  // Per-track loudness normalization gain. Attenuates hot masters so the
+  // catalogue plays at a consistent volume (the active track's loudness
+  // drives it; unknown loudness → gain 1, no change).
+  const normGain = isActiveAudio ? normalizationGain(currentTrack?.loudness) : 1;
+
   // Drive play / pause / volume from the global store, gated on
   // isActiveAudio. Inactive instances stay paused and muted regardless
   // of what the global player is doing.
@@ -160,10 +166,10 @@ export function WavePlayer({
       setVolume(0);
       return;
     }
-    setVolume(volume);
+    setVolume(volume * normGain);
     if (isPlaying) play();
     else pause();
-  }, [ready, isActiveAudio, isPlaying, volume, play, pause, setVolume]);
+  }, [ready, isActiveAudio, isPlaying, volume, normGain, play, pause, setVolume]);
 
   // Consume seekTarget from the store — external components (store grid
   // waveform, share page) write a 0..1 fraction here to seek the active
