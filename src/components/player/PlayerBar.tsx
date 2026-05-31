@@ -128,10 +128,14 @@ export function PlayerBar() {
       <div className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center">
         <div
           className={cn(
-            'pointer-events-auto flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-full',
-            'backdrop-blur-2xl border border-white/[0.06]',
-            'bg-gradient-to-b from-[#161616]/85 to-[#0a0907]/95',
-            'shadow-[0_12px_48px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
+            'pointer-events-auto flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-[28px]',
+            // Apple-style frosted glass: heavy blur + saturation pop, a
+            // translucent warm base so the page bleeds through, a bright
+            // top edge-light (inset highlight) and a soft, far-cast shadow.
+            'backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.09]',
+            'bg-[#14110d]/72',
+            'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.65),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(0,0,0,0.3)]',
+            'transition-shadow duration-300 hover:shadow-[0_22px_60px_-8px_rgba(0,0,0,0.7),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.12)]',
             'animate-in slide-in-from-bottom-4 fade-in duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.
             // md+: anchor to the center column with the original
@@ -143,7 +147,7 @@ export function PlayerBar() {
           <div className="flex items-center gap-2 md:gap-3 pl-1 pr-2 md:pr-3 py-1 min-w-0">
             <button
               onClick={() => setNowPlayingOpen(true)}
-              className="w-10 h-10 md:w-11 md:h-11 bg-[#14110d] rounded-full overflow-hidden flex-shrink-0 border border-white/[0.06] relative group/cover"
+              className="w-10 h-10 md:w-11 md:h-11 bg-[#14110d] rounded-[13px] overflow-hidden flex-shrink-0 border border-white/[0.08] relative group/cover shadow-[0_2px_10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] transition-transform duration-200 hover:scale-[1.04] active:scale-95"
               aria-label="Open Now Playing"
             >
               {currentTrack.cover_url ? (
@@ -153,8 +157,8 @@ export function PlayerBar() {
                   <Music size={14} />
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
-                <ChevronDown size={14} className="text-white rotate-180" />
+              <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
+                <ChevronDown size={15} className="text-white rotate-180" />
               </div>
             </button>
             <div className="min-w-0 flex-1 md:flex-initial md:max-w-[160px]">
@@ -178,11 +182,11 @@ export function PlayerBar() {
 
           {/* Waveform + scrub + times — hidden below md (phone pill is
               cover + transport only). md+ keeps the inline waveform. */}
-          <div className="hidden md:flex items-center gap-2 min-w-0">
-            <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-9 text-right shrink-0">
+          <div className="hidden md:flex items-center gap-2.5 min-w-0">
+            <span className="text-[10px] font-mono text-[#c8b89a] tabular-nums w-9 text-right shrink-0">
               {formatTime(currentSeconds)}
             </span>
-            <div className="w-[200px] h-8 flex items-center">
+            <div className="w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
               {currentTrack.audio_url ? (
                 <WavePlayer
                   url={currentTrack.audio_url}
@@ -193,7 +197,7 @@ export function PlayerBar() {
                   height={28}
                 />
               ) : (
-                <div className="w-full h-[2px] bg-[#1a160f] rounded" />
+                <div className="w-full h-[2px] bg-white/10 rounded" />
               )}
             </div>
             <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-9 shrink-0">
@@ -203,18 +207,18 @@ export function PlayerBar() {
 
           {/* Transport — center-right. The play button is the dominant
               circular element so it reads as the pill's "anchor". */}
-          <div className="flex items-center gap-1 shrink-0">
-            <button onClick={prev} className="w-7 h-7 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors" aria-label="Previous track">
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={prev} className="w-8 h-8 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
               <SkipBack size={13} fill="currentColor" />
             </button>
             <button
               onClick={togglePlay}
-              className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-transform shadow-[0_2px_8px_rgba(255,255,255,0.15)]"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.07] active:scale-95 transition-transform duration-150 shadow-[0_3px_12px_rgba(0,0,0,0.35),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
-              {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
             </button>
-            <button onClick={next} className="w-7 h-7 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors" aria-label="Next track">
+            <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
               <SkipForward size={13} fill="currentColor" />
             </button>
           </div>
@@ -225,14 +229,14 @@ export function PlayerBar() {
               studio. Progressive disclosure on narrow screens — phone
               keeps only Queue, tablet adds Shuffle/Repeat, desktop adds
               the volume slider. */}
-          <div className="flex items-center gap-1.5 shrink-0 pl-2 md:border-l md:border-white/[0.05] md:ml-1">
+          <div className="flex items-center gap-1 shrink-0 pl-2 md:border-l md:border-white/[0.07] md:ml-1">
             {/* Shuffle + Repeat — hidden below sm (phones) since the
                 pill is already cramped with transport + cover. Volume
                 stays hidden until md per its hover-slider design. */}
             <button
               onClick={toggleShuffle}
               className={cn(
-                'hidden sm:flex w-7 h-7 items-center justify-center transition-colors rounded-full',
+                'hidden sm:flex w-7 h-7 items-center justify-center transition-all rounded-full active:scale-90 hover:bg-white/[0.05]',
                 shuffle ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white',
               )}
               aria-label="Shuffle"
@@ -248,7 +252,7 @@ export function PlayerBar() {
             <button
               onClick={cycleRepeat}
               className={cn(
-                'hidden sm:flex relative w-7 h-7 items-center justify-center transition-colors rounded-full',
+                'hidden sm:flex relative w-7 h-7 items-center justify-center transition-all rounded-full active:scale-90 hover:bg-white/[0.05]',
                 repeat !== 'off' ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white',
               )}
               aria-label={`Repeat ${repeat}`}
@@ -297,7 +301,7 @@ export function PlayerBar() {
                   step="0.01"
                   value={volume}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className="w-full h-1 cursor-pointer accent-white"
+                  className="w-full h-1 cursor-pointer accent-[#E8DCC8] rounded-full"
                   aria-label="Volume"
                 />
               </div>
@@ -419,16 +423,16 @@ export function PlayerBar() {
                 >
                   <Shuffle size={18} />
                 </button>
-                <button onClick={prev} className="w-10 h-10 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors">
+                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
                   <SkipBack size={22} fill="currentColor" />
                 </button>
                 <button
                   onClick={togglePlay}
-                  className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-transform shadow-[0_4px_24px_rgba(255,255,255,0.2)]"
+                  className="w-16 h-16 rounded-full flex items-center justify-center text-black bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.06] active:scale-95 transition-transform duration-150 shadow-[0_6px_28px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_2px_0_rgba(255,255,255,0.9)]"
                 >
                   {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-1" />}
                 </button>
-                <button onClick={next} className="w-10 h-10 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors">
+                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
                   <SkipForward size={22} fill="currentColor" />
                 </button>
                 <button
@@ -448,7 +452,7 @@ export function PlayerBar() {
                 <input
                   type="range" min="0" max="1" step="0.01" value={volume}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className="flex-1 h-1 cursor-pointer accent-white"
+                  className="flex-1 h-1 cursor-pointer accent-[#E8DCC8] rounded-full"
                 />
                 <Volume2 size={15} className="text-[#6a5d4a] opacity-80" />
               </div>

@@ -120,9 +120,14 @@ export function WavePlayer({
     url: resolvedUrl,
     peaksUrl,
     height,
-    waveColor: '#2d2620',
+    // Frosted unplayed bars + warm-accent played; a faint warm playhead gives
+    // a precise scrub reference without the heavy old vertical line.
+    waveColor: 'rgba(232,220,200,0.20)',
     progressColor: accent,
-    cursorColor: 'transparent',
+    cursorColor: 'rgba(232,220,200,0.55)',
+    barWidth: 2,
+    barGap: 1.6,
+    barRadius: 3,
     initialVolume: isActiveAudio ? volume : 0,
     // Don't auto-play in the hook — we drive play/pause manually below
     // so the active-audio guard fully controls when this instance sounds.
@@ -205,7 +210,7 @@ export function WavePlayer({
             }
             setPlaying(!isPlaying);
           }}
-          className="w-8 h-8 rounded-full bg-[#16130e] border border-[#1a160f] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] transition-all shrink-0"
+          className="w-8 h-8 rounded-full bg-[#16130e]/80 border border-white/[0.08] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         >
           {isPlaying ? (
             <Pause size={13} fill="currentColor" />

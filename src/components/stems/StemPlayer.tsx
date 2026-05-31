@@ -37,10 +37,14 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
 
       wavesurfers.current[key] = WaveSurfer.create({
         container: containers[key as keyof typeof containers].current!,
-        waveColor: '#1f1a13',
+        // Match the app-wide waveform palette: frosted unplayed bars + warm
+        // accent played, thin rounded "liquid" bars.
+        waveColor: 'rgba(232,220,200,0.18)',
         progressColor: '#D4BFA0',
         height: 40,
         barWidth: 2,
+        barGap: 1.6,
+        barRadius: 3,
         normalize: true,
       });
 

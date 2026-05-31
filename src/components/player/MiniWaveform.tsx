@@ -205,19 +205,23 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
               y={y}
               width={2}
               height={barH}
-              rx={1}
-              className={`transition-colors duration-75 ${
-                isPlayed ? 'fill-[#D4BFA0]' : isActive ? 'fill-[#4a3f2e]' : 'fill-[#2d2620]'
+              rx={1.2}
+              // Frosted unplayed bars (warm off-white, low alpha) read clearly
+              // on dark cards; played bars glow in the warm accent. Idle cards
+              // sit a touch dimmer so the active track stands out.
+              className={`transition-[fill] duration-150 ${
+                isPlayed ? 'fill-[#D4BFA0]' : isActive ? 'fill-[#E8DCC8]/30' : 'fill-[#E8DCC8]/15'
               }`}
+              style={isPlayed ? { filter: 'drop-shadow(0 0 1.5px rgba(212,191,160,0.45))' } : undefined}
             />
           );
         })}
       </svg>
 
-      {/* Cursor line on the active track */}
+      {/* Playhead on the active track — a slim warm line with a soft glow. */}
       {isActive && (
         <div
-          className="absolute top-0 bottom-0 w-[1.5px] bg-[#E8DCC8]/80 rounded-full pointer-events-none"
+          className="absolute top-0 bottom-0 w-[1.5px] bg-[#F0E6D2] rounded-full pointer-events-none shadow-[0_0_6px_rgba(240,230,210,0.7)]"
           style={{ left: `${fillPct}%`, transform: 'translateX(-50%)' }}
         />
       )}
