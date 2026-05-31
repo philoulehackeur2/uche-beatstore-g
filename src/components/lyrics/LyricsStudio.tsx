@@ -74,6 +74,18 @@ function lineSyllables(line: string): number {
     .reduce((sum, w) => sum + countSyllables(w), 0);
 }
 
+/** Section headers — bracketed ([Hook]) or "Verse 1:" style — get marked in
+ *  the gutter and excluded from the syllable count so structure reads quietly. */
+const SECTION_RE = /^\s*(?:\[[^\]]+\]|(?:intro|verse|pre-?chorus|chorus|hook|bridge|refrain|outro|drop|interlude|break)\b[^a-z]*\d*\s*:?)\s*$/i;
+function isSectionLine(line: string): boolean {
+  return SECTION_RE.test(line.trim()) && line.trim().length > 0;
+}
+function sectionLabel(line: string): string {
+  return line.trim().replace(/^\[|\]$/g, '').replace(/:$/, '').toUpperCase().slice(0, 10);
+}
+
+const QUICK_SECTIONS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Hook', 'Bridge', 'Outro'];
+
 export function LyricsStudio({ trackId }: Props) {
   const [content, setContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
@@ -276,17 +288,30 @@ export function LyricsStudio({ trackId }: Props) {
     if (w && w.toLowerCase() !== lookupWord) setLookupWord(w.toLowerCase());
   };
 
+  /** Drop a bracketed section header at the caret on its own line. */
+  const insertSection = (name: string) => {
+    const ta = textareaRef.current;
+    const atLineStart = !ta || ta.selectionStart === 0 || content[ta.selectionStart - 1] === '\n';
+    insertAtCaret(`${atLineStart ? '' : '\n'}[${name}]\n`);
+  };
+
   /* ─────── stats ─────── */
   const stats = useMemo(() => {
     const lines = content.split('\n');
-    const lineSyl = lines.map(lineSyllables);
-    const words = content.match(/\b[A-Za-z']+\b/g) || [];
+    // Section headers don't carry syllables; mark them so the gutter shows a
+    // quiet label instead of a number, and they're excluded from the count.
+    const sections = lines.map(isSectionLine);
+    const lineSyl = lines.map((l, i) => (sections[i] ? 0 : lineSyllables(l)));
+    const sectionLabels = lines.map((l, i) => (sections[i] ? sectionLabel(l) : ''));
+    const words = (content.replace(/^\s*\[[^\]]*\]\s*$/gm, '').match(/\b[A-Za-z']+\b/g) || []);
     const totalSyl = lineSyl.reduce((s, n) => s + n, 0);
     return {
       words: words.length,
       lines: lines.length,
       syllables: totalSyl,
       lineSyl,
+      sections,
+      sectionLabels,
     };
   }, [content]);
 
@@ -303,48 +328,66 @@ export function LyricsStudio({ trackId }: Props) {
 
   /* ─────── UI ─────── */
   return (
-    <div className="border border-[#1a160f] rounded-lg bg-[#0a0907] overflow-hidden">
-      {/* toolbar */}
-      <div className="flex items-center gap-3 px-4 h-10 border-b border-[#16130e] bg-[#0a0907]">
+    <div className="border border-[#16130e] rounded-2xl bg-[#0c0a08] overflow-hidden">
+      {/* toolbar — quiet header: title, live count, autosave state, version/history */}
+      <div className="flex items-center gap-3 px-5 h-11 bg-transparent">
         <Music2 size={12} className="text-[#E8D8B8]" />
         <span className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">Lyrics</span>
         <span className="text-[10px] font-mono text-[#3a3328]">·</span>
         <span className="text-[10px] font-mono text-[#5a5142]">
-          {stats.words}w · {stats.lines}L · {stats.syllables} syl
+          {stats.words}w · {stats.syllables} syl
         </span>
         <div className="flex-1" />
         <SaveBadge status={status} error={error} />
         <button
           onClick={saveSnapshot}
-          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620] flex items-center gap-1"
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.03] flex items-center gap-1 transition-colors"
           title="Save a version snapshot"
         >
           <Save size={10} /> Version
         </button>
         <button
           onClick={() => setShowHistory((v) => !v)}
-          className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border flex items-center gap-1 ${
+          className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1 transition-colors ${
             showHistory
-              ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-              : 'border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620]'
+              ? 'bg-[#2A2418] text-[#E8D8B8]'
+              : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.03]'
           }`}
         >
           <History size={10} /> {history.length}
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_320px] min-h-[420px]">
-        {/* editor */}
-        <div className="relative border-r border-[#16130e]">
-          <div className="absolute inset-0 grid grid-cols-[44px_1fr] overflow-hidden">
-            {/* per-line syllable gutter */}
-            <div className="bg-[#0a0907] border-r border-[#16130e] py-3 overflow-hidden pointer-events-none">
+      {/* Section quick-insert — keeps structure light + secondary. Click drops
+          a header at the caret. */}
+      <div className="flex items-center gap-1.5 px-5 pb-2.5 overflow-x-auto no-scrollbar">
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] shrink-0">Section</span>
+        {QUICK_SECTIONS.map((s) => (
+          <button
+            key={s}
+            onClick={() => insertSection(s)}
+            className="shrink-0 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full text-[#6a5d4a] hover:text-[#E8D8B8] hover:bg-[#2A2418] transition-colors"
+          >
+            + {s}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] min-h-[460px]">
+        {/* editor — the calm writing surface; gutter is borderless + faint so
+            the lyrics are the only thing with weight. Section lines show a
+            small accent marker instead of a syllable count. */}
+        <div className="relative bg-[#0a0907]/40">
+          <div className="absolute inset-0 grid grid-cols-[40px_1fr] overflow-hidden">
+            <div className="py-4 overflow-hidden pointer-events-none select-none">
               {stats.lineSyl.map((n, i) => (
                 <div
                   key={i}
-                  className="text-right pr-2 text-[10px] font-mono text-[#3a3328] leading-[1.6]"
+                  className="text-right pr-2 text-[10px] font-mono leading-[28px]"
                 >
-                  {n || ''}
+                  {stats.sections[i]
+                    ? <span className="text-[#8A7A5C]">§</span>
+                    : <span className="text-[#332c20]">{n || ''}</span>}
                 </div>
               ))}
             </div>
@@ -356,17 +399,19 @@ export function LyricsStudio({ trackId }: Props) {
               onSelect={onTextareaSelect}
               onClick={onTextareaSelect}
               onKeyUp={onTextareaSelect}
-              placeholder={`Drop lyrics here…
-Click a word to look up rhymes, synonyms, definitions.
-Auto-saves every ${SAVE_DEBOUNCE_MS / 1000}s.`}
+              placeholder={`Start writing…
+
+Drop a section like [Verse] or [Hook] from the bar above.
+Click any word to find rhymes, synonyms, definitions.
+Everything autosaves.`}
               spellCheck
-              className="w-full h-full bg-transparent text-[14px] leading-[1.6] text-[#E8DCC8] placeholder:text-[#3a3328] px-4 py-3 resize-none focus:outline-none font-mono"
+              className="w-full h-full bg-transparent text-[15px] leading-[28px] text-[#E8DCC8] placeholder:text-[#3a3328] pl-1 pr-5 py-4 resize-none focus:outline-none font-mono"
             />
           </div>
         </div>
 
-        {/* word tools */}
-        <div className="flex flex-col">
+        {/* word tools — secondary sidebar, separated by a faint rule */}
+        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#16130e]">
           <div className="px-3 py-3 border-b border-[#16130e]">
             <div className="flex items-center gap-2 mb-2">
               <Search size={11} className="text-[#4a4338]" />

@@ -25,7 +25,6 @@ import { LibraryMetadataGrid } from '@/components/library/LibraryMetadataGrid';
 import { LibraryVersionHistory, type TrackVersion } from '@/components/library/LibraryVersionHistory';
 import { StemUploader } from '@/components/tracks/StemUploader';
 import { SimilarTracks } from '@/components/tracks/SimilarTracks';
-import { TrackHeatmap } from '@/components/tracks/TrackHeatmap';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
@@ -323,6 +322,17 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                     <option key={opt.value} value={opt.value} className="bg-[#0a0907]">{opt.label}</option>
                   ))}
                 </select>
+                {/* Instrumental flag (mig 079) — distinct from type; drives the
+                    lyrics workflow + storefront/discovery filtering. */}
+                <select
+                  value={track.instrumental ? 'yes' : 'no'}
+                  onChange={(e) => patchTrack({ instrumental: e.target.value === 'yes' })}
+                  title="Does this track have vocals?"
+                  className="bg-transparent text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] border border-[#1f1a13] rounded px-2 py-1 hover:border-[#2d2620] focus:outline-none focus:border-[#D4BFA0] cursor-pointer"
+                >
+                  <option value="no" className="bg-[#0a0907]">Has Vocals</option>
+                  <option value="yes" className="bg-[#0a0907]">Instrumental</option>
+                </select>
                 {STATUS_OPTIONS.map((opt) => {
                   const active = (track.status || 'needs_work') === opt.value;
                   return (
@@ -380,17 +390,29 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Action row — every button shares the exact same height /
+                padding / radius. Emphasis comes from fill colour, not size:
+                Play is the primary white, Re-analyze is accent-filled. */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors"
+                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-white text-black hover:bg-[#E8DCC8]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play
               </button>
               <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                title="Re-extract BPM, key and loudness"
+                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#D4BFA0] text-[#0a0907] hover:bg-[#E2CDA8] disabled:opacity-50"
+              >
+                {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
+                {reanalyzing ? 'Analyzing…' : 'Analyze'}
+              </button>
+              <button
                 onClick={() => setShareOpen(true)}
-                className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620]"
               >
                 <Share2 size={12} />
                 Share
@@ -398,25 +420,16 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8D8B8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#8A7A5C]/40 hover:bg-[#2A2418] transition-colors"
+                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8D8B8] hover:border-[#8A7A5C]/40 hover:bg-[#2A2418]"
               >
                 <Sliders size={12} />
                 Studio
-              </button>
-              <button
-                onClick={handleReanalyze}
-                disabled={reanalyzing}
-                title="Re-extract BPM, key and loudness"
-                className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] disabled:opacity-50 transition-colors"
-              >
-                {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
-                {reanalyzing ? 'Analyzing…' : 'Re-analyze'}
               </button>
               {track.audio_url && (
                 <a
                   href={audioSrc(track.audio_url)}
                   download={`${track.title || 'track'}.wav`}
-                  className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+                  className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620]"
                 >
                   <Download size={12} />
                   Download
@@ -432,6 +445,21 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             </div>
             {/* end meta panel (title / status / actions row group) */}
 
+            {/* Notes — top of the workspace. Quick capture for session notes,
+                references, hooks, mix decisions; autosaves on blur. */}
+            <div className="mb-8">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-2">Notes</p>
+              <textarea
+                defaultValue={track.notes || ''}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v !== (track.notes || '')) patchTrack({ notes: v || null });
+                }}
+                placeholder="Session notes, references, hook ideas, mix decisions…"
+                className="w-full min-h-[80px] bg-[#0e0c08] border border-[#1a160f] rounded-lg px-4 py-3 text-[13px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#2d2620] resize-y leading-relaxed"
+              />
+            </div>
+
             {/* Metadata — extracted to components/library/LibraryMetadataGrid. */}
             <LibraryMetadataGrid track={track} />
 
@@ -445,16 +473,11 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               durationSeconds={track.duration_seconds || 0}
             />
 
-            {/* Audience Waveform retention analytics */}
-            <div className="mb-10">
-              <TrackHeatmap trackId={track.id} durationSeconds={track.duration_seconds || 0} />
-            </div>
-
-            {/* "Find Matches" — surface BPM/key/vibe-adjacent tracks from
-                the producer's own library. Drives the playlist-building
-                + send workflow. Lives near the metadata so the producer
-                sees the suggestion right next to "this beat is 140 bpm
-                in C minor — what else do I have like this?" */}
+            {/* Discover & match — the matching tool that seeds from this
+                track and surfaces compatible beats/instrumentals from the
+                producer's library, filterable by type / state / tag and
+                tightenable to harmonic-key + tempo-compatible only.
+                (Replaced the low-signal audience heatmap block here.) */}
             <SimilarTracks trackId={track.id} />
 
             {/* Per-track listing: description + lease/exclusive price
@@ -503,22 +526,8 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
         </div>
 
         {/* Lyrics studio */}
-        <div id="lyrics" className="mb-10 scroll-mt-10">
+        <div id="lyrics" className="mb-16 scroll-mt-10">
           <LyricsStudio trackId={track.id} />
-        </div>
-
-        {/* Notes */}
-        <div className="mb-16">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-2">Notes</p>
-          <textarea
-            defaultValue={track.notes || ''}
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v !== (track.notes || '')) patchTrack({ notes: v || null });
-            }}
-            placeholder="Session notes, references, mix decisions…"
-            className="w-full min-h-[96px] bg-[#0e0c08] border border-[#1a160f] rounded-lg px-4 py-3 text-[13px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#2d2620] resize-y"
-          />
         </div>
           </div>
           {/* end right column */}

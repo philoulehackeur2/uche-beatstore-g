@@ -48,6 +48,10 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
   // Free download
   const [freeDownload, setFreeDownload] = useState(!!track.free_download_enabled);
+  // Storefront merchandising
+  const [featured, setFeatured] = useState(!!(track as any).store_featured);
+  const [voiceTag, setVoiceTag] = useState(!!track.voice_tag_enabled);
+  const [sortOrder, setSortOrder] = useState(track.store_sort_order != null ? String(track.store_sort_order) : '');
 
   // Per-track license rows
   const [licenseRows, setLicenseRows] = useState<TrackLicenseRow[]>([]);
@@ -101,6 +105,9 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     setDescription(track.description ?? '');
     setStoreListed(!!track.store_listed);
     setFreeDownload(!!track.free_download_enabled);
+    setFeatured(!!(track as any).store_featured);
+    setVoiceTag(!!track.voice_tag_enabled);
+    setSortOrder(track.store_sort_order != null ? String(track.store_sort_order) : '');
     setCoverUrlInput(track.cover_url ?? '');
     setBpmInput(track.bpm != null ? String(track.bpm) : '');
     setKeyInput(track.key ?? '');
@@ -135,6 +142,12 @@ export function TrackListingEditor({ track, onSaved }: Props) {
         payload.store_listed = !!value;
       } else if (field === 'free_download_enabled') {
         payload.free_download_enabled = !!value;
+      } else if (field === 'store_featured') {
+        payload.store_featured = !!value;
+      } else if (field === 'voice_tag_enabled') {
+        payload.voice_tag_enabled = !!value;
+      } else if (field === 'store_sort_order') {
+        payload.store_sort_order = value === '' ? null : Number(value);
       } else if (field === 'cover_url') {
         payload.cover_url = value || null;
       } else if (field === 'bpm') {
@@ -244,6 +257,16 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {storeListed && (
+              <a
+                href={`/store/${track.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] font-mono uppercase tracking-widest text-[#6a5d4a] hover:text-[#E8DCC8] underline underline-offset-2 transition-colors"
+              >
+                View live ↗
+              </a>
+            )}
             <span className={`text-[10px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full font-bold border ${
               storeListed
                 ? 'text-[#AFA9EC] bg-[#1a1833] border-[#534AB7]'
@@ -310,6 +333,59 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                 freeDownload ? 'translate-x-5' : 'translate-x-0'
               }`} />
             </button>
+          </div>
+
+          {/* ── Merchandising — featured pick, preview voice tag, sort order ── */}
+          <div className="p-4 rounded-xl bg-[#0c0a08] border border-[#1a160f] space-y-3">
+            <div className="flex items-center justify-between border-b border-[#1a160f] pb-2">
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a]">
+                <Globe size={10} /> Merchandising
+              </div>
+              <span className="text-[9px] font-mono text-[#3a3328]">How it appears on /store</span>
+            </div>
+
+            <ToggleRow
+              label="Featured pick"
+              hint="Highlight in the storefront's Picks row (must be published)."
+              on={featured}
+              onColor="bg-[#D4BFA0]"
+              busy={saving === 'store_featured'}
+              onToggle={async () => {
+                const next = !featured; setFeatured(next);
+                await persist('store_featured', next);
+                toast.success(next ? 'Marked as a featured pick.' : 'Removed from picks.');
+              }}
+            />
+            <ToggleRow
+              label="Voice tag on preview"
+              hint="Overlay your producer tag on the store preview to deter rips. Clean file still delivers on purchase."
+              on={voiceTag}
+              onColor="bg-[#9d95e8]"
+              busy={saving === 'voice_tag_enabled'}
+              onToggle={async () => {
+                const next = !voiceTag; setVoiceTag(next);
+                await persist('voice_tag_enabled', next);
+                toast.success(next ? 'Voice tag enabled on preview.' : 'Voice tag disabled.');
+              }}
+            />
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-medium text-[#E8DCC8]">Store sort order</p>
+                <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">Lower shows first. Blank = default (newest).</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  onBlur={(e) => { if (e.target.value !== (track.store_sort_order != null ? String(track.store_sort_order) : '')) persist('store_sort_order', e.target.value); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  placeholder="—"
+                  className="w-20 bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono text-center"
+                />
+                <SaveStateChip state={saving === 'store_sort_order' ? 'saving' : recentlySaved === 'store_sort_order' ? 'saved' : 'idle'} />
+              </div>
+            </div>
           </div>
 
           {/* ── Cover Art ── */}
@@ -571,6 +647,38 @@ function PriceInput({
           className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md pl-7 pr-2.5 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono"
         />
       </div>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label, hint, on, onColor, busy, onToggle,
+}: {
+  label: string;
+  hint: string;
+  on: boolean;
+  onColor: string;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-[#E8DCC8]">{label}</p>
+        <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 leading-relaxed">{hint}</p>
+      </div>
+      <button
+        onClick={onToggle}
+        disabled={busy}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none disabled:opacity-60 ${
+          on ? onColor : 'bg-[#1f1a13]'
+        }`}
+        aria-pressed={on}
+      >
+        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+          on ? 'translate-x-5' : 'translate-x-0'
+        }`} />
+      </button>
     </div>
   );
 }

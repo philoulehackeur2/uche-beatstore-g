@@ -21,7 +21,8 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const limitParam = Number(req.nextUrl.searchParams.get('limit') ?? 5);
-  const limit = Math.max(1, Math.min(20, isFinite(limitParam) ? limitParam : 5));
+  // Cap raised to 50 so the discovery surface has a real pool to filter/browse.
+  const limit = Math.max(1, Math.min(50, isFinite(limitParam) ? limitParam : 5));
 
   try {
     let target: Track | null = null;
@@ -57,10 +58,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const similar = findSimilar(target, pool, limit);
+
+    // Attach tags per result so the discovery surface can filter by tag.
+    // Best-effort batch query; missing table / no tags → empty arrays.
+    const tagsByTrack: Record<string, string[]> = {};
+    if (isSupabaseConfigured() && similar.length > 0) {
+      try {
+        const owner = await requireRowOwnership('tracks', id);
+        if (owner.ok) {
+          const ids = similar.map((s) => s.track.id);
+          const { data: tagRows } = await owner.admin
+            .from('track_tags')
+            .select('track_id, tag')
+            .in('track_id', ids);
+          for (const r of (tagRows ?? []) as Array<{ track_id: string; tag: string }>) {
+            (tagsByTrack[r.track_id] ??= []).push(r.tag);
+          }
+        }
+      } catch {
+        // non-fatal — tag filtering just won't be available
+      }
+    }
+
     return NextResponse.json({
       target_id: target.id,
       results: similar.map((s) => ({
-        track: s.track,
+        track: {
+          id: s.track.id,
+          title: s.track.title,
+          type: s.track.type,
+          status: s.track.status ?? null,
+          cover_url: s.track.cover_url ?? null,
+          bpm: s.track.bpm ?? null,
+          key: s.track.key ?? null,
+          scale: s.track.scale ?? null,
+          tags: tagsByTrack[s.track.id] ?? [],
+        },
         distance: Number(s.distance.toFixed(4)),
         breakdown: {
           bpm: Number(s.breakdown.bpm.toFixed(3)),
