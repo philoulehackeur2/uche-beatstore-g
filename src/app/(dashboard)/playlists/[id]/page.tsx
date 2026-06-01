@@ -11,7 +11,9 @@ import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
-import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2, Search, Tag } from 'lucide-react';
+import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2, Search, Tag, ListMusic } from 'lucide-react';
+import { PlaylistSuggestions } from '@/components/playlists/PlaylistSuggestions';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDuration } from '@/lib/audio/format';
@@ -268,8 +270,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               {playlist?.cover_url ? (
                 <img loading="lazy" src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
-                  {playlist?.name?.[0] || 'P'}
+                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-white/[0.07]" style={seededGradient(playlist?.id ?? 'pl')}>
+                  <ListMusic size={64} className="text-white/15" />
                 </div>
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
@@ -322,10 +324,10 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleDescriptionSave();
                       if (e.key === 'Escape') { setTempDescription(playlist?.description ?? ''); setIsEditingDescription(false); }
                     }}
-                    rows={3}
+                    rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#0a0907] border border-[#2d2620] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] resize-none"
+                    className="w-full bg-[#0a0907] border border-[#2d2620] rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] resize-none"
                   />
                   <p className="mt-1 text-[9px] font-mono text-[#3a3328]">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
@@ -334,14 +336,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               ) : (
                 <button
                   onClick={() => setIsEditingDescription(true)}
-                  className="group mt-3 block text-left max-w-2xl"
+                  className="group mt-4 block text-left w-full"
                 >
                   {playlist?.description ? (
-                    <p className="text-[12px] text-[#a08a6a] leading-relaxed whitespace-pre-line group-hover:text-[#E8DCC8] transition-colors">
+                    <p className="text-[15px] text-[#a08a6a] leading-[1.7] whitespace-pre-line group-hover:text-[#E8DCC8] transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (
-                    <p className="text-[12px] text-[#3a3328] italic group-hover:text-[#5a5142] transition-colors">
+                    <p className="text-[14px] text-[#3a3328] italic group-hover:text-[#5a5142] transition-colors">
                       + Add a description
                     </p>
                   )}
@@ -489,6 +491,13 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             ))
           )}
         </div>
+          {/* Similar track suggestions — collapsed by default, opens on demand.
+              Seeds from up to 3 spread playlist tracks to capture the full vibe. */}
+          <PlaylistSuggestions
+            playlistId={params.id}
+            playlistTracks={tracks}
+            onAdded={fetchData}
+          />
           </div>
           {/* end right column */}
         </div>
