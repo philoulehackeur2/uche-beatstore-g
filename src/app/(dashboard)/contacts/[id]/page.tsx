@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
+import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
@@ -244,6 +245,14 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
                 <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
               </div>
+            </section>
+
+            {/* Tags — free-form CRM tags (mig 091) for find / regroup. */}
+            <section>
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3 flex items-center gap-2">
+                <Tag size={11} /> Tags
+              </h2>
+              <ContactTagPicker contactId={contact.id} />
             </section>
 
             {/* Notes — full-width textarea, autosave on blur. */}

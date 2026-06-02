@@ -119,6 +119,8 @@ export interface Contact {
   /** Buyer pipeline stage — set when contact was created via store
    *  free-download or contact form (category = 'buyer'). */
   buyer_pipeline_status?: 'new_lead' | 'contacted' | 'negotiating' | 'purchased' | 'repeat_buyer' | null;
+  /** Free-form CRM tags (mig 091). Attached by GET /api/contacts. */
+  tags?: { tag: string; category?: string | null }[];
   created_at: string;
 }
 

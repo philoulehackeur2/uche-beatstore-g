@@ -1,18 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scopedList, insertOwned, isErrorResponse } from '@/lib/db';
+import { scopedList, insertOwned, isErrorResponse, isSupabaseConfigured, createServiceClient, getAll } from '@/lib/db';
 
 /**
  * Contacts list + create — runs through the storage facade so the
  * `if (supabase) else (local)` boilerplate is centralized.
  *
- * GET  /api/contacts → caller's contacts, oldest-name-first.
- *                       Null-owner legacy rows included by default.
+ * GET  /api/contacts → caller's contacts, oldest-name-first, with tags attached
+ *                       (mig 091). Null-owner legacy rows included by default.
  * POST /api/contacts → create with user_id auto-stamped from session.
  */
 export async function GET(_req: NextRequest) {
-  const rows = await scopedList('contacts', { orderBy: 'name', ascending: true });
+  const rows = await scopedList<{ id: string; [k: string]: unknown }>('contacts', { orderBy: 'name', ascending: true });
   if (isErrorResponse(rows)) return rows;
-  return NextResponse.json(rows);
+
+  // Batch-attach tags so the CRM can filter/group by them client-side.
+  const ids = rows.map((r) => r.id);
+  const tagsByContact = new Map<string, { tag: string; category: string | null }[]>();
+  if (ids.length) {
+    if (isSupabaseConfigured()) {
+      const admin = createServiceClient();
+      const { data: tagRows } = await admin.from('contact_tags').select('contact_id, tag, category').in('contact_id', ids);
+      (tagRows ?? []).forEach((r: any) => {
+        const arr = tagsByContact.get(r.contact_id) ?? [];
+        arr.push({ tag: r.tag, category: r.category });
+        tagsByContact.set(r.contact_id, arr);
+      });
+    } else {
+      (getAll('contact_tags') as any[]).forEach((r) => {
+        const arr = tagsByContact.get(r.contact_id) ?? [];
+        arr.push({ tag: r.tag, category: r.category ?? null });
+        tagsByContact.set(r.contact_id, arr);
+      });
+    }
+  }
+
+  const withTags = rows.map((r) => ({ ...r, tags: tagsByContact.get(r.id) ?? [] }));
+  return NextResponse.json(withTags);
 }
 
 export async function POST(req: NextRequest) {

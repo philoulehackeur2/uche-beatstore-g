@@ -33,6 +33,7 @@ interface DBSchema {
   playlist_folders: any[];
   playlist_folder_items: any[];
   contact_segments: any[];
+  contact_tags: any[];
 }
 
 function getEmptyDB(): DBSchema {
@@ -65,6 +66,7 @@ function getEmptyDB(): DBSchema {
     playlist_folders: [],
     playlist_folder_items: [],
     contact_segments: [],
+    contact_tags: [],
   };
 }
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Search, Mail, Globe, Tag, Users, Send, Upload, Clock, X, Bookmark, BookmarkPlus } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
+import { filterAndSortContacts, type ContactFilterState } from '@/lib/contacts/filters';
 import { AddContactModal } from '@/components/crm/AddContactModal';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { BeatLog } from '@/components/crm/BeatLog';
@@ -51,6 +52,13 @@ export function ContactsView({
   // filter to that tone, or clears it if already the active filter).
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'engaged' | 'cold'>('all');
   const [sortMode, setSortMode] = useState<'recent' | 'name' | 'category'>('recent');
+  // Tag filter (mig 091) — AND semantics, multi-select.
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
+  // Windowed rendering — only render this many rows at once, grow on scroll.
+  // Keeps the DOM light at 500-600+ contacts.
+  const PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // Bulk-nudge spinner state — separate flag so the delete + nudge
   // buttons can each show their own loading state if both happen
@@ -308,69 +316,43 @@ export function ContactsView({
     return { label: 'Engaged', tone: 'engaged' };
   }
 
+  // All tags present across loaded contacts — drives the tag-filter chips.
+  const allTags = useMemo(() => {
+    const seen = new Set<string>();
+    for (const c of contacts) for (const t of c.tags ?? []) seen.add(t.tag);
+    return [...seen].sort();
+  }, [contacts]);
+
+  // Set of contact ids that currently need a nudge — passed to the pure helper.
+  const needsNudgeIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of contacts) if (needsNudge(c.id)) s.add(c.id);
+    return s;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, latestSendByContact]);
+
   const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    // Snapshot the "active" set inside the memo so we don't reach
-    // outside React's tracking. lastSentByContact is already a
-    // dependency-stable Map (memoized above), so referencing it
-    // inside the closure is safe.
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const isActive = (id: string) => {
-      const last = lastSentByContact.get(id);
-      return last != null && last >= thirtyDaysAgo;
+    const fState: ContactFilterState = {
+      search: searchQuery, category: categoryFilter as any, status: statusFilter, sort: sortMode, tags: tagFilter,
     };
-    const matched = contacts.filter((c) => {
-      if (categoryFilter !== 'all') {
-        const cat = c.category?.toLowerCase() || '';
-        const role = c.role?.toLowerCase() || '';
-        if (categoryFilter === 'buyers') {
-          if (cat !== 'buyer') return false;
-        } else if (categoryFilter === 'producers') {
-          if (cat !== 'producer' && !role.includes('producer')) return false;
-        } else if (categoryFilter === 'rappers') {
-          if (cat !== 'rapper' && !role.includes('rapper') && !role.includes('artist') && !role.includes('singer')) return false;
-        } else if (categoryFilter === 'a&r') {
-          if (cat !== 'a&r' && cat !== 'label' && !role.includes('a&r') && !role.includes('label')) return false;
-        } else if (categoryFilter === 'friends') {
-          if (cat !== 'friend' && !role.includes('friend')) return false;
-        } else if (categoryFilter === 'nudge') {
-          // Virtual segment — orthogonal to category. Surfaces only
-          // contacts whose most recent send has gone cold and needs a
-          // follow-up.
-          if (!needsNudge(c.id)) return false;
-        }
-      }
-      // Engagement filter — checks against the same statusFor() tiers.
-      if (statusFilter !== 'all') {
-        const last = lastSentByContact.get(c.id);
-        const tone = !last ? 'cold' : isActive(c.id) ? 'active' : 'engaged';
-        if (tone !== statusFilter) return false;
-      }
-      if (!q) return true;
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.role?.toLowerCase().includes(q) ||
-        c.label?.toLowerCase().includes(q) ||
-        c.category?.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q)
-      );
-    });
-    const sorted = [...matched];
-    switch (sortMode) {
-      case 'name':
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'category':
-        // Group-by-category — empty categories collated at end.
-        sorted.sort((a, b) => (a.category || '￿').localeCompare(b.category || '￿') ||
-                              a.name.localeCompare(b.name));
-        break;
-      case 'recent':
-      default:
-        sorted.sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
-    }
-    return sorted;
-  }, [contacts, searchQuery, categoryFilter, sortMode, statusFilter, lastSentByContact]);
+    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds });
+  }, [contacts, searchQuery, categoryFilter, sortMode, statusFilter, tagFilter, lastSentByContact, needsNudgeIds]);
+
+  // Reset the render window whenever the result set changes (new filter/search).
+  useEffect(() => { setVisibleCount(PAGE); }, [searchQuery, categoryFilter, statusFilter, sortMode, tagFilter]);
+
+  // Grow the window when the sentinel scrolls into view (infinite scroll).
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) setVisibleCount((c) => Math.min(c + PAGE, filtered.length));
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length]);
+
+  const visibleContacts = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
   const selectedContacts = useMemo(
     () => contacts.filter((c) => selectedIds.has(c.id)),
@@ -612,6 +594,27 @@ export function ContactsView({
                 library + playlists. */}
           </div>
 
+          {/* Tag filter chips (mig 091) — find / regroup contacts by tag. AND semantics. */}
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-1.5 mb-5 flex-wrap">
+              <Tag size={11} className="text-[#3a3328] shrink-0" />
+              {allTags.map((tag) => {
+                const on = tagFilter.has(tag);
+                return (
+                  <button key={tag} onClick={() => setTagFilter((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; })}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'}`}>
+                    {tag}
+                  </button>
+                );
+              })}
+              {tagFilter.size > 0 && (
+                <button onClick={() => setTagFilter(new Set())} className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#E8DCC8] transition-colors ml-1">
+                  <X size={10} /> Clear tags
+                </button>
+              )}
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             // Three empty-state flavours:
             //   1. fetch errored       → show the error
@@ -730,7 +733,7 @@ export function ContactsView({
                   <span className="text-right">Actions</span>
                 </div>
               )}
-              {filtered.map((contact) => {
+              {visibleContacts.map((contact) => {
                 const isSelected = selectedIds.has(contact.id);
                 const isDropTarget = dropHoverId === contact.id;
                 const sendCount = sendCountByContact.get(contact.id) ?? 0;
@@ -822,9 +825,15 @@ export function ContactsView({
                           </button>
                         )}
                       </div>
-                      <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
-                        {new Date(contact.created_at).toLocaleDateString()}
-                      </p>
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+                          {new Date(contact.created_at).toLocaleDateString()}
+                        </p>
+                        {(contact.tags ?? []).slice(0, 2).map((t) => (
+                          <span key={t.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1 py-0.5 rounded">{t.tag}</span>
+                        ))}
+                        {(contact.tags?.length ?? 0) > 2 && <span className="text-[8px] font-mono text-[#4a4338]">+{contact.tags!.length - 2}</span>}
+                      </div>
                     </div>
 
                     {categoryFilter === 'a&r' ? (
@@ -975,6 +984,12 @@ export function ContactsView({
                   </div>
                 );
               })}
+              {/* Infinite-scroll sentinel + count — keeps the DOM light at scale. */}
+              {visibleCount < filtered.length && (
+                <div ref={sentinelRef} className="flex items-center justify-center py-4 text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+                  <Loader2 size={12} className="animate-spin mr-2" /> Showing {visibleCount} of {filtered.length}
+                </div>
+              )}
               </div>
             </div>
           )}
