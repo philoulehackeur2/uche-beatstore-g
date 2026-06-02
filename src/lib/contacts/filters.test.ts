@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterAndSortContacts, matchesCategory, activeContactFilterCount, type ContactLike, type ContactFilterState, type ContactFilterContext } from './filters';
+import { filterAndSortContacts, matchesCategory, activeContactFilterCount, paginate, pageCount, type ContactLike, type ContactFilterState, type ContactFilterContext } from './filters';
 
 let seq = 0;
 function make(p: Partial<ContactLike> = {}): ContactLike {
@@ -48,8 +48,35 @@ describe('filterAndSortContacts', () => {
     const list = [make({ id: 'a', name: 'Zoe' }), make({ id: 'b', name: 'Abe' })];
     expect(filterAndSortContacts(list, state({ sort: 'name' }), emptyCtx).map((c) => c.id)).toEqual(['b', 'a']);
   });
+  it('sorts by lastSent desc by default', () => {
+    const ctx: ContactFilterContext = { lastSentByContact: new Map([['a', '2024-01-01'], ['b', '2024-06-01']]), needsNudgeIds: new Set() };
+    const list = [make({ id: 'a' }), make({ id: 'b' }), make({ id: 'c' })];
+    expect(filterAndSortContacts(list, state({ sort: 'lastSent' }), ctx).map((c) => c.id)).toEqual(['b', 'a', 'c']);
+  });
+  it('sorts by sends count, respecting sortDir asc', () => {
+    const ctx: ContactFilterContext = { lastSentByContact: new Map(), needsNudgeIds: new Set(), sendCountByContact: new Map([['a', 5], ['b', 1], ['c', 3]]) };
+    const list = [make({ id: 'a' }), make({ id: 'b' }), make({ id: 'c' })];
+    expect(filterAndSortContacts(list, { ...state({ sort: 'sends' }), sortDir: 'asc' }, ctx).map((c) => c.id)).toEqual(['b', 'c', 'a']);
+    expect(filterAndSortContacts(list, { ...state({ sort: 'sends' }), sortDir: 'desc' }, ctx).map((c) => c.id)).toEqual(['a', 'c', 'b']);
+  });
   it('activeContactFilterCount', () => {
     expect(activeContactFilterCount(state())).toBe(0);
     expect(activeContactFilterCount(state({ category: 'buyers', tags: ['vip'], search: 'x' }))).toBe(3);
+  });
+});
+
+describe('paginate', () => {
+  const list = Array.from({ length: 47 }, (_, i) => i);
+  it('slices 1-indexed pages', () => {
+    expect(paginate(list, 1, 25)).toEqual(list.slice(0, 25));
+    expect(paginate(list, 2, 25)).toEqual(list.slice(25, 47));
+  });
+  it('empty for out-of-range page', () => {
+    expect(paginate(list, 3, 25)).toEqual([]);
+  });
+  it('pageCount rounds up, min 1', () => {
+    expect(pageCount(47, 25)).toBe(2);
+    expect(pageCount(0, 25)).toBe(1);
+    expect(pageCount(50, 25)).toBe(2);
   });
 });

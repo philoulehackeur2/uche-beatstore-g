@@ -270,6 +270,29 @@ export const ContactResolveBodySchema = z.object({
 }).strict();
 export type ContactResolveBody = z.infer<typeof ContactResolveBodySchema>;
 
+// ── CRM lifecycle stage (mig 092) ─────────────────────────────────────────
+// Editable, stored. Distinct from the auto-computed activity tone.
+export const CRM_STAGES = ['prospect', 'active', 'engaged', 'cold', 'archived'] as const;
+export type CrmStage = (typeof CRM_STAGES)[number];
+
+// Batch edit a set of contacts (stage and/or category).
+export const ContactsBatchPatchBodySchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(1000),
+  patch: z.object({
+    crm_status: z.enum(CRM_STAGES).nullable().optional(),
+    category: z.string().max(40).nullable().optional(),
+  }).strict(),
+}).strict();
+export type ContactsBatchPatchBody = z.infer<typeof ContactsBatchPatchBodySchema>;
+
+// Bulk add/remove tags across many contacts in one request.
+export const ContactsBulkTagsBodySchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(1000),
+  add: z.array(z.string().min(1).max(40)).max(50).optional(),
+  remove: z.array(z.string().min(1).max(40)).max(50).optional(),
+}).strict();
+export type ContactsBulkTagsBody = z.infer<typeof ContactsBulkTagsBodySchema>;
+
 // ── License purchases ──────────────────────────────────────────────────
 // license_purchases.line_items is a JSON column the Stripe webhook writes
 // from cart_items metadata. Stripe metadata caps each value at 500 chars

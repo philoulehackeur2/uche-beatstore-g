@@ -19,13 +19,16 @@ export interface ContactLike {
 
 export type ContactCategoryFilter = 'all' | 'buyers' | 'rappers' | 'producers' | 'a&r' | 'friends' | 'nudge';
 export type ContactStatusFilter = 'all' | 'active' | 'engaged' | 'cold';
-export type ContactSortMode = 'recent' | 'name' | 'category';
+export type ContactSortMode = 'recent' | 'name' | 'category' | 'lastSent' | 'sends';
+export type SortDir = 'asc' | 'desc';
 
 export interface ContactFilterState {
   search: string;
   category: ContactCategoryFilter;
   status: ContactStatusFilter;
   sort: ContactSortMode;
+  /** Direction for the active sort column. Default 'desc'. */
+  sortDir?: SortDir;
   tags: Set<string>;
 }
 
@@ -34,6 +37,8 @@ export interface ContactFilterContext {
   lastSentByContact: Map<string, string>;
   /** Set of contactIds whose most recent send needs a nudge. */
   needsNudgeIds: Set<string>;
+  /** Map contactId → number of sends. Required for the 'sends' sort. */
+  sendCountByContact?: Map<string, number>;
 }
 
 /** True when a contact matches the given category segment (role-aware). */
@@ -88,20 +93,45 @@ export function filterAndSortContacts<T extends ContactLike>(
   });
 
   const sorted = [...matched];
+  const lastSent = ctx.lastSentByContact;
+  const sendCount = ctx.sendCountByContact;
+  // Comparators return ascending order; we flip at the end for 'desc'.
+  let cmp: (a: ContactLike, b: ContactLike) => number;
   switch (state.sort) {
     case 'name':
-      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      cmp = (a, b) => a.name.localeCompare(b.name);
       break;
     case 'category':
-      sorted.sort((a, b) =>
-        (a.category || '￿').localeCompare(b.category || '￿') || a.name.localeCompare(b.name),
-      );
+      cmp = (a, b) => (a.category || '￿').localeCompare(b.category || '￿') || a.name.localeCompare(b.name);
+      break;
+    case 'lastSent':
+      cmp = (a, b) => String(lastSent.get(a.id) ?? '').localeCompare(String(lastSent.get(b.id) ?? ''));
+      break;
+    case 'sends':
+      cmp = (a, b) => (sendCount?.get(a.id) ?? 0) - (sendCount?.get(b.id) ?? 0);
       break;
     case 'recent':
     default:
-      sorted.sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
+      cmp = (a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
   }
+  sorted.sort(cmp);
+  // Default direction is 'desc' for recency/count columns, 'asc' for name —
+  // but the caller's explicit sortDir always wins.
+  const defaultDesc = state.sort === 'recent' || state.sort === 'lastSent' || state.sort === 'sends';
+  const dir = state.sortDir ?? (defaultDesc ? 'desc' : 'asc');
+  if (dir === 'desc') sorted.reverse();
   return sorted;
+}
+
+/** Pure pagination slice. page is 1-indexed. */
+export function paginate<T>(list: T[], page: number, pageSize: number): T[] {
+  const start = Math.max(0, (page - 1) * pageSize);
+  return list.slice(start, start + pageSize);
+}
+
+/** Total page count for a list (min 1). */
+export function pageCount(total: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(total / pageSize));
 }
 
 export function activeContactFilterCount(state: ContactFilterState): number {

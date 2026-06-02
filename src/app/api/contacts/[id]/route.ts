@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getOwned, updateOwned, deleteOwned, isErrorResponse } from '@/lib/db';
 import { readBody } from '@/lib/validate';
+import { CRM_STAGES } from '@/lib/contracts';
 
 /**
  * Per-contact CRUD.
@@ -29,6 +30,7 @@ const PatchBodySchema = z
     instagram: z.string().max(120).nullable().optional(),
     twitter: z.string().max(120).nullable().optional(),
     notes: z.string().max(10000).nullable().optional(),
+    crm_status: z.enum(CRM_STAGES).nullable().optional(),
   })
   .strict();
 

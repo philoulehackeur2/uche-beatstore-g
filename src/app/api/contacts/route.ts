@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scopedList, insertOwned, isErrorResponse, isSupabaseConfigured, createServiceClient, getAll } from '@/lib/db';
+import { scopedList, insertOwned, isErrorResponse, isSupabaseConfigured, createServiceClient, getAll, requireUser, query, update } from '@/lib/db';
+import { readBody } from '@/lib/validate';
+import { errorMessage } from '@/lib/errors';
+import { ContactsBatchPatchBodySchema } from '@/lib/contracts';
 
 /**
  * Contacts list + create — runs through the storage facade so the
@@ -57,4 +60,41 @@ export async function POST(req: NextRequest) {
   });
   if (isErrorResponse(result)) return result;
   return NextResponse.json(result);
+}
+
+/**
+ * PATCH /api/contacts — batch edit. Body { ids, patch: { crm_status?, category? } }.
+ * Used by the CRM bulk-edit bar. Owner-scoped: only the caller's (or legacy-null)
+ * rows among the given ids are updated.
+ */
+export async function PATCH(req: NextRequest) {
+  const parsed = await readBody(req, ContactsBatchPatchBodySchema);
+  if (!parsed.ok) return parsed.res;
+  const { ids, patch } = parsed.data;
+  if (Object.keys(patch).length === 0) return NextResponse.json({ updated: 0 });
+
+  try {
+    const auth = await requireUser();
+    if (!auth.ok) return auth.res;
+
+    if (isSupabaseConfigured()) {
+      // Single UPDATE … IN (ids) scoped to owner-or-legacy-null. No N round-trips.
+      const { data, error } = await auth.admin
+        .from('contacts')
+        .update(patch)
+        .in('id', ids)
+        .or(`user_id.eq.${auth.userId},user_id.is.null`)
+        .select('id');
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ updated: data?.length ?? 0 });
+    }
+
+    // Local-store fallback.
+    const idset = new Set(ids);
+    const rows = query('contacts', (c) => idset.has((c as any).id)) as any[];
+    rows.forEach((r) => update('contacts', r.id, patch));
+    return NextResponse.json({ updated: rows.length });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+  }
 }

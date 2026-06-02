@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Loader2, Search, Mail, Globe, Tag, Users, Send, Upload, Clock, X, Bookmark, BookmarkPlus } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2, Users, Upload, Send, Mail } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
-import { filterAndSortContacts, type ContactFilterState } from '@/lib/contacts/filters';
+import { filterAndSortContacts, paginate, type ContactFilterState, type ContactSortMode, type SortDir } from '@/lib/contacts/filters';
+import type { CrmStage } from '@/lib/contracts';
 import { AddContactModal } from '@/components/crm/AddContactModal';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { BeatLog } from '@/components/crm/BeatLog';
@@ -11,17 +12,22 @@ import { ImportContactsModal } from '@/components/crm/ImportContactsModal';
 import { ContactHistoryDrawer } from '@/components/crm/ContactHistoryDrawer';
 import { NudgeModal } from '@/components/crm/NudgeModal';
 import { toast, confirmToast } from '@/hooks/useToast';
-import { Dropdown } from '@/components/ui/Dropdown';
-import Link from 'next/link';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { isTrackDrag, readTrackDragData, type TrackDragPayload } from '@/lib/dnd';
+import { contactsToCsv, downloadCsv } from '@/lib/contacts/export';
+import { ContactsStatsBar } from '@/components/crm/ContactsStatsBar';
+import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar';
+import { ContactsTable } from '@/components/crm/ContactsTable';
+import { ContactsPagination } from '@/components/crm/ContactsPagination';
+import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
+import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 
 /**
  * Client island that owns the interactive layer of /contacts.
+ * Initial data is fetched on the server (RSC) and handed in as props.
  *
- * Initial data is fetched on the server (RSC) and handed in as props, so the
- * page renders with content on the very first paint. Subsequent mutations
- * (add, import, send) trigger a client-side refetch.
+ * This component is the stateful container; presentation lives in the
+ * extracted Toolbar / Table / Pagination / StatsBar / BulkEditPanel children.
  */
 export function ContactsView({
   initialContacts,
@@ -37,48 +43,27 @@ export function ContactsView({
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  // sendQueue can hold one contact (single send) or many (bulk send). The
-  // SendBeatModal accepts both shapes through its `contacts` prop.
   const [sendQueue, setSendQueue] = useState<Contact[] | null>(null);
   const [historyContact, setHistoryContact] = useState<Contact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'network' | 'activity'>('network');
-  // CRM filters that operate on top of free-text search. Category narrows
-  // the list to a specific contact role (artist / producer / a&r etc).
-  // Sort gives the user control over alphabetical vs recency views.
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  // Engagement filter — `all` shows everyone, the others narrow to one
-  // pill tone. Toggled by clicking any row's status pill (it sets the
-  // filter to that tone, or clears it if already the active filter).
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'engaged' | 'cold'>('all');
-  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'category'>('recent');
-  // Tag filter (mig 091) — AND semantics, multi-select.
+  const [sortMode, setSortMode] = useState<ContactSortMode>('recent');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
-  // Windowed rendering — only render this many rows at once, grow on scroll.
-  // Keeps the DOM light at 500-600+ contacts.
-  const PAGE = 60;
-  const [visibleCount, setVisibleCount] = useState(PAGE);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Pagination — replaces the old infinite-scroll window.
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  // Bulk-nudge spinner state — separate flag so the delete + nudge
-  // buttons can each show their own loading state if both happen
-  // back-to-back.
   const [bulkNudging, setBulkNudging] = useState(false);
-  // Multi-select state for bulk operations. We keep a Set in state so
-  // toggling stays O(1) regardless of contact-count.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // DnD: when the user drags a track over a contact row, this holds the
-  // contact id being hovered so we can highlight it. Resets on
-  // dragleave / drop.
   const [dropHoverId, setDropHoverId] = useState<string | null>(null);
-  // When a track gets dropped on a contact row, we pre-load the
-  // SendBeatModal with both the recipient and the track already
-  // selected. The modal supports `prefilledTrackIds` for this.
   const [prefilledTrackIds, setPrefilledTrackIds] = useState<string[] | null>(null);
   const [nudgeContact, setNudgeContact] = useState<{ contact: Contact; latestSend: any } | null>(null);
+  // Bulk-edit panel: which batch operation is open.
+  const [bulkPanel, setBulkPanel] = useState<'stage' | 'addTags' | 'removeTags' | null>(null);
 
-  // Saved filter segments (mig 090) — named filter combos shown as chips.
-  type Segment = { id: string; name: string; filters: { search?: string; category?: string; status?: string; sort?: string } };
   const [segments, setSegments] = useState<Segment[]>([]);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
 
@@ -131,45 +116,12 @@ export function ContactsView({
     setDropHoverId(null);
   };
 
-  const handleChangeCategory = async (contactId: string, newCategory: string | null) => {
-    // Optimistic UI update
-    setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, category: newCategory || null } : c))
-    );
-    try {
-      const res = await fetch(`/api/contacts/${contactId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: newCategory || null }),
-      });
-      if (!res.ok) {
-        toast.error('Failed to change category');
-        refetch();
-      } else {
-        toast.success('Category updated successfully');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to change category');
-      refetch();
-    }
-  };
-
   const refetch = async () => {
     setRefreshing(true);
     try {
-      // Contracts:
-      //   GET /api/contacts    → Contact[] (raw array)
-      //   GET /api/beat_sends  → { sends: BeatSend[] }
-      // If either ever drifts, prefer a loud TypeError to a silent empty
-      // page. The previous "either shape works" code masked the day the
-      // contract changed.
-      const [contactsRes, sendsRes] = await Promise.all([
-        fetch('/api/contacts'),
-        fetch('/api/beat_sends'),
-      ]);
+      const [contactsRes, sendsRes] = await Promise.all([fetch('/api/contacts'), fetch('/api/beat_sends')]);
       if (!contactsRes.ok) throw new Error(`/api/contacts HTTP ${contactsRes.status}`);
-      if (!sendsRes.ok)    throw new Error(`/api/beat_sends HTTP ${sendsRes.status}`);
+      if (!sendsRes.ok) throw new Error(`/api/beat_sends HTTP ${sendsRes.status}`);
       const contactsList = (await contactsRes.json()) as Contact[];
       const sends = (await sendsRes.json()) as { sends: BeatSend[] };
       setContacts(contactsList);
@@ -182,845 +134,262 @@ export function ContactsView({
     }
   };
 
-  // If the server-side fetch errored, retry on the client once on mount so
-  // transient hiccups (e.g. cold-start) don't leave the page empty.
   useEffect(() => {
     if (fetchError && contacts.length === 0) refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Distinct categories present in the loaded contact set, used to
-  // populate the dropdown. We don't hardcode the canonical list because
-  // imported CSVs can introduce one-off labels — the dropdown should
-  // reflect the user's actual data, not a fixed enum.
-  const availableCategories = useMemo(() => {
-    const seen = new Set<string>();
-    for (const c of contacts) if (c.category) seen.add(c.category);
-    return Array.from(seen).sort();
-  }, [contacts]);
-
-  // Count how many sends each contact has — keys the inline history badge
-  // so users can spot "I've already sent Phil 4 things" without opening.
+  // ── Derived maps ──────────────────────────────────────────────────────
   const sendCountByContact = useMemo(() => {
     const map = new Map<string, number>();
-    for (const s of beatSends) {
-      map.set(s.contact_id, (map.get(s.contact_id) ?? 0) + 1);
-    }
+    for (const s of beatSends) map.set(s.contact_id, (map.get(s.contact_id) ?? 0) + 1);
     return map;
   }, [beatSends]);
 
-  // Most recent send per contact — drives the engagement status pill
-  // (active / engaged / cold) and the "last sent N days ago" hover
-  // hint on the history badge. ISO strings sort lexicographically so
-  // a direct `>` compare gives us the most recent without parsing.
   const lastSentByContact = useMemo(() => {
     const map = new Map<string, string>();
-    for (const s of beatSends) {
-      const cur = map.get(s.contact_id);
-      if (!cur || s.sent_at > cur) map.set(s.contact_id, s.sent_at);
-    }
+    for (const s of beatSends) { const cur = map.get(s.contact_id); if (!cur || s.sent_at > cur) map.set(s.contact_id, s.sent_at); }
     return map;
   }, [beatSends]);
-
-  // Most recent beat_send object per contact — used by both the
-  // Needs-Nudge filter chip AND the bulk-nudge action. We keep the
-  // whole row (not just the timestamp) so callers can grab
-  // `track_ids` / `share_token` and pre-fill modals without a
-  // second pass over beatSends.
 
   const latestSendByContact = useMemo(() => {
     const map = new Map<string, BeatSend>();
-    for (const s of beatSends) {
-      const cur = map.get(s.contact_id);
-      if (!cur || s.sent_at > cur.sent_at) map.set(s.contact_id, s);
-    }
+    for (const s of beatSends) { const cur = map.get(s.contact_id); if (!cur || s.sent_at > cur.sent_at) map.set(s.contact_id, s); }
     return map;
   }, [beatSends]);
-
-  // Predicate shared by the row-level Nudge badge, the Needs-Nudge
-  // filter chip, and the bulk-Nudge action. A contact needs a nudge
-  // when their most recent send is still in the `sent` stage (not
-  // opened / interested / placed / pass) and has aged past the
-  // 5-day default cadence. Campaigns may override per-target later.
 
   const NUDGE_AFTER_DAYS = 5;
   const needsNudge = (contactId: string): boolean => {
     const latest = latestSendByContact.get(contactId);
     if (!latest || latest.status !== 'sent') return false;
-    const days = (Date.now() - Date.parse(latest.sent_at)) / 86_400_000;
-    return days > NUDGE_AFTER_DAYS;
+    return (Date.now() - Date.parse(latest.sent_at)) / 86_400_000 > NUDGE_AFTER_DAYS;
   };
 
-  // Latest send STATUS per contact — drives the new pipeline-stage
-  // column. Status updates happen in ContactHistoryDrawer (already
-  // wired); this view just reflects whatever the latest send's status
-  // is. We index off `sent_at` not `created_at` because the status is
-  // tied to send activity, not contact creation.
   const latestStatusByContact = useMemo(() => {
     const latest = new Map<string, { sent_at: string; status: string }>();
-    for (const s of beatSends) {
-      const cur = latest.get(s.contact_id);
-      if (!cur || s.sent_at > cur.sent_at) {
-        latest.set(s.contact_id, { sent_at: s.sent_at, status: s.status });
-      }
-    }
+    for (const s of beatSends) { const cur = latest.get(s.contact_id); if (!cur || s.sent_at > cur.sent_at) latest.set(s.contact_id, { sent_at: s.sent_at, status: s.status }); }
     const map = new Map<string, string>();
     for (const [id, v] of latest) map.set(id, v.status);
     return map;
   }, [beatSends]);
 
-  // Header stats — richer metrics than plain "total sends".
+  // Derived activity tone (read-only) — distinct from the editable crm_status stage.
+  const toneFor = (contactId: string): ActivityTone => {
+    const last = lastSentByContact.get(contactId);
+    if (!last) return 'cold';
+    return (Date.now() - Date.parse(last)) / 86_400_000 <= 30 ? 'active' : 'engaged';
+  };
+
   const stats = useMemo(() => {
     const total = contacts.length;
     const sends = beatSends.length;
-    const engaged = new Set(beatSends.map((s) => s.contact_id)).size;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const activeIds = new Set(
-      beatSends.filter((s) => s.sent_at >= thirtyDaysAgo).map((s) => s.contact_id),
-    );
-
-    // Response rate — sends that advanced beyond "sent" (opened, interested, negotiating, placed)
+    const active = new Set(beatSends.filter((s) => s.sent_at >= thirtyDaysAgo).map((s) => s.contact_id)).size;
     const responded = beatSends.filter((s) => !['sent'].includes(s.status ?? 'sent')).length;
     const responseRate = sends > 0 ? Math.round((responded / sends) * 100) : 0;
-
-    // Pipeline breakdown
-    const pipeline = { sent: 0, opened: 0, interested: 0, negotiating: 0, placed: 0, pass: 0 };
-    for (const s of beatSends) {
-      const st = (s.status as keyof typeof pipeline) ?? 'sent';
-      if (st in pipeline) pipeline[st]++;
-    }
-
-    // Per-category contact counts
-    const byCategory: Record<string, number> = {};
-    for (const c of contacts) {
-      const cat = c.category?.toLowerCase() || 'other';
-      byCategory[cat] = (byCategory[cat] ?? 0) + 1;
-    }
-
-    // Open tracking (mig 089) — how many sends have been opened
+    const pipeline: Record<string, number> = { sent: 0, opened: 0, interested: 0, negotiating: 0, placed: 0, pass: 0 };
+    for (const s of beatSends) { const st = (s.status as string) ?? 'sent'; if (st in pipeline) pipeline[st]++; }
     const openedCount = beatSends.filter((s) => (s as any).opened_at).length;
+    const needNudge = contacts.reduce((n, c) => n + (needsNudge(c.id) ? 1 : 0), 0);
+    return { total, sends, active, needNudge, responseRate, pipeline, openedCount };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, beatSends, latestSendByContact]);
 
-    return { total, sends, engaged, active: activeIds.size, responseRate, pipeline, byCategory, openedCount };
-  }, [contacts, beatSends]);
-
-  // Per-contact engagement status, derived from last-send recency.
-  // Three tiers cover the 80% case without forcing the user to think
-  // about exact dates. Also drives the click-to-filter behavior on
-  // the row pill — clicking an Active pill narrows the list to
-  // Active contacts.
-  function statusFor(contactId: string): { label: string; tone: 'active' | 'engaged' | 'cold' } {
-    const last = lastSentByContact.get(contactId);
-    if (!last) return { label: 'Cold', tone: 'cold' };
-    const days = (Date.now() - Date.parse(last)) / 86_400_000;
-    if (days <= 30) return { label: 'Active', tone: 'active' };
-    return { label: 'Engaged', tone: 'engaged' };
-  }
-
-  // All tags present across loaded contacts — drives the tag-filter chips.
   const allTags = useMemo(() => {
     const seen = new Set<string>();
     for (const c of contacts) for (const t of c.tags ?? []) seen.add(t.tag);
     return [...seen].sort();
   }, [contacts]);
 
-  // Set of contact ids that currently need a nudge — passed to the pure helper.
   const needsNudgeIds = useMemo(() => {
     const s = new Set<string>();
     for (const c of contacts) if (needsNudge(c.id)) s.add(c.id);
     return s;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts, latestSendByContact]);
 
+  // Count for each category segment (toolbar dropdown).
+  const categoryCount = (seg: string): number => {
+    if (seg === 'all') return contacts.length;
+    return contacts.filter((c) => {
+      if (seg === 'nudge') return needsNudge(c.id);
+      const cat = c.category?.toLowerCase() || '';
+      const role = c.role?.toLowerCase() || '';
+      if (seg === 'buyers') return cat === 'buyer';
+      if (seg === 'producers') return cat === 'producer' || role.includes('producer');
+      if (seg === 'rappers') return cat === 'rapper' || role.includes('rapper') || role.includes('artist') || role.includes('singer');
+      if (seg === 'a&r') return cat === 'a&r' || cat === 'label' || role.includes('a&r') || role.includes('label');
+      if (seg === 'friends') return cat === 'friend' || role.includes('friend');
+      return false;
+    }).length;
+  };
+
   const filtered = useMemo(() => {
-    const fState: ContactFilterState = {
-      search: searchQuery, category: categoryFilter as any, status: statusFilter, sort: sortMode, tags: tagFilter,
-    };
-    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds });
-  }, [contacts, searchQuery, categoryFilter, sortMode, statusFilter, tagFilter, lastSentByContact, needsNudgeIds]);
+    const fState: ContactFilterState = { search: searchQuery, category: categoryFilter as any, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
+    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact });
+  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact]);
 
-  // Reset the render window whenever the result set changes (new filter/search).
-  useEffect(() => { setVisibleCount(PAGE); }, [searchQuery, categoryFilter, statusFilter, sortMode, tagFilter]);
+  // Reset to page 1 whenever the result set changes.
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, categoryFilter, statusFilter, sortMode, sortDir, tagFilter, pageSize]);
 
-  // Grow the window when the sentinel scrolls into view (infinite scroll).
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) setVisibleCount((c) => Math.min(c + PAGE, filtered.length));
-    }, { rootMargin: '600px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [filtered.length]);
+  const paginated = useMemo(() => paginate(filtered, currentPage, pageSize), [filtered, currentPage, pageSize]);
 
-  const visibleContacts = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const selectedContacts = useMemo(() => contacts.filter((c) => selectedIds.has(c.id)), [contacts, selectedIds]);
 
-  const selectedContacts = useMemo(
-    () => contacts.filter((c) => selectedIds.has(c.id)),
-    [contacts, selectedIds],
-  );
+  const toggleSelect = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const pageIds = paginated.map((c) => c.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const toggleSelectPage = () => setSelectedIds((prev) => {
+    const n = new Set(prev);
+    if (allPageSelected) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id));
+    return n;
+  });
+  const selectAllFiltered = () => setSelectedIds(new Set(filtered.map((c) => c.id)));
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-  const toggleSelectAll = () => {
-    setSelectedIds((prev) =>
-      prev.size === filtered.length && filtered.length > 0
-        ? new Set()
-        : new Set(filtered.map((c) => c.id)),
-    );
+  // Sort: clicking a column toggles direction (or activates it descending first for recency/count).
+  const onSort = (col: ContactSortMode) => {
+    if (sortMode === col) { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); return; }
+    setSortMode(col);
+    setSortDir(col === 'name' ? 'asc' : 'desc');
   };
 
-  // Status helpers moved up to here in this turn so the `filtered`
-  // useMemo can call `statusFor()` when narrowing by engagement tone.
-  // See the new statusFilter chip strip near the toolbar.
+  // Inline stage edit — update local state; the StageCell does the PATCH.
+  const onStageChange = (id: string, next: CrmStage | null) =>
+    setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, crm_status: next } : c)));
+
+  // DnD row handlers (track-on-contact).
+  const onRowDragOver = (id: string, e: React.DragEvent) => { if (isTrackDrag(e)) { e.preventDefault(); setDropHoverId(id); } };
+  const onRowDragLeave = (e: React.DragEvent) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropHoverId(null); };
+  const onRowDrop = (contact: Contact, e: React.DragEvent) => {
+    const payload = readTrackDragData(e);
+    if (payload) { e.preventDefault(); handleDropOnContact(contact, payload); }
+  };
+
+  const exportFiltered = () => {
+    downloadCsv(`contacts-${new Date().toISOString().slice(0, 10)}.csv`, contactsToCsv(filtered));
+    toast.success(`Exported ${filtered.length} contact${filtered.length === 1 ? '' : 's'}`);
+  };
+  const exportSelected = () => {
+    downloadCsv(`contacts-selection-${new Date().toISOString().slice(0, 10)}.csv`, contactsToCsv(selectedContacts));
+    toast.success(`Exported ${selectedContacts.length}`);
+  };
+
+  const isFiltered = searchQuery.trim() !== '' || categoryFilter !== 'all' || statusFilter !== 'all' || tagFilter.size > 0;
+  const staleSelected = selectedContacts.filter((c) => needsNudge(c.id) && c.email);
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
-      {/* Header — title + action row, then stats strip underneath. */}
-      <div className="mb-6 pb-6 border-b border-[#16130e]">
-        <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-8">
-          {/* Abstract Image Background */}
-          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-3.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CRM</p>
-              <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Contacts</h1>
-              <p className="text-[11px] text-[#a08a6a] max-w-md">Your network. Sends, statuses, history — all in one place.</p>
-            </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center bg-[#14110d] border border-[#1f1a13] rounded-full p-0.5">
-              {(['network', 'activity'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  className={`px-3 py-1.5 text-[11px] font-medium rounded-full capitalize transition-colors ${
-                    activeTab === t ? 'bg-[#2A2418] text-white' : 'text-[#6a5d4a] hover:text-[#E8DCC8]'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[#E8DCC8] hover:bg-[#1a160f] hover:border-[#2d2620] text-[11px] font-medium transition-colors"
-            >
-              <Upload size={13} />
-              Import
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium transition-colors active:scale-[0.98]"
-            >
-              <Plus size={13} />
-              Add contact
-            </button>
-          </div>
+      {/* Header */}
+      <div className="flex items-end justify-between gap-4 mb-5 flex-wrap">
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CRM</p>
+          <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading">Contacts</h1>
         </div>
-        </div>
-
-        {/* Analytics strip — meaningful CRM metrics, not just raw counts. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Total contacts */}
-          <StatCard label="Contacts" value={stats.total.toString()} hint={`${stats.active} active`} />
-
-          {/* Response rate — the conversion that actually matters */}
-          <StatCard
-            label="Response rate"
-            value={`${stats.responseRate}%`}
-            hint={`${stats.sends} sends`}
-            tone={stats.responseRate >= 30 ? 'active' : undefined}
-          />
-
-          {/* Open tracking — shows pending until Resend webhook lands */}
-          <div className="bg-[#14110d] border border-[#1f1a13] rounded-xl px-4 py-4">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Opened</p>
-            <p className="text-[22px] font-bold font-mono text-[#E8DCC8] leading-none">
-              {stats.openedCount > 0 ? stats.openedCount : '—'}
-            </p>
-            <p className="text-[9px] font-mono text-[#3a3328] mt-1">
-              {stats.openedCount > 0 ? `${Math.round((stats.openedCount / Math.max(1, stats.sends)) * 100)}% open rate` : 'Pending Resend hook'}
-            </p>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
+            {(['network', 'activity'] as const).map((t) => (
+              <button key={t} onClick={() => setActiveTab(t)}
+                className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-[#2A2418] text-white' : 'text-[#6a5d4a] hover:text-[#E8DCC8]'}`}>
+                {t}
+              </button>
+            ))}
           </div>
-
-          {/* Pipeline mini-funnel */}
-          <div className="bg-[#14110d] border border-[#1f1a13] rounded-xl px-4 py-4">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Pipeline</p>
-            <div className="space-y-1.5">
-              {([
-                ['placed', '#6DC6A4'],
-                ['negotiating', '#9d95e8'],
-                ['interested', '#D4BFA0'],
-                ['opened', '#c8a84b'],
-              ] as const).map(([stage, color]) => {
-                const n = stats.pipeline[stage as keyof typeof stats.pipeline] ?? 0;
-                const pct = stats.sends > 0 ? Math.round((n / stats.sends) * 100) : 0;
-                return n > 0 ? (
-                  <div key={stage} className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 rounded-full bg-[#1a160f] overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
-                    </div>
-                    <span className="text-[9px] font-mono capitalize text-[#5a5142]">{stage} · {n}</span>
-                  </div>
-                ) : null;
-              })}
-              {stats.sends === 0 && <p className="text-[9px] font-mono text-[#3a3328]">No sends yet</p>}
-            </div>
-          </div>
+          <button onClick={() => setShowImportModal(true)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-[#E8DCC8] hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
+            <Upload size={13} /> Import
+          </button>
         </div>
       </div>
 
       {activeTab === 'network' ? (
         <>
-          {/* CRM segment chips */}
-          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-            {(['all', 'buyers', 'rappers', 'producers', 'a&r', 'friends', 'nudge'] as const).map((segment) => {
-              const count = contacts.filter((c) => {
-                if (segment === 'all') return true;
-                if (segment === 'nudge') return needsNudge(c.id);
-                const cat = c.category?.toLowerCase() || '';
-                const role = c.role?.toLowerCase() || '';
-                if (segment === 'buyers') return cat === 'buyer';
-                if (segment === 'producers') return cat === 'producer' || role.includes('producer');
-                if (segment === 'rappers') return cat === 'rapper' || role.includes('rapper') || role.includes('artist') || role.includes('singer');
-                if (segment === 'a&r') return cat === 'a&r' || cat === 'label' || role.includes('a&r') || role.includes('label');
-                if (segment === 'friends') return cat === 'friend' || role.includes('friend');
-                return false;
-              }).length;
-              
-              // The "nudge" chip gets an amber tone so it reads as a
-              // to-do rather than a taxonomy filter. When count is 0
-              // we dim it — nothing actionable, no visual noise.
-              const isNudge = segment === 'nudge';
-              const nudgeHot = isNudge && count > 0;
-              const label = isNudge ? `needs nudge` : segment;
-              return (
-                <button
-                  key={segment}
-                  onClick={() => { setCategoryFilter(segment); setActiveSegmentId(null); }}
-                  className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
-                    categoryFilter === segment
-                      ? isNudge
-                        ? 'bg-amber-500/90 text-black shadow-lg shadow-amber-500/20'
-                        : 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/15'
-                      : nudgeHot
-                        ? 'bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
-                        : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#1a160f]'
-                  }`}
-                >
-                  {label}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                    categoryFilter === segment ? 'bg-black/10 text-black' : 'bg-white/5 text-[#5a5142]'
-                  }`}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <ContactsStatsBar stats={stats} />
 
-          {/* Saved segments — custom filter combos. Plus a "Save current filter" button. */}
-          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-            <span className="shrink-0 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">
-              <Bookmark size={11} /> Segments
-            </span>
-            {segments.map((seg) => (
-              <span key={seg.id} className="shrink-0 flex items-center group">
-                <button
-                  onClick={() => applySegment(seg)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] font-medium transition-all flex items-center gap-1.5 border ${
-                    activeSegmentId === seg.id
-                      ? 'bg-[#534AB7] text-white border-[#534AB7]'
-                      : 'bg-[#14110d] border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
-                  }`}
-                >
-                  {seg.name}
-                </button>
-                <button
-                  onClick={() => deleteSegment(seg)}
-                  className="w-5 h-5 -ml-0.5 flex items-center justify-center text-[#3a3328] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Delete segment"
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-            <button
-              onClick={saveSegment}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium border border-dashed border-[#2d2620] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#534AB7]/50 transition-colors"
-              title="Save the current search + filters as a reusable segment"
-            >
-              <BookmarkPlus size={11} /> Save current
-            </button>
-          </div>
+          <ContactsToolbar
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            categoryFilter={categoryFilter} setCategoryFilter={(v) => { setCategoryFilter(v); setActiveSegmentId(null); }}
+            statusFilter={statusFilter} setStatusFilter={(v) => setStatusFilter(v as any)}
+            allTags={allTags} tagFilter={tagFilter}
+            toggleTag={(t) => setTagFilter((prev) => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; })}
+            clearTags={() => setTagFilter(new Set())}
+            categoryCount={categoryCount}
+            segments={segments} activeSegmentId={activeSegmentId}
+            onApplySegment={applySegment} onSaveSegment={saveSegment} onDeleteSegment={deleteSegment}
+            onExport={exportFiltered} onAddContact={() => setShowAddModal(true)} onRefresh={refetch} refreshing={refreshing}
+          />
 
-          {/* Toolbar — search on the left, sort on the right. Refresh
-              spinner overlays the search input when a refetch is in
-              flight. */}
-          <div className="flex items-center gap-3 mb-6 flex-wrap">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" size={12} />
-              <input
-                type="text"
-                placeholder="Search by name, role, label, category, email…"
-                className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full py-2 pl-8 pr-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-white/[0.12] transition-colors"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {refreshing && (
-                <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6a5d4a] animate-spin" />
+          {refreshing && contacts.length === 0 ? (
+            <div className="border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--bg-card)]">
+              <ContactsTableSkeleton rows={10} />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-24 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-card)]">
+              <Users size={26} className="text-[#3a3328] mx-auto mb-4" />
+              {fetchError ? (
+                <>
+                  <p className="text-sm text-[#E8DCC8] mb-1">Couldn&apos;t load contacts</p>
+                  <p className="text-[11px] text-[#5a5142] mb-5 font-mono">{fetchError}</p>
+                  <button onClick={refetch} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors">Try again</button>
+                </>
+              ) : isFiltered ? (
+                <>
+                  <p className="text-sm text-[#E8DCC8] mb-1">No matches</p>
+                  <p className="text-[11px] text-[#5a5142] mb-5">{contacts.length} contact{contacts.length === 1 ? '' : 's'} total — try widening your filters.</p>
+                  <button onClick={() => { setSearchQuery(''); setCategoryFilter('all'); setStatusFilter('all'); setTagFilter(new Set()); setActiveSegmentId(null); }}
+                    className="text-[#a08a6a] hover:text-[#E8DCC8] text-[11px] underline underline-offset-2">Clear filters</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-[#E8DCC8] mb-1">No contacts yet</p>
+                  <p className="text-[11px] text-[#5a5142] mb-5">Add your first contact or import a CSV.</p>
+                  <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors">Add contact</button>
+                </>
               )}
-            </div>
-
-            <div className="ml-auto">
-              <Dropdown
-                value={sortMode}
-                onChange={(v) => setSortMode(v as typeof sortMode)}
-                options={[
-                  { value: 'recent',   label: 'Recent' },
-                  { value: 'name',     label: 'Name A→Z' },
-                  { value: 'category', label: 'Category' },
-                ]}
-                label="Sort"
-                aria-label="Sort contacts"
-              />
-            </div>
-
-            {/* Selection CTAs (Send / Delete / Clear) render in the
-                floating BatchActionBar at the bottom — consistent with
-                library + playlists. */}
-          </div>
-
-          {/* Tag filter chips (mig 091) — find / regroup contacts by tag. AND semantics. */}
-          {allTags.length > 0 && (
-            <div className="flex items-center gap-1.5 mb-5 flex-wrap">
-              <Tag size={11} className="text-[#3a3328] shrink-0" />
-              {allTags.map((tag) => {
-                const on = tagFilter.has(tag);
-                return (
-                  <button key={tag} onClick={() => setTagFilter((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; })}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'}`}>
-                    {tag}
-                  </button>
-                );
-              })}
-              {tagFilter.size > 0 && (
-                <button onClick={() => setTagFilter(new Set())} className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#E8DCC8] transition-colors ml-1">
-                  <X size={10} /> Clear tags
-                </button>
-              )}
-            </div>
-          )}
-
-          {filtered.length === 0 ? (
-            // Three empty-state flavours:
-            //   1. fetch errored       → show the error
-            //   2. filter hides all    → offer "Clear filters"
-            //   3. genuinely empty     → offer "Add contact"
-            // The previous single-button branch always offered "Add",
-            // which is wrong when the user just typed a narrow search
-            // and is staring at a misleading CTA.
-            <div className="text-center py-32 border border-dashed border-[#1a160f] rounded-lg">
-              <Users size={24} className="text-[#3a3328] mx-auto mb-4" />
-              {(() => {
-                const isFiltered = searchQuery.trim() !== '' || categoryFilter !== 'all';
-                if (fetchError) {
-                  return (
-                    <>
-                      <p className="text-sm text-[#E8DCC8] mb-1">Couldn’t load contacts</p>
-                      <p className="text-[11px] text-[#5a5142] mb-6 font-mono">{fetchError}</p>
-                      <button
-                        onClick={refetch}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620] text-[11px] font-medium"
-                      >
-                        Try again
-                      </button>
-                    </>
-                  );
-                }
-                if (isFiltered && contacts.length > 0) {
-                  return (
-                    <>
-                      <p className="text-sm text-[#E8DCC8] mb-1">No matches</p>
-                      <p className="text-[11px] text-[#5a5142] mb-6">
-                        {contacts.length} contact{contacts.length !== 1 ? 's' : ''} hidden by current filters.
-                      </p>
-                      <button
-                        onClick={() => { setSearchQuery(''); setCategoryFilter('all'); }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620] text-[11px] font-medium"
-                      >
-                        Clear filters
-                      </button>
-                    </>
-                  );
-                }
-                return (
-                  <>
-                    <p className="text-sm text-[#E8DCC8] mb-1">No contacts</p>
-                    <p className="text-[11px] text-[#5a5142] mb-6">Build your network by adding contacts</p>
-                    <button
-                      onClick={() => setShowAddModal(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium"
-                    >
-                      <Plus size={13} />
-                      Add contact
-                    </button>
-                  </>
-                );
-              })()}
             </div>
           ) : (
-            <div className="border border-[#16130e] rounded-lg overflow-hidden overflow-x-auto w-full custom-scrollbar">
-              <div className="min-w-[1200px]">
-                {/* Dynamic Grid Headers based on active segment */}
-                {categoryFilter === 'producers' ? (
-                  <div className="grid grid-cols-[28px_40px_1.5fr_1fr_100px_110px_90px_1.2fr_1.2fr_130px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                    onChange={toggleSelectAll}
-                    className="accent-[#D4BFA0] cursor-pointer"
-                    aria-label="Select all visible contacts"
-                  />
-                  <span />
-                  <span>Name</span>
-                  <span>Role / Label</span>
-                  <span>Status</span>
-                  <span>Pipeline</span>
-                  <span>Stems</span>
-                  <span>Email</span>
-                  <span>Instagram</span>
-                  <span className="text-right">Actions</span>
-                </div>
-              ) : categoryFilter === 'a&r' ? (
-                <div className="grid grid-cols-[28px_40px_1.5fr_1fr_1fr_100px_110px_1.2fr_1.2fr_130px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                    onChange={toggleSelectAll}
-                    className="accent-[#D4BFA0] cursor-pointer"
-                    aria-label="Select all visible contacts"
-                  />
-                  <span />
-                  <span>Name</span>
-                  <span>Role</span>
-                  <span>Company / Label</span>
-                  <span>Status</span>
-                  <span>Pipeline</span>
-                  <span>Email</span>
-                  <span>Instagram</span>
-                  <span className="text-right">Actions</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-[28px_40px_1.5fr_1fr_110px_120px_160px_160px_150px] items-center gap-4 px-4 h-9 border-b border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                    onChange={toggleSelectAll}
-                    className="accent-[#D4BFA0] cursor-pointer"
-                    aria-label="Select all visible contacts"
-                  />
-                  <span />
-                  <span>Name</span>
-                  <span>Role / Label</span>
-                  <span>Status</span>
-                  <span>Pipeline</span>
-                  <span>Email</span>
-                  <span>Instagram</span>
-                  <span className="text-right">Actions</span>
-                </div>
-              )}
-              {visibleContacts.map((contact) => {
-                const isSelected = selectedIds.has(contact.id);
-                const isDropTarget = dropHoverId === contact.id;
-                const sendCount = sendCountByContact.get(contact.id) ?? 0;
-                
-                // Smart Follow-up nudge calculation
-                const latestSend = beatSends.find(s => s.contact_id === contact.id);
-                const daysDiff = latestSend ? (Date.now() - Date.parse(latestSend.sent_at)) / 86_400_000 : 0;
-                const contactNeedsNudge = latestSend?.status === 'sent' && daysDiff > 5;
-
-                // Mock stems check for Producer view
-                const isProducer = contact.category?.toLowerCase() === 'producer' || contact.role?.toLowerCase().includes('producer');
-                const hasStems = isProducer && sendCount > 0;
-
-                const gridRowClass = 
-                  categoryFilter === 'producers'
-                    ? 'grid grid-cols-[28px_40px_1.5fr_1fr_100px_110px_90px_1.2fr_1.2fr_130px]'
-                    : categoryFilter === 'a&r'
-                      ? 'grid grid-cols-[28px_40px_1.5fr_1fr_1fr_100px_110px_1.2fr_1.2fr_130px]'
-                      : 'grid grid-cols-[28px_40px_1.5fr_1fr_110px_120px_160px_160px_150px]';
-
-                return (
-                  <div
-                    key={contact.id}
-                    onDragOver={(e) => {
-                      if (!isTrackDrag(e)) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'copy';
-                      if (dropHoverId !== contact.id) setDropHoverId(contact.id);
-                    }}
-                    onDragLeave={(e) => {
-                      const next = e.relatedTarget as Node | null;
-                      if (!next || !(e.currentTarget as Node).contains(next)) {
-                        setDropHoverId((cur) => (cur === contact.id ? null : cur));
-                      }
-                    }}
-                    onDrop={(e) => {
-                      const payload = readTrackDragData(e);
-                      if (!payload) {
-                        setDropHoverId(null);
-                        return;
-                      }
-                      e.preventDefault();
-                      handleDropOnContact(contact, payload);
-                    }}
-                    className={`${gridRowClass} items-center gap-4 px-4 h-14 border-b border-[#1f1a13] transition-colors last:border-b-0 ${
-                      isDropTarget
-                        ? 'bg-[#2A2418] ring-2 ring-[#D4BFA0]/60 ring-inset'
-                        : isSelected
-                          ? 'bg-[#2A2418]/30'
-                          : 'hover:bg-[#1a160f]'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleSelect(contact.id)}
-                      className="accent-[#D4BFA0] cursor-pointer"
-                      aria-label={`Select ${contact.name}`}
-                    />
-                    {(() => {
-                      const av = nameToAvatar(contact.name);
-                      return (
-                        <div className={`w-8 h-8 rounded-full ${av.bg} border ${av.border} flex items-center justify-center text-[11px] font-bold ${av.text} shrink-0`}>
-                          {contact.name[0]?.toUpperCase()}
-                        </div>
-                      );
-                    })()}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          href={`/contacts/${contact.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[13px] font-medium text-[#E8DCC8] truncate hover:text-[#E8D8B8] transition-colors block"
-                        >
-                          {contact.name}
-                        </Link>
-                        {contactNeedsNudge && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (latestSend) {
-                                setNudgeContact({ contact, latestSend });
-                              }
-                            }}
-                            className="bg-amber-500/15 border border-amber-500/40 text-[#D4BFA0] hover:bg-amber-500/35 hover:border-amber-500/80 text-[7px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded animate-pulse shrink-0 cursor-pointer transition-all"
-                            title="Click to trigger a polite follow-up email nudge"
-                          >
-                            Nudge
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                        <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
-                          {new Date(contact.created_at).toLocaleDateString()}
-                        </p>
-                        {(contact.tags ?? []).slice(0, 2).map((t) => (
-                          <span key={t.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1 py-0.5 rounded">{t.tag}</span>
-                        ))}
-                        {(contact.tags?.length ?? 0) > 2 && <span className="text-[8px] font-mono text-[#4a4338]">+{contact.tags!.length - 2}</span>}
-                      </div>
-                    </div>
-
-                    {categoryFilter === 'a&r' ? (
-                      <>
-                        <div className="min-w-0">
-                          <p className="text-[12px] text-[#a08a6a] truncate">{contact.role || '—'}</p>
-                          <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                            <Dropdown
-                              value={contact.category || 'none'}
-                              onChange={(val) => {
-                                const finalVal = val === 'none' ? null : val;
-                                handleChangeCategory(contact.id, finalVal);
-                              }}
-                              options={[
-                                { value: 'none', label: 'Move...' },
-                                { value: 'rapper', label: 'Rapper' },
-                                { value: 'producer', label: 'Producer' },
-                                { value: 'a&r', label: 'A&R / Label' },
-                                { value: 'friend', label: 'Friend' }
-                              ]}
-                              className="bg-[#0c0a08] border border-[#1f1a13] hover:border-[#D4BFA0]/50 text-[#6a5d4a] hover:text-[#E8DCC8] rounded py-1 px-2.5 text-[9px] font-mono uppercase tracking-wider focus:outline-none cursor-pointer transition-all h-7 w-28"
-                            />
-                          </div>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[12px] text-[#E8DCC8] truncate font-medium">{contact.label || '—'}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="min-w-0">
-                        <p className="text-[12px] text-[#a08a6a] truncate">{contact.role || '—'}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                          <Dropdown
-                            value={contact.category || 'none'}
-                            onChange={(val) => {
-                              const finalVal = val === 'none' ? null : val;
-                              handleChangeCategory(contact.id, finalVal);
-                            }}
-                            options={[
-                              { value: 'none', label: 'Move...' },
-                              { value: 'rapper', label: 'Rapper' },
-                              { value: 'producer', label: 'Producer' },
-                              { value: 'a&r', label: 'A&R / Label' },
-                              { value: 'friend', label: 'Friend' }
-                            ]}
-                            className="bg-[#0c0a08] border border-[#1f1a13] hover:border-[#D4BFA0]/50 text-[#6a5d4a] hover:text-[#E8DCC8] rounded py-1 px-2.5 text-[9px] font-mono uppercase tracking-wider focus:outline-none cursor-pointer transition-all h-7 w-28"
-                          />
-                          {contact.label && (
-                            <p className="text-[10px] text-[#6a5d4a] truncate flex items-center gap-1">
-                              <Tag size={9} />
-                              {contact.label}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {(() => {
-                      const s = statusFor(contact.id);
-                      return (
-                        <StatusPill
-                          tone={s.tone}
-                          label={s.label}
-                          active={statusFilter === s.tone}
-                          onClick={(tone) => setStatusFilter((cur) => (cur === tone ? 'all' : tone))}
-                        />
-                      );
-                    })()}
-                    
-                    <PipelinePill status={latestStatusByContact.get(contact.id) ?? null} />
-
-                    {/* Buyer pipeline — surfaced in the buyers segment and when a contact has
-                        buyer_pipeline_status set (mig 038). Shows the store-side conversion stage. */}
-                    {categoryFilter === 'buyers' && (contact as any).buyer_pipeline_status && (
-                      <span className={`text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
-                        (contact as any).buyer_pipeline_status === 'purchased' || (contact as any).buyer_pipeline_status === 'repeat_buyer'
-                          ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/30'
-                          : 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/30'
-                      }`}>
-                        {((contact as any).buyer_pipeline_status as string).replace('_', ' ')}
-                      </span>
-                    )}
-
-                    {/* Producers View Stems Indicator column */}
-                    {categoryFilter === 'producers' && (
-                      <div>
-                        {hasStems ? (
-                          <span className="bg-green-500/10 border border-green-500/30 text-green-400 text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">
-                            Attached
-                          </span>
-                        ) : (
-                          <span className="text-[#3a3328] font-mono text-[10px]">None</span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#a08a6a] truncate">
-                      {contact.email ? (
-                        <>
-                          <Mail size={11} className="text-[#3a3328] shrink-0" />
-                          <span className="truncate">{contact.email}</span>
-                        </>
-                      ) : (
-                        <span className="text-[#3a3328]">—</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#a08a6a] truncate">
-                      {contact.instagram ? (
-                        <>
-                          <Globe size={11} className="text-[#3a3328] shrink-0" />
-                          <span className="truncate">@{contact.instagram}</span>
-                        </>
-                      ) : (
-                        <span className="text-[#3a3328]">—</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 justify-end">
-                      <button
-                        onClick={() => setHistoryContact(contact)}
-                        className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[10px] font-medium transition-colors ${
-                          sendCount > 0
-                            ? 'border-[#2d2620] text-[#E8D8B8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/60'
-                            : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
-                        }`}
-                        title={sendCount > 0
-                          ? `${sendCount} send${sendCount === 1 ? '' : 's'} · last ${relativeDays(lastSentByContact.get(contact.id))}`
-                          : 'No sends yet — click to open history'}
-                      >
-                        <Clock size={10} />
-                        {sendCount > 0 ? (
-                          <>
-                            <span className="font-mono tabular-nums">{sendCount}</span>
-                            <span className="text-[#6a5d4a] hidden md:inline">·</span>
-                            <span className="text-[#6a5d4a] font-mono hidden md:inline">{relativeDays(lastSentByContact.get(contact.id))}</span>
-                          </>
-                        ) : (
-                          <span className="font-mono">0</span>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setSendQueue([contact])}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-[#2d2620] text-[10px] font-medium text-[#E8D8B8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/60 transition-colors"
-                      >
-                        <Send size={10} />
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Infinite-scroll sentinel + count — keeps the DOM light at scale. */}
-              {visibleCount < filtered.length && (
-                <div ref={sentinelRef} className="flex items-center justify-center py-4 text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
-                  <Loader2 size={12} className="animate-spin mr-2" /> Showing {visibleCount} of {filtered.length}
-                </div>
-              )}
-              </div>
-            </div>
+            <>
+              <ContactsTable
+                contacts={paginated}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onToggleSelectPage={toggleSelectPage}
+                allPageSelected={allPageSelected}
+                sortMode={sortMode} sortDir={sortDir} onSort={onSort}
+                sendCountByContact={sendCountByContact}
+                lastSentByContact={lastSentByContact}
+                latestStatusByContact={latestStatusByContact}
+                toneFor={toneFor}
+                statusFilter={statusFilter}
+                onFilterTone={(t) => setStatusFilter((cur) => (cur === t ? 'all' : t))}
+                needsNudge={needsNudge}
+                onOpenHistory={(c) => setHistoryContact(c)}
+                onSend={(c) => setSendQueue([c])}
+                onNudge={(c) => { const latest = latestSendByContact.get(c.id); if (latest) setNudgeContact({ contact: c, latestSend: latest }); }}
+                onStageChange={onStageChange}
+                dropHoverId={dropHoverId}
+                onRowDragOver={onRowDragOver}
+                onRowDragLeave={onRowDragLeave}
+                onRowDrop={onRowDrop}
+              />
+              <ContactsPagination total={filtered.length} page={currentPage} pageSize={pageSize} onPage={setCurrentPage} onPageSize={setPageSize} />
+            </>
           )}
         </>
       ) : (
-        <div className="border border-[#16130e] rounded-lg overflow-hidden">
+        <div className="border border-[var(--border)] rounded-xl overflow-hidden">
           <BeatLog sends={beatSends} contacts={contacts} />
         </div>
       )}
 
+      {/* ── Modals (unchanged behaviour) ── */}
       {showAddModal && <AddContactModal onClose={() => setShowAddModal(false)} onSuccess={refetch} />}
-      {showImportModal && (
-        <ImportContactsModal onClose={() => setShowImportModal(false)} onSuccess={refetch} />
-      )}
+      {showImportModal && <ImportContactsModal onClose={() => setShowImportModal(false)} onSuccess={refetch} />}
       {sendQueue && sendQueue.length > 0 && (
         <SendBeatModal
           contacts={sendQueue}
-          // Pre-populated track set when the modal was opened via a
-          // track-on-contact drop. `null` means "let the user choose".
           initialTrackIds={prefilledTrackIds ?? undefined}
-          onClose={() => {
-            setSendQueue(null);
-            setPrefilledTrackIds(null);
-          }}
-          onSuccess={() => {
-            refetch();
-            setPrefilledTrackIds(null);
-            // Clear multi-select after a successful bulk send so the
-            // user isn't left with stale checked boxes.
-            setSelectedIds(new Set());
-          }}
+          onClose={() => { setSendQueue(null); setPrefilledTrackIds(null); }}
+          onSuccess={() => { refetch(); setPrefilledTrackIds(null); setSelectedIds(new Set()); }}
         />
       )}
       {historyContact && (
@@ -1028,309 +397,90 @@ export function ContactsView({
           contact={historyContact}
           sends={beatSends.filter((s) => s.contact_id === historyContact.id)}
           onClose={() => setHistoryContact(null)}
-          onSendAgain={() => {
-            // "Send again" pre-loads the modal with this contact and
-            // closes the history drawer in one motion.
-            setSendQueue([historyContact]);
-            setHistoryContact(null);
-          }}
+          onSendAgain={() => { setSendQueue([historyContact]); setHistoryContact(null); }}
+        />
+      )}
+      {nudgeContact && (
+        <NudgeModal contact={nudgeContact.contact} latestSend={nudgeContact.latestSend} onClose={() => setNudgeContact(null)} onSuccess={refetch} />
+      )}
+      {bulkPanel && (
+        <BulkEditPanel
+          mode={bulkPanel}
+          ids={Array.from(selectedIds)}
+          onClose={() => setBulkPanel(null)}
+          onDone={() => { setBulkPanel(null); setSelectedIds(new Set()); refetch(); }}
         />
       )}
 
-      {/* Floating batch-action bar — appears when ≥1 contact is checked.
-          Send + Delete share the same UI surface for consistency with the
-          library and playlists pages. Parallel DELETE keeps wall time
-          ~constant in selection size; failures get tallied in the toast. */}
+      {/* Batch action bar */}
       <BatchActionBar
         count={selectedIds.size}
         noun={['contact', 'contacts']}
         onClear={() => setSelectedIds(new Set())}
         busy={bulkDeleting || bulkNudging}
         actions={[
-          {
-            label: `Send to ${selectedIds.size}`,
-            icon: <Send size={11} />,
-            intent: 'primary',
-            onClick: () => setSendQueue(selectedContacts),
-          },
-          // Bulk Nudge — surfaces only when at least one selected
-          // contact has a stale `sent` beat older than the nudge
-          // cadence. Click fires a follow-up email per stale contact
-          // and bumps each underlying beat_send to `negotiating`.
-          // Skips selected contacts that don't need a nudge so the
-          // user can lasso a category chip without worrying about
-          // hitting fresh recipients.
-          ...(() => {
-            const stale = selectedContacts.filter((c) => needsNudge(c.id) && c.email);
-            if (stale.length === 0) return [];
-            return [{
-              label: `Nudge ${stale.length}`,
-              icon: <Mail size={11} />,
-              onClick: async () => {
-                const ok = await confirmToast(
-                  `Nudge ${stale.length} stale contact${stale.length === 1 ? '' : 's'}?`,
-                  'Sends a polite follow-up email and bumps each one to "negotiating". Contacts without email are skipped.',
-                  { confirmLabel: 'Send nudges', cancelLabel: 'Cancel' },
-                );
-                if (!ok) return;
-                setBulkNudging(true);
-                const results = await Promise.allSettled(
-                  stale.map(async (c) => {
-                    const latest = latestSendByContact.get(c.id);
-                    if (!latest) throw new Error('no send');
-                    // Generic but polite follow-up. The single-contact
-                    // NudgeModal lets the user customize per send; the
-                    // bulk version trades editability for throughput.
-                    const message =
-                      `Hi ${c.name},\n\nJust circling back on what I sent over recently — wanted to make sure it didn't get buried. Let me know if any of it caught your ear, or if you'd like to hear something in a different lane.\n\nBest,`;
-                    const emailRes = await fetch('/api/email', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        contactId: c.id,
-                        email: c.email,
-                        trackIds: latest.track_ids,
-                        shareToken: latest.share_token,
-                        message,
-                      }),
-                    });
-                    if (!emailRes.ok) throw new Error(`email ${emailRes.status}`);
-                    // Move pipeline forward so the contact drops off
-                    // the Needs-Nudge chip immediately.
-                    await fetch(`/api/beat_sends/${latest.id}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ status: 'negotiating' }),
-                    });
-                  }),
-                );
-                const failed = results.filter((r) => r.status === 'rejected').length;
-                setBulkNudging(false);
-                setSelectedIds(new Set());
-                await refetch();
-                if (failed === 0) {
-                  toast.success(`Nudged ${stale.length} contact${stale.length === 1 ? '' : 's'}`);
-                } else {
-                  toast.warning(
-                    `Nudged ${stale.length - failed}, ${failed} failed`,
-                    'Failed sends kept in the list — try again or check the network tab.',
-                  );
-                }
-              },
-            }];
-          })(),
+          { label: `Send to ${selectedIds.size}`, icon: <Send size={11} />, intent: 'primary', onClick: () => setSendQueue(selectedContacts) },
+          { label: 'Stage', onClick: () => setBulkPanel('stage') },
+          { label: 'Add tags', onClick: () => setBulkPanel('addTags') },
+          { label: 'Remove tags', onClick: () => setBulkPanel('removeTags') },
+          { label: 'Export CSV', onClick: exportSelected },
+          ...(staleSelected.length > 0 ? [{
+            label: `Nudge ${staleSelected.length}`,
+            icon: <Mail size={11} />,
+            onClick: async () => {
+              const ok = await confirmToast(
+                `Nudge ${staleSelected.length} stale contact${staleSelected.length === 1 ? '' : 's'}?`,
+                'Sends a polite follow-up email and bumps each one to "negotiating". Contacts without email are skipped.',
+                { confirmLabel: 'Send nudges', cancelLabel: 'Cancel' },
+              );
+              if (!ok) return;
+              setBulkNudging(true);
+              const results = await Promise.allSettled(staleSelected.map(async (c) => {
+                const latest = latestSendByContact.get(c.id);
+                if (!latest) throw new Error('no send');
+                const message = `Hi ${c.name},\n\nJust circling back on what I sent over recently — wanted to make sure it didn't get buried. Let me know if any of it caught your ear, or if you'd like to hear something in a different lane.\n\nBest,`;
+                const emailRes = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contactId: c.id, email: c.email, trackIds: latest.track_ids, shareToken: latest.share_token, message }) });
+                if (!emailRes.ok) throw new Error(`email ${emailRes.status}`);
+                await fetch(`/api/beat_sends/${latest.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'negotiating' }) });
+              }));
+              const failed = results.filter((r) => r.status === 'rejected').length;
+              setBulkNudging(false);
+              setSelectedIds(new Set());
+              await refetch();
+              if (failed === 0) toast.success(`Nudged ${staleSelected.length} contact${staleSelected.length === 1 ? '' : 's'}`);
+              else toast.warning(`Nudged ${staleSelected.length - failed}, ${failed} failed`);
+            },
+          }] : []),
           {
             label: 'Delete',
             icon: <DeleteIcon size={11} />,
             intent: 'danger',
             onClick: async () => {
-              const ok = await confirmToast(
-                `Delete ${selectedIds.size} contact${selectedIds.size === 1 ? '' : 's'}?`,
-                'Their send history will be removed too. This is permanent.',
-                { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true },
-              );
+              const ok = await confirmToast(`Delete ${selectedIds.size} contact${selectedIds.size === 1 ? '' : 's'}?`, 'Their send history will be removed too. This is permanent.', { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true });
               if (!ok) return;
               setBulkDeleting(true);
               const ids = Array.from(selectedIds);
-              const results = await Promise.allSettled(
-                ids.map((id) =>
-                  fetch(`/api/contacts/${id}`, { method: 'DELETE' }).then((r) => {
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                  }),
-                ),
-              );
+              const results = await Promise.allSettled(ids.map((id) => fetch(`/api/contacts/${id}`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); })));
               const failed = results.filter((r) => r.status === 'rejected').length;
               setBulkDeleting(false);
               setSelectedIds(new Set());
               await refetch();
-              if (failed === 0) {
-                toast.success(`Deleted ${ids.length} contact${ids.length === 1 ? '' : 's'}`);
-              } else {
-                toast.warning(
-                  `Deleted ${ids.length - failed}, ${failed} failed`,
-                  'Failed contacts kept in the list — try again or check the network tab.',
-                );
-              }
+              if (failed === 0) toast.success(`Deleted ${ids.length} contact${ids.length === 1 ? '' : 's'}`);
+              else toast.warning(`Deleted ${ids.length - failed}, ${failed} failed`);
             },
           },
         ]}
       />
 
-      {nudgeContact && (
-        <NudgeModal
-          contact={nudgeContact.contact}
-          latestSend={nudgeContact.latestSend}
-          onClose={() => setNudgeContact(null)}
-          onSuccess={refetch}
-        />
+      {/* "Select all N filtered" affordance — shown when a partial page selection exists. */}
+      {selectedIds.size > 0 && selectedIds.size < filtered.length && (
+        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40">
+          <button onClick={selectAllFiltered}
+            className="text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-full bg-[#0e0c08] border border-[var(--border-hover)] text-[#a08a6a] hover:text-[#E8DCC8] shadow-lg transition-colors">
+            Select all {filtered.length} filtered
+          </button>
+        </div>
       )}
     </div>
-  );
-}
-
-/**
- * Avatar palette — 6 warm/cool tones derived from the contact name.
- * Gives each row a unique hue so the list is scannable without photos.
- */
-const AVATAR_PALETTES = [
-  { bg: 'bg-[#1a1230]', text: 'text-[#9d95e8]', border: 'border-[#534AB7]/30' },
-  { bg: 'bg-[#0a1f0f]', text: 'text-[#6DC6A4]', border: 'border-[#1f5a4a]/40' },
-  { bg: 'bg-[#1f1a0a]', text: 'text-[#c8a84b]', border: 'border-[#3a2f1f]/60' },
-  { bg: 'bg-[#1f0f0a]', text: 'text-[#e87a6a]', border: 'border-[#6a2a1f]/40' },
-  { bg: 'bg-[#0a1420]', text: 'text-[#7aa8e8]', border: 'border-[#3a4a6a]/40' },
-  { bg: 'bg-[#1a1410]', text: 'text-[#E8D8B8]', border: 'border-[#8A7A5C]/30' },
-];
-
-function nameToAvatar(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
-}
-
-/**
- * Quiet stat tile used in the contacts header. Numbers in cream-bone,
- * label in warm muted. The `tone` prop tints the value when the metric
- * is "engagement-positive" — keeps the page reading as one system
- * with the row-level status pills.
- */
-function StatCard({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: 'active';
-}) {
-  return (
-    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">{label}</p>
-      <div className="flex items-end gap-2">
-        <p className={`text-[28px] font-black tabular-nums leading-none ${
-          tone === 'active' ? 'text-[#E8D8B8]' : 'text-white'
-        }`}>
-          {value}
-        </p>
-        {hint && (
-          <span className="text-[11px] font-mono text-[#a08a6a] mb-0.5 tabular-nums">{hint}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Per-contact engagement status pill. Dot + label. Three tones:
- *   - active  — sent within 30 days (amber dot)
- *   - engaged — has at least one send, but stale  (warm gray dot)
- *   - cold    — never been sent (faint outline)
- * Visual hierarchy: active pops, engaged reads, cold recedes.
- */
-/**
- * Compact "Xd ago" formatter for the history badge. Keeps the cell
- * narrow — full timestamps live in the drawer that opens on click.
- * Returns "—" for missing input so the badge gracefully covers
- * contacts with no sends.
- */
-function relativeDays(iso: string | undefined | null): string {
-  if (!iso) return '—';
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return '—';
-  const days = Math.floor((Date.now() - t) / 86_400_000);
-  if (days < 1) return 'today';
-  if (days === 1) return '1d';
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
-}
-
-/**
- * Pipeline progress track — 5 sequential stages rendered as a
- * growing dot-bar. Filled dots show progress; unfilled recede.
- * "Pass" breaks out of the sequence with a red pill so it reads
- * as a terminal state rather than a position on the track.
- */
-const PIPELINE_STAGES = ['sent', 'opened', 'interested', 'negotiating', 'placed'] as const;
-type PipelineStage = (typeof PIPELINE_STAGES)[number];
-
-const STAGE_FILL: Record<PipelineStage, string> = {
-  sent:        'bg-[#6a5d4a]',
-  opened:      'bg-[#7aa8e8]',
-  interested:  'bg-[#E8D8B8]',
-  negotiating: 'bg-[#e8a86a]',
-  placed:      'bg-[#6DC6A4]',
-};
-
-function PipelinePill({ status }: { status: string | null }) {
-  if (!status) return <span className="text-[10px] text-[#3a3328]">—</span>;
-
-  if (status === 'pass') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider text-[#e88a8a] ring-1 ring-inset ring-[#6a2a2a]/60">
-        Pass
-      </span>
-    );
-  }
-
-  const currentIdx = PIPELINE_STAGES.indexOf(status as PipelineStage);
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
-
-  return (
-    <div className="flex flex-col gap-1" title={label}>
-      <div className="flex items-center gap-0.5">
-        {PIPELINE_STAGES.map((stage, i) => (
-          <div
-            key={stage}
-            className={`rounded-full transition-all ${
-              i <= currentIdx
-                ? `${STAGE_FILL[stage]} h-1.5 w-4`
-                : 'bg-[#1f1a13] h-1.5 w-2'
-            }`}
-          />
-        ))}
-      </div>
-      <span className={`text-[9px] font-mono uppercase tracking-wider ${
-        currentIdx >= 3 ? 'text-[#e8a86a]' : currentIdx >= 1 ? 'text-[#7aa8e8]' : 'text-[#6a5d4a]'
-      }`}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function StatusPill({
-  tone,
-  label,
-  onClick,
-  active,
-}: {
-  tone: 'active' | 'engaged' | 'cold';
-  label: string;
-  /** When set the pill becomes a button — clicking calls onClick(tone). */
-  onClick?: (tone: 'active' | 'engaged' | 'cold') => void;
-  /** Visual "this filter is currently on" state — bumps the pill into a
-   *  solid fill so the click feedback is unmistakable. */
-  active?: boolean;
-}) {
-  const dot = tone === 'active' ? 'bg-[#E8D8B8]' : tone === 'engaged' ? 'bg-[#8A7A5C]' : 'bg-[#3a3328]';
-  const text = tone === 'active' ? 'text-[#E8D8B8]' : tone === 'engaged' ? 'text-[#a08a6a]' : 'text-[#6a5d4a]';
-  const ring = tone === 'active' ? 'ring-[#8A7A5C]/40' : 'ring-[#2d2620]';
-  // When active (selected as the filter) we flip to a solid amber wash
-  // so the user sees "this filter is on" at a glance, regardless of
-  // which row's pill they originally clicked.
-  const activeClasses = active ? 'bg-[#2A2418] ring-[#D4BFA0]/60' : 'hover:bg-white/[0.03]';
-  const Comp: 'button' | 'span' = onClick ? 'button' : 'span';
-  return (
-    <Comp
-      onClick={onClick ? (e) => { e.stopPropagation(); onClick(tone); } : undefined}
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset ${ring} ${text} ${onClick ? `cursor-pointer transition-colors ${activeClasses}` : ''}`}
-      title={onClick ? `Filter to ${label.toLowerCase()} contacts` : undefined}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
-      {label}
-    </Comp>
   );
 }
