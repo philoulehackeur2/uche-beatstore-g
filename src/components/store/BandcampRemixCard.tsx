@@ -101,10 +101,10 @@ export default function BandcampRemixCard({
       className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${borderClass}`}
       style={borderStyle}
     >
-      {/* Square cover — Bandcamp's defining shape. Click opens preview drawer.
-          A floating play button overlay triggers playback directly. */}
+      {/* Cover strip — fixed height so it reads as a reactive accent,
+          not a poster. Full square was too dominant without adding value. */}
       <div
-        className="relative w-full aspect-square shrink-0 cursor-pointer border-b border-[#1f1a13] bg-[#0a0907]"
+        className="relative w-full h-[160px] shrink-0 cursor-pointer border-b border-[#1f1a13] bg-[#0a0907] overflow-hidden"
         onClick={onPreview}
       >
         {track.cover_url ? (
@@ -115,10 +115,10 @@ export default function BandcampRemixCard({
               mode={ditherMode}
               colorMode={ditherColorMode}
               texture={ditherTexture}
-              reactivity={1.2}
-              detail={1.45}
+              reactivity={1.5}
+              detail={1.8}
               analyserNode={isCurrent ? analyserNode ?? null : null}
-              className="block h-full w-full"
+              className="block h-full w-full object-cover"
             />
             <AudioGradient
               analyserNode={isCurrent ? analyserNode ?? null : null}
