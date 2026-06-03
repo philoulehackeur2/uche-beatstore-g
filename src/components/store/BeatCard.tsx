@@ -87,26 +87,23 @@ export function BeatCard({
     >
       {/* Cover area — hover overlay surfaces a big play button. Clicking
           the cover plays (and does not bubble to the card onPreview). */}
-      {/* Cover strip — compact fixed height so the card reads as a list item
-          with a reactive accent, not a poster. Full square felt like wasted
-          space when not playing; 140px is enough to see the dither effect. */}
       <div
         data-card-action
         onClick={stop(onPlay)}
-        className="relative w-full h-[140px] cursor-pointer overflow-hidden"
+        className="relative w-full aspect-square cursor-pointer"
       >
         {track.cover_url ? (
-          <div className="relative h-full w-full bg-[#0a0907]">
+          <div className="relative h-full w-full overflow-hidden bg-[#0a0907]">
             <DitherShader
               src={track.cover_url}
               alt={track.title}
               mode={ditherMode}
               colorMode={ditherColorMode}
               texture={ditherTexture}
-              reactivity={1.5}
-              detail={1.8}
+              reactivity={1.25}
+              detail={1.55}
               analyserNode={isCurrent ? analyserNode ?? null : null}
-              className="block h-full w-full object-cover"
+              className="block h-full w-full transition-transform duration-500 group-hover:scale-[1.04]"
             />
             <AudioGradient
               analyserNode={isCurrent ? analyserNode ?? null : null}
@@ -116,7 +113,7 @@ export function BeatCard({
           </div>
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
-            <Music size={28} />
+            <Music size={36} />
           </div>
         )}
 

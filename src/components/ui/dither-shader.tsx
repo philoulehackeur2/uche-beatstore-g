@@ -255,29 +255,24 @@ export function DitherShader({
         }
         const dataArray = frequencyDataRef.current;
         analyserNode.getByteFrequencyData(dataArray);
-        const bassEnergy = averageBins(dataArray, 0, 8);
-        const midEnergy = averageBins(dataArray, 8, 80);
-        const highEnergy = averageBins(dataArray, 80, 200);
-        // Kick: sharp transient — detect onset as a positive spike above the
-        // running bass level; multiply aggressively so even light kicks register.
-        const rawKick = Math.max(0, bassEnergy - lastBassRef.current) * 6;
-        lastBassRef.current = bassEnergy * 0.85 + lastBassRef.current * 0.15; // slower decay for smoother baseline
+        const bassEnergy = averageBins(dataArray, 0, 10);
+        const midEnergy = averageBins(dataArray, 10, 100);
+        const highEnergy = averageBins(dataArray, 100, 255);
+        const kick = Math.max(0, bassEnergy - lastBassRef.current) * 4;
+        lastBassRef.current = bassEnergy;
 
-        // Fast-attack, medium-release smoothing — snaps to peaks, floats down.
         audio = {
-          bass: Math.max(audio.bass * 0.55 + bassEnergy * 0.45, bassEnergy),
-          mid:  Math.max(audio.mid  * 0.60 + midEnergy  * 0.40, midEnergy * 0.9),
-          high: Math.max(audio.high * 0.50 + highEnergy * 0.50, highEnergy),
-          kick: audio.kick * 0.40 + Math.min(1, rawKick) * 0.60,
-          phase: audio.phase + 1 + bassEnergy * 6 + highEnergy * 3,
+          bass: audio.bass * 0.72 + bassEnergy * 0.28,
+          mid: audio.mid * 0.78 + midEnergy * 0.22,
+          high: audio.high * 0.68 + highEnergy * 0.32,
+          kick: audio.kick * 0.55 + Math.min(1, kick) * 0.45,
+          phase: audio.phase + 1 + bassEnergy * 4 + highEnergy * 2,
         };
         audioStateRef.current = audio;
 
-        // Bass blooms the grid (pixels get bigger), kick snaps it even further.
-        effectiveGridSize = gridSize + audio.bass * 14 * reactivity + audio.kick * 9 * reactivity;
-        // Kick dips the threshold → more dots lit → bright flash on the beat.
-        effectiveThreshold = threshold + (audio.mid - 0.5) * 0.4 * reactivity - audio.kick * 0.22 * reactivity - audio.bass * 0.08 * reactivity;
-        effectiveBrightness = brightness + audio.high * 0.3 * reactivity + audio.kick * 0.15 * reactivity;
+        effectiveGridSize = gridSize + audio.bass * 8 * reactivity + audio.kick * 5 * reactivity;
+        effectiveThreshold = threshold + (audio.mid - 0.5) * 0.36 * reactivity - audio.kick * 0.12 * reactivity;
+        effectiveBrightness = brightness + audio.high * 0.22 * reactivity + audio.kick * 0.08 * reactivity;
       } else {
         audioStateRef.current = { bass: 0, mid: 0, high: 0, kick: 0, phase: 0 };
         lastBassRef.current = 0;
