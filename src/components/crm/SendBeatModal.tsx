@@ -38,6 +38,13 @@ interface SendBeatModalProps {
    * 'tracks' so the user lands on their pre-selected pack.
    */
   initialTrackIds?: string[];
+  /**
+   * Track IDs that have already been sent to this recipient (or any
+   * of the recipients in a bulk send). Callers compute this from their
+   * already-loaded beatSends and pass it in — no extra fetch needed.
+   * Used to show "Sent before" badges on the track picker cards.
+   */
+  priorSentTrackIds?: Set<string>;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -51,7 +58,7 @@ type ShareRole = 'viewer' | 'commenter';
  * and an email preview tab. For bulk sends we create one share PER
  * recipient so revocation / per-contact tracking stays clean.
  */
-export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, onClose, onSuccess }: SendBeatModalProps) {
+export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, onClose, onSuccess }: SendBeatModalProps) {
   // Normalize the input — caller can pass either `contact` or `contacts`.
   // Internal logic only sees `recipients`.
   const initialRecipients = useMemo<Contact[]>(() => {
@@ -651,6 +658,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 ) : (
                   filteredTracks.map((track) => {
                     const selected = selectedTrackIds.includes(track.id);
+                    const sentBefore = priorSentTrackIds?.has(track.id) ?? false;
                     const rating = track.rating ?? 0;
                     const energy = track.energy != null ? Math.round(track.energy * 100) : null;
                     const hasCover = !!track.cover_url;
@@ -661,7 +669,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
                           selected
                             ? 'bg-[#2A2418] border-[#8A7A5C]/40'
-                            : 'bg-transparent border-transparent hover:bg-[#14110d] hover:border-[#1f1a13]'
+                            : sentBefore
+                              ? 'bg-[#1f1a10]/60 border-[#1f1a13] hover:bg-[#2A2010] hover:border-[#3a3010]'
+                              : 'bg-transparent border-transparent hover:bg-[#14110d] hover:border-[#1f1a13]'
                         }`}
                       >
                         {/* Checkbox */}
@@ -678,7 +688,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         </div>
                         {/* Title + meta */}
                         <div className="min-w-0 flex-1">
-                          <p className={`text-[12px] font-medium truncate ${selected ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className={`text-[12px] font-medium truncate ${selected ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
+                            {sentBefore && (
+                              <span className="shrink-0 text-[8px] font-mono uppercase tracking-wider text-[#c8a84b] bg-[#c8a84b]/10 border border-[#c8a84b]/25 px-1.5 py-0.5 rounded" title="Already sent to this contact">
+                                Sent before
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">
                             {track.type}{track.bpm ? ` · ${track.bpm} bpm` : ''}{track.key ? ` · ${track.key}${track.scale === 'minor' ? 'm' : ''}` : ''}
                           </p>

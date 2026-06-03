@@ -384,14 +384,26 @@ export function ContactsView({
       {/* ── Modals (unchanged behaviour) ── */}
       {showAddModal && <AddContactModal onClose={() => setShowAddModal(false)} onSuccess={refetch} />}
       {showImportModal && <ImportContactsModal onClose={() => setShowImportModal(false)} onSuccess={refetch} />}
-      {sendQueue && sendQueue.length > 0 && (
-        <SendBeatModal
-          contacts={sendQueue}
-          initialTrackIds={prefilledTrackIds ?? undefined}
-          onClose={() => { setSendQueue(null); setPrefilledTrackIds(null); }}
-          onSuccess={() => { refetch(); setPrefilledTrackIds(null); setSelectedIds(new Set()); }}
-        />
-      )}
+      {sendQueue && sendQueue.length > 0 && (() => {
+        // Derive all track IDs ever sent to any of the queued recipients,
+        // so the modal can badge them "Sent before".
+        const recipientIdSet = new Set(sendQueue.map((c) => c.id));
+        const prior = new Set<string>();
+        for (const s of beatSends) {
+          if (recipientIdSet.has(s.contact_id)) {
+            for (const tid of s.track_ids ?? []) prior.add(tid);
+          }
+        }
+        return (
+          <SendBeatModal
+            contacts={sendQueue}
+            initialTrackIds={prefilledTrackIds ?? undefined}
+            priorSentTrackIds={prior.size > 0 ? prior : undefined}
+            onClose={() => { setSendQueue(null); setPrefilledTrackIds(null); }}
+            onSuccess={() => { refetch(); setPrefilledTrackIds(null); setSelectedIds(new Set()); }}
+          />
+        );
+      })()}
       {historyContact && (
         <ContactHistoryDrawer
           contact={historyContact}

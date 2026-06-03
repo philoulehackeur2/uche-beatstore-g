@@ -423,6 +423,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
       {sendModalOpen && (
         <SendBeatModal
           contact={contact}
+          priorSentTrackIds={sends.length > 0 ? new Set(sends.flatMap((s) => s.track_ids ?? [])) : undefined}
           onClose={() => setSendModalOpen(false)}
           onSuccess={() => { setSendModalOpen(false); fetchAll(); }}
         />
