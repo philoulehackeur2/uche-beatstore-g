@@ -59,6 +59,15 @@ describe('filterAndSortContacts', () => {
     expect(filterAndSortContacts(list, { ...state({ sort: 'sends' }), sortDir: 'asc' }, ctx).map((c) => c.id)).toEqual(['b', 'c', 'a']);
     expect(filterAndSortContacts(list, { ...state({ sort: 'sends' }), sortDir: 'desc' }, ctx).map((c) => c.id)).toEqual(['a', 'c', 'b']);
   });
+  it('sorts by lead score, hottest first by default', () => {
+    const ctx: ContactFilterContext = {
+      lastSentByContact: new Map(),
+      needsNudgeIds: new Set(),
+      leadScoreByContact: new Map([['a', 20], ['b', 90], ['c', 55]]),
+    };
+    const list = [make({ id: 'a' }), make({ id: 'b' }), make({ id: 'c' })];
+    expect(filterAndSortContacts(list, state({ sort: 'lead' }), ctx).map((c) => c.id)).toEqual(['b', 'c', 'a']);
+  });
   it('activeContactFilterCount', () => {
     expect(activeContactFilterCount(state())).toBe(0);
     expect(activeContactFilterCount(state({ category: 'buyers', tags: ['vip'], search: 'x' }))).toBe(3);

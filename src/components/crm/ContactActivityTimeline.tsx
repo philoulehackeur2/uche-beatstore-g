@@ -19,6 +19,7 @@ import {
   GitBranch, Play, Clock, Loader2, Plus,
 } from 'lucide-react';
 import type { ContactActivity, EngagementSummary, ActivityKind } from '@/lib/contacts/activity';
+import { scoreLead, TIER_META } from '@/lib/contacts/scoring';
 
 interface Props {
   contactId: string;
@@ -101,11 +102,25 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
       ]
     : [];
 
+  const lead = summary ? scoreLead({ ...summary }) : null;
+
   return (
     <section>
-      <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3 flex items-center gap-2">
-        <Clock size={11} /> Activity
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] flex items-center gap-2">
+          <Clock size={11} /> Activity
+        </h2>
+        {lead && (
+          <span
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider"
+            style={{ background: TIER_META[lead.tier].bg, color: TIER_META[lead.tier].color, border: `1px solid ${TIER_META[lead.tier].color}33` }}
+            title={lead.reasons.join(' · ')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: TIER_META[lead.tier].color }} />
+            {TIER_META[lead.tier].label} lead · {lead.score}
+          </span>
+        )}
+      </div>
 
       {/* Engagement summary strip */}
       {summary && (

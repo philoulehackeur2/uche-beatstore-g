@@ -140,6 +140,29 @@ export function ContactsView({
   }, []);
 
   // ── Derived maps ──────────────────────────────────────────────────────
+  // Lead scores — batched from /api/contacts/scores (sends/opens/clicks +
+  // purchases). Drives the "Hottest" sort + the per-row tier dot.
+  const [leadScoreByContact, setLeadScoreByContact] = useState<Map<string, number>>(new Map());
+  const [leadTierByContact, setLeadTierByContact] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/contacts/scores')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.scores) return;
+        const sMap = new Map<string, number>();
+        const tMap = new Map<string, string>();
+        for (const [id, v] of Object.entries(d.scores as Record<string, { score: number; tier: string }>)) {
+          sMap.set(id, v.score);
+          tMap.set(id, v.tier);
+        }
+        setLeadScoreByContact(sMap);
+        setLeadTierByContact(tMap);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const sendCountByContact = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of beatSends) map.set(s.contact_id, (map.get(s.contact_id) ?? 0) + 1);
@@ -226,8 +249,8 @@ export function ContactsView({
 
   const filtered = useMemo(() => {
     const fState: ContactFilterState = { search: searchQuery, category: categoryFilter as any, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
-    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact });
-  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact]);
+    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact });
+  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact]);
 
   // Reset to page 1 whenever the result set changes.
   useEffect(() => { setCurrentPage(1); }, [searchQuery, categoryFilter, statusFilter, sortMode, sortDir, tagFilter, pageSize]);
@@ -358,6 +381,8 @@ export function ContactsView({
                 sendCountByContact={sendCountByContact}
                 lastSentByContact={lastSentByContact}
                 latestStatusByContact={latestStatusByContact}
+                leadScoreByContact={leadScoreByContact}
+                leadTierByContact={leadTierByContact}
                 toneFor={toneFor}
                 statusFilter={statusFilter}
                 onFilterTone={(t) => setStatusFilter((cur) => (cur === t ? 'all' : t))}

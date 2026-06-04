@@ -21,6 +21,8 @@ interface Props {
   sendCountByContact: Map<string, number>;
   lastSentByContact: Map<string, string>;
   latestStatusByContact: Map<string, string>;
+  leadScoreByContact?: Map<string, number>;
+  leadTierByContact?: Map<string, string>;
   toneFor: (id: string) => ActivityTone;
   statusFilter: ContactStatusFilter;
   onFilterTone: (t: ActivityTone) => void;
@@ -63,6 +65,7 @@ export function ContactsTable(p: Props) {
             <SortHeader label="Last Sent" col="lastSent" active={p.sortMode === 'lastSent'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[130px] hidden sm:table-cell" />
             <th className="text-left font-mono uppercase tracking-wider text-[10px] text-[#3a3328] font-normal px-2 hidden lg:table-cell">Tags</th>
             <SortHeader label="Sends" col="sends" active={p.sortMode === 'sends'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[70px] hidden sm:table-cell" />
+            <SortHeader label="Lead" col="lead" active={p.sortMode === 'lead'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[90px] hidden md:table-cell" />
             <th className="text-right font-mono uppercase tracking-wider text-[10px] text-[#3a3328] font-normal px-3 w-[120px]">Actions</th>
           </tr>
         </thead>
@@ -147,6 +150,23 @@ export function ContactsTable(p: Props) {
                   {sends > 0 ? (
                     <span className="text-[11px] font-mono tabular-nums text-[#a08a6a] bg-[#1a160f] rounded px-1.5 py-0.5">{sends}</span>
                   ) : <span className="text-[#2d2620]">—</span>}
+                </td>
+
+                {/* Lead score + tier dot */}
+                <td className="px-2 align-middle hidden md:table-cell">
+                  {(() => {
+                    const tier = p.leadTierByContact?.get(c.id);
+                    const score = p.leadScoreByContact?.get(c.id) ?? 0;
+                    if (!tier || tier === 'new') return <span className="text-[#2d2620]">—</span>;
+                    const tints: Record<string, string> = { hot: '#E8896A', warm: '#D4BFA0', cold: '#7d92b0', new: '#6a5d4a' };
+                    const clr = tints[tier] ?? '#6a5d4a';
+                    return (
+                      <span className="inline-flex items-center gap-1.5" title={`${tier} lead · score ${score}`}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
+                        <span className="text-[11px] font-mono tabular-nums" style={{ color: clr }}>{score}</span>
+                      </span>
+                    );
+                  })()}
                 </td>
 
                 {/* Actions */}

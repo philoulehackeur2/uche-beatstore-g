@@ -19,7 +19,7 @@ export interface ContactLike {
 
 export type ContactCategoryFilter = 'all' | 'buyers' | 'rappers' | 'producers' | 'a&r' | 'friends' | 'nudge';
 export type ContactStatusFilter = 'all' | 'active' | 'engaged' | 'cold';
-export type ContactSortMode = 'recent' | 'name' | 'category' | 'lastSent' | 'sends';
+export type ContactSortMode = 'recent' | 'name' | 'category' | 'lastSent' | 'sends' | 'lead';
 export type SortDir = 'asc' | 'desc';
 
 export interface ContactFilterState {
@@ -39,6 +39,8 @@ export interface ContactFilterContext {
   needsNudgeIds: Set<string>;
   /** Map contactId → number of sends. Required for the 'sends' sort. */
   sendCountByContact?: Map<string, number>;
+  /** Map contactId → lead score (0–100). Required for the 'lead' sort. */
+  leadScoreByContact?: Map<string, number>;
 }
 
 /** True when a contact matches the given category segment (role-aware). */
@@ -95,6 +97,7 @@ export function filterAndSortContacts<T extends ContactLike>(
   const sorted = [...matched];
   const lastSent = ctx.lastSentByContact;
   const sendCount = ctx.sendCountByContact;
+  const leadScore = ctx.leadScoreByContact;
   // Comparators return ascending order; we flip at the end for 'desc'.
   let cmp: (a: ContactLike, b: ContactLike) => number;
   switch (state.sort) {
@@ -110,6 +113,12 @@ export function filterAndSortContacts<T extends ContactLike>(
     case 'sends':
       cmp = (a, b) => (sendCount?.get(a.id) ?? 0) - (sendCount?.get(b.id) ?? 0);
       break;
+    case 'lead':
+      // Tie-break hottest leads by most-recent send so equal scores stay stable.
+      cmp = (a, b) =>
+        (leadScore?.get(a.id) ?? 0) - (leadScore?.get(b.id) ?? 0) ||
+        String(lastSent.get(a.id) ?? '').localeCompare(String(lastSent.get(b.id) ?? ''));
+      break;
     case 'recent':
     default:
       cmp = (a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
@@ -117,7 +126,7 @@ export function filterAndSortContacts<T extends ContactLike>(
   sorted.sort(cmp);
   // Default direction is 'desc' for recency/count columns, 'asc' for name —
   // but the caller's explicit sortDir always wins.
-  const defaultDesc = state.sort === 'recent' || state.sort === 'lastSent' || state.sort === 'sends';
+  const defaultDesc = state.sort === 'recent' || state.sort === 'lastSent' || state.sort === 'sends' || state.sort === 'lead';
   const dir = state.sortDir ?? (defaultDesc ? 'desc' : 'asc');
   if (dir === 'desc') sorted.reverse();
   return sorted;
