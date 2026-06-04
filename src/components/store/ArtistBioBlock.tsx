@@ -69,24 +69,27 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
   return (
     <div className="relative w-full overflow-hidden">
       {hero ? (
-        <img loading="eager" src={hero} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img loading="eager" src={hero} alt="" className="absolute inset-0 z-0 w-full h-full object-cover" />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-[#2A2418] via-[#14110d] to-[#0a0907]" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#2A2418] via-[#14110d] to-[#0a0907]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-[#0a0907]" />
+      {/* Gradient: darker at top so particles stand out against any hero image */}
+      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/75 via-black/65 to-[#0a0907]" />
 
-      <div className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 pt-12 pb-12 md:pt-32 md:pb-24">
-        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-3">Beat store</p>
-        <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
-        {/* No max-width on the canvas wrapper — Akira Expanded is very wide
-            and max-w-3xl clips long names at the right edge. The canvas
-            itself scales the font to fit its actual width, so going
-            full-width just means more room before the scale-down kicks in. */}
+      <div className="relative z-10 max-w-[1400px] mx-auto pt-10 pb-10 md:pt-28 md:pb-20">
+        <div className="px-4 md:px-8">
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-2">Beat store</p>
+          <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
+        </div>
+        {/* ParticleText sits outside the horizontal padding so the canvas
+            gets the full max-w container width. Akira Expanded is extremely
+            wide — every pixel counts before the font-scale-down kicks in. */}
         <ParticleText
           text={creator?.display_name || 'Producer'}
           color={accentColor || '#D4BFA0'}
-          className="relative w-full h-[90px] md:h-[140px]"
+          className="relative w-full h-[100px] md:h-[160px]"
         />
+        <div className="px-4 md:px-8">
         {creator?.bio && (
           <div className="mt-4">
             <p className={`text-[14px] text-[#E8DCC8]/80 max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''}`}>
@@ -149,6 +152,7 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
               <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">{label}</span>
             </a>
           ))}
+        </div>
         </div>
       </div>
     </div>

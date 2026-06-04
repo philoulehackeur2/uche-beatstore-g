@@ -102,10 +102,9 @@ export default function BandcampRemixCard({
       style={{ background: bezelBg }}
     >
     <div className={`relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d] ${borderClass}`} style={borderStyle}>
-      {/* Cover — same overlay pattern as BeatCard for visual consistency */}
+      {/* Cover — clicking opens preview drawer; play circle inside plays */}
       <div
         className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#0a0907]"
-        onClick={(e) => { e.stopPropagation(); onPlay(); }}
       >
         {track.cover_url ? (
           <img
@@ -143,10 +142,11 @@ export default function BandcampRemixCard({
           )}
         </div>
 
-        {/* Centre: play hover */}
+        {/* Centre: play hover — overlay is pointer-events-none, circle is clickable */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
           <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+            onClick={(e) => { e.stopPropagation(); onPlay(); }}
+            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] cursor-pointer pointer-events-auto"
             style={{ backgroundColor: accentColor }}
           >
             {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5 text-black" />}

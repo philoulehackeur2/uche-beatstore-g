@@ -72,10 +72,10 @@ export function BeatCard({
     <div className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d]"
       style={{ transition: 'box-shadow 500ms cubic-bezier(0.32,0.72,0,1), transform 500ms cubic-bezier(0.32,0.72,0,1)' }}
     >
-      {/* ── Cover — fills the card, everything overlaid on top ── */}
+      {/* ── Cover — clicking anywhere on cover opens the preview drawer.
+           The play button circle inside gets pointer-events-auto so
+           clicking it specifically plays without opening preview. */}
       <div
-        data-card-action
-        onClick={stop(onPlay)}
         className="relative w-full aspect-square overflow-hidden"
       >
         {/* Art or seeded gradient fallback */}
@@ -135,7 +135,8 @@ export function BeatCard({
         {/* ── Centre: play button (hover) ── */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none" style={{ transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}>
           <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+            onClick={stop(onPlay)}
+            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] cursor-pointer pointer-events-auto"
             style={{ backgroundColor: accentColor }}
           >
             {isCurrent && isPlaying
