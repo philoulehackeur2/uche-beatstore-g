@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ListMusic, ChevronRight, X, Music, ShoppingBag,
+  ListMusic, ChevronRight, X, Music, ShoppingBag, Layers,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import type { Track } from '@/lib/types';
@@ -20,15 +20,77 @@ interface Props {
   onAddAllToCart?: (tracks: PlaylistTrackItem[], type: 'lease' | 'exclusive') => void;
   detailHrefBase?: string;
   onBuyProject?: (proj: FeaturedPlaylist & { price_usd?: number | null }) => void;
+  /** Project mode: larger album-style cards, direct navigation to detail page */
+  projectMode?: boolean;
 }
 
 export function FeaturedPlaylistsStrip({
   label = 'Featured Playlists',
   playlists, currentTrack, isPlaying, onPlay, priceFor, onAddToCart,
-  onAddAllToCart, detailHrefBase, onBuyProject,
+  onAddAllToCart, detailHrefBase, onBuyProject, projectMode = false,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  /* ── Project mode: large album cards, direct link ── */
+  if (projectMode) {
+    return (
+      <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
+        <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#3a3328] mb-4">{label}</p>
+        <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar snap-x snap-mandatory">
+          {playlists.map((pl) => {
+            const href = detailHrefBase ? `${detailHrefBase}/${pl.id}` : '#';
+            const projectPrice = (pl as any).price_usd as number | null | undefined;
+            return (
+              <Link
+                key={pl.id}
+                href={href}
+                className="group shrink-0 w-[180px] sm:w-[200px] md:w-[220px] snap-start"
+              >
+                {/* Cover — double-bezel */}
+                <div
+                  className="w-full aspect-square rounded-[14px] p-[1.5px] mb-3 overflow-hidden"
+                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)' }}
+                >
+                  <div className="relative w-full h-full rounded-[13px] overflow-hidden bg-[#14110d]">
+                    {pl.cover_url ? (
+                      <img
+                        src={pl.cover_url}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a13] to-[#0a0907]">
+                        <Layers size={28} className="text-[#2d2620]" />
+                      </div>
+                    )}
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ChevronRight size={22} className="text-white" />
+                    </div>
+                    {/* Price badge */}
+                    {projectPrice != null && Number(projectPrice) > 0 && (
+                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-black/70 backdrop-blur-sm text-[10px] font-bold text-[#D4BFA0]">
+                        ${projectPrice}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[12px] font-semibold text-[#E8DCC8] truncate group-hover:text-[#D4BFA0] transition-colors leading-tight">
+                  {pl.name}
+                </p>
+                <p className="text-[9px] font-mono text-[#5a5142] mt-1">
+                  {pl.tracks?.length ?? 0} track{(pl.tracks?.length ?? 0) === 1 ? '' : 's'}
+                </p>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Playlist mode: compact thumbnail strip, expand on click ── */
   return (
     <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
       <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#3a3328] mb-4">{label}</p>

@@ -66,11 +66,16 @@ export function BeatCard({
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
       className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 rounded-[14px] p-[1.5px]"
-      style={{ background: bezelBg, ...ringStyle }}
+      style={{
+        background: bezelBg,
+        ...ringStyle,
+        transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)',
+      }}
     >
     {/* Inner card — the actual surface */}
-    <div className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d]"
-      style={{ transition: 'box-shadow 500ms cubic-bezier(0.32,0.72,0,1), transform 500ms cubic-bezier(0.32,0.72,0,1)' }}
+    <div
+      className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d] group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+      style={{ transition: 'box-shadow 400ms cubic-bezier(0.32,0.72,0,1)' }}
     >
       {/* ── Cover — clicking anywhere on cover opens the preview drawer.
            The play button circle inside gets pointer-events-auto so
@@ -93,8 +98,8 @@ export function BeatCard({
           />
         )}
 
-        {/* Gradient scrim — bottom-heavy for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
+        {/* Gradient scrim — heavy at bottom for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/5" />
 
         {/* ── Top row: BPM · wishlist ── */}
         <div className="absolute top-0 inset-x-0 flex items-start justify-between p-2.5 gap-2">
@@ -153,7 +158,7 @@ export function BeatCard({
               <span className="block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse mb-1.5" />
             )}
             <p
-              className="text-[12px] sm:text-[13px] font-semibold text-white leading-tight truncate"
+              className="text-[13px] sm:text-[14px] font-bold text-white leading-tight truncate"
               style={isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -166,8 +171,8 @@ export function BeatCard({
           {/* Price pill — accent tinted, shown when not free/sold */}
           {!track.exclusive_sold && !track.free_download_enabled && fromPrice != null && (
             <span
-              className="shrink-0 text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-lg text-black"
-              style={{ backgroundColor: `${accentColor}E6` }}
+              className="shrink-0 text-[12px] font-bold tabular-nums px-2.5 py-1 rounded-lg text-black shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
+              style={{ backgroundColor: accentColor }}
             >
               ${fromPrice}
             </span>

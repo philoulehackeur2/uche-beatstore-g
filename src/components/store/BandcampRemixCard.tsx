@@ -17,6 +17,7 @@
 import { Download, Heart } from 'lucide-react';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { CoverImage } from '@/components/ui/CoverImage';
 import type { Track } from '@/lib/types';
 
 export type BandcampRemixTrack = Track;
@@ -107,11 +108,11 @@ export default function BandcampRemixCard({
         className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#0a0907]"
       >
         {track.cover_url ? (
-          <img
-            loading="lazy"
+          <CoverImage
             src={track.cover_url}
             alt={track.title}
-            className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
         ) : (
           <div className="absolute inset-0" style={seededGradient(track.id)} />

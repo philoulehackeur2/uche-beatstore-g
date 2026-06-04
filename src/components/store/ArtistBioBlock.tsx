@@ -106,12 +106,6 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
             )}
           </div>
         )}
-        {trackCount > 0 && (
-          <p className="mt-3 text-[11px] font-mono uppercase tracking-wider text-[#5a5142]">
-            {trackCount} beat{trackCount === 1 ? '' : 's'} for sale
-          </p>
-        )}
-
         {creator?.license_notes && (
           <div className="mt-5 max-w-2xl">
             <button

@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { buildHarmonicOrder } from '@/lib/audio/harmonic';
-import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
@@ -42,7 +41,6 @@ import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
 } from '@/components/store/StoreSidebar';
 import { DropCountdown } from '@/components/store/DropCountdown';
-import { BeatMatchModal } from '@/components/store/BeatMatchModal';
 import { logPlay } from '@/lib/buyer-session';
 import { TagChips } from '@/components/store/TagChips';
 import { BeatCard } from '@/components/store/BeatCard';
@@ -463,12 +461,49 @@ function StorePage() {
           upcoming scheduled_publish_at on a draft track) ──────── */}
       <DropCountdown accentColor={accentColor} />
 
-      {/* ── Featured playlists + projects ────────────────────── */}
-      {(featuredPlaylists.length > 0 || featuredProjects.length > 0) && (
+      {/* ── Featured projects (first) + playlists ──────────────── */}
+      {(featuredProjects.length > 0 || featuredPlaylists.length > 0) && (
         <div>
+          {/* Projects — album-style larger cards, direct navigation */}
+          {featuredProjects.length > 0 && (
+            <FeaturedPlaylistsStrip
+              label="Projects"
+              playlists={featuredProjects}
+              detailHrefBase="/store/projects"
+              projectMode
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              onPlay={(t, playlist) => {
+                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
+                setTrack(t as unknown as Track);
+              }}
+              priceFor={(t, type) => {
+                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+                if (override != null && Number(override) > 0) return Number(override);
+                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
+                return def != null && Number(def) > 0 ? Number(def) : null;
+              }}
+              onAddToCart={(t, type) => {
+                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
+                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
+                if (!price) { toast.error(`No ${type} price set`); return; }
+                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
+                  id: `${type}-${t.id}`,
+                  name: type === 'lease' ? 'Lease' : 'Exclusive',
+                  price_usd: Number(price),
+                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+                  is_exclusive: type === 'exclusive',
+                });
+                toast.success(`Added: ${t.title} (${type})`);
+              }}
+              onAddAllToCart={addAllToCart}
+              onBuyProject={handleBuyProject}
+            />
+          )}
+          {/* Playlists — compact thumbnail strip below projects */}
           {featuredPlaylists.length > 0 && (
             <FeaturedPlaylistsStrip
-              label="Featured Playlists"
+              label="Playlists"
               playlists={featuredPlaylists}
               detailHrefBase="/store/playlists"
               currentTrack={currentTrack}
@@ -498,41 +533,6 @@ function StorePage() {
               }}
               onAddAllToCart={addAllToCart}
             />
-          )}
-          {featuredProjects.length > 0 && (
-            <FeaturedPlaylistsStrip
-              label="Projects"
-              playlists={featuredProjects}
-              detailHrefBase="/store/projects"
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlay={(t, playlist) => {
-                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
-                setTrack(t as unknown as Track);
-              }}
-              priceFor={(t, type) => {
-                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-                if (override != null && Number(override) > 0) return Number(override);
-                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
-                return def != null && Number(def) > 0 ? Number(def) : null;
-              }}
-              onAddToCart={(t, type) => {
-                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
-                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
-                if (!price) { toast.error(`No ${type} price set`); return; }
-                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
-                  id: `${type}-${t.id}`,
-                  name: type === 'lease' ? 'Lease' : 'Exclusive',
-                  price_usd: Number(price),
-                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
-                  is_exclusive: type === 'exclusive',
-                });
-                toast.success(`Added: ${t.title} (${type})`);
-              }}
-              onAddAllToCart={addAllToCart}
-              onBuyProject={handleBuyProject}
-            />
-
           )}
         </div>
       )}
@@ -618,11 +618,6 @@ function StorePage() {
             <Disc3 size={11} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
             DJ Mode
           </button>
-
-          {/* AI Beat Match — drop a vocal, get matching beats */}
-          <div className="hidden md:block">
-            <BeatMatchModal accentColor={accentColor} />
-          </div>
 
           {/* Copy store link */}
           <button
