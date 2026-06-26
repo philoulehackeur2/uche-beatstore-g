@@ -145,15 +145,19 @@ export default function BandcampRemixCard({
           )}
         </div>
 
-        {/* Centre: play glyph (hover) — decorative; click passes through to
-            the card's onPreview, play happens inside the drawer */}
+        {/* Centre: play button (hover). Interactive — starts playback in the
+            bottom player (click-to-play); clicking elsewhere opens the drawer.
+            Wrapper stays pointer-events-none so only the button intercepts. */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPlay(); }}
+            aria-label={`${isPlaying ? 'Pause' : 'Play'} ${track.title}`}
+            className="pointer-events-auto w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             style={{ backgroundColor: accentColor }}
           >
             {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5 text-black" />}
-          </div>
+          </button>
         </div>
 
         {/* Bottom: title + producer + price */}

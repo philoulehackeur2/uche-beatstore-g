@@ -35,7 +35,7 @@ interface Props {
 
 export function BeatCard({
   track, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
-  onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
+  onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
   isWishlisted, onToggleWishlist,
 }: Props) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -138,18 +138,22 @@ export function BeatCard({
           ) : <span />}
         </div>
 
-        {/* ── Centre: play glyph (hover) — purely a "click to preview"
-             affordance. pointer-events-none so the click passes through to
-             the card's onPreview; you play from inside the drawer. ── */}
+        {/* ── Centre: play button (hover). Interactive — clicking it starts
+             playback in the bottom player (click-to-play); clicking anywhere
+             else on the card still opens the preview/buy drawer. The wrapper
+             stays pointer-events-none so only the button intercepts. ── */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none" style={{ transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}>
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+          <button
+            type="button"
+            onClick={stop(onPlay)}
+            aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title}`}
+            className="pointer-events-auto w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             style={{ backgroundColor: accentColor }}
           >
             {isCurrent && isPlaying
               ? <PauseGlyph size={16} />
               : <PlayGlyph size={16} className="ml-0.5 text-black" />}
-          </div>
+          </button>
         </div>
 
         {/* ── Bottom overlay: title + key + price ── */}
