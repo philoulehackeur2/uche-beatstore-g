@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Track } from '@/lib/types';
 import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { Popover } from '@/components/ui/Popover';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -64,8 +65,6 @@ export function TrackCard({
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
   const stemStatus = track.stems_status as string | null | undefined;
   const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
@@ -118,15 +117,6 @@ export function TrackCard({
       toast.error('Failed to delete cache');
     }
   };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
 
   const isCurrent = currentTrack?.id === track.id;
   const isActive = isCurrent && isPlaying;
@@ -323,83 +313,90 @@ export function TrackCard({
         </div>
       </div>
 
-      {/* More */}
-      <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#6E685B] transition-colors hover:bg-white/[0.06] hover:text-[#F7EBDD]"
-          aria-label="Track actions"
+      {/* More — portaled via Popover so the menu escapes the card's
+          overflow-hidden clip + stacking context (was invisible before). */}
+      <div className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <Popover
+          align="right"
+          width={208}
+          trigger={({ toggle, ref }) => (
+            <button
+              ref={ref as (el: HTMLButtonElement | null) => void}
+              onClick={(e) => { e.stopPropagation(); toggle(); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[#6E685B] transition-colors hover:bg-white/[0.06] hover:text-[#F7EBDD]"
+              aria-label="Track actions"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          )}
         >
-          <MoreHorizontal size={14} />
-        </button>
-        {menuOpen && (
-          <div
-            className="absolute right-0 top-7 z-30 w-52 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
-          >
-            {onClickDetails && (
-              <button
-                onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
-              >
-                <Info size={12} className="text-[#E7D7BE]" /> View details
-              </button>
-            )}
-            {onShare && (
-              <button
-                onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
-              >
-                <Share2 size={12} className="text-[#E7D7BE]" /> Share track
-              </button>
-            )}
-            
-            {isCached ? (
-              <button
-                onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#1A1813]"
-              >
-                <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
-              </button>
-            ) : (
-              <button
-                onClick={(e) => { handleSync(e); }}
-                disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-50"
-              >
-                {syncProgress !== null ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin text-[#7F77DD] shrink-0" />
-                    <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={12} className="text-[#7F77DD] shrink-0" />
-                    <span>Sync to device</span>
-                  </>
-                )}
-              </button>
-            )}
-            {onRemoveFromContext && (
-              <button
-                onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
-              >
-                <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
-              </button>
-            )}
-            {onDelete && (
-              <>
-                <div className="my-1 border-t border-[#211F1A]" />
+          {(close) => (
+            <>
+              {onClickDetails && (
                 <button
-                  onClick={() => { setMenuOpen(false); onDelete(track); }}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
+                  onClick={() => { close(); onClickDetails(track); }}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
                 >
-                  <Trash2 size={12} /> Delete from library
+                  <Info size={12} className="text-[#E7D7BE]" /> View details
                 </button>
-              </>
-            )}
-          </div>
-        )}
+              )}
+              {onShare && (
+                <button
+                  onClick={() => { close(); onShare(track); }}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                >
+                  <Share2 size={12} className="text-[#E7D7BE]" /> Share track
+                </button>
+              )}
+
+              {isCached ? (
+                <button
+                  onClick={(e) => { close(); handleRemoveSync(e); }}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#1A1813]"
+                >
+                  <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => { handleSync(e); }}
+                  disabled={syncProgress !== null}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-50"
+                >
+                  {syncProgress !== null ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-[#7F77DD] shrink-0" />
+                      <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={12} className="text-[#7F77DD] shrink-0" />
+                      <span>Sync to device</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {onRemoveFromContext && (
+                <button
+                  onClick={() => { close(); onRemoveFromContext(track); }}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                >
+                  <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
+                </button>
+              )}
+              {onDelete && (
+                <>
+                  <div className="my-1 border-t border-[#211F1A]" />
+                  <button
+                    onClick={() => { close(); onDelete(track); }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
+                  >
+                    <Trash2 size={12} /> Delete from library
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </Popover>
       </div>
     </div>
   );
