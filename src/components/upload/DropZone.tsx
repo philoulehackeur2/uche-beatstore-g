@@ -47,6 +47,26 @@ const FORMAT_STYLE: Record<string, string> = {
   ogg:  'text-white/80 bg-white/[0.05]/60 border-white/20',
 };
 
+// Caps how many files run client-side analysis (each spins up an AudioContext
+// + decode worker) at once. A 100+ file drop without this cap creates 100+
+// concurrent AudioContexts, which browsers throttle or refuse outright.
+const ANALYSIS_CONCURRENCY = 6;
+
+async function analyzeWithConcurrency<T>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<void>,
+  concurrency: number,
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+}
+
 function fmtBytes(b: number): string {
   if (b >= 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024).toFixed(0)} KB`;
@@ -122,25 +142,25 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     const acceptedOffset = rejectedCards.length;
     safeSetCards([...rejectedCards, ...initial]);
 
-    // Run analysis in parallel, update each card as its result lands.
-    const analyses = await Promise.all(
-      accepted.map(async (f, i) => {
-        try {
-          const result = await analyzeAudio(f);
-          safeSetCards((prev) => prev.map((c, ci) =>
-            ci === acceptedOffset + i
-              ? { ...c, analyzing: false, bpm: result?.bpm ?? null, key: result?.key ?? null, scale: result?.scale ?? null }
-              : c,
-          ));
-          return result;
-        } catch {
-          safeSetCards((prev) => prev.map((c, ci) =>
-            ci === acceptedOffset + i ? { ...c, analyzing: false, analysisError: true } : c,
-          ));
-          return null;
-        }
-      }),
-    );
+    // Run analysis with bounded concurrency, update each card as its result
+    // lands. Unbounded (one AudioContext per file) falls over past a few
+    // dozen simultaneous files.
+    const analyses: (Awaited<ReturnType<typeof analyzeAudio>> | null)[] = new Array(accepted.length).fill(null);
+    await analyzeWithConcurrency(accepted, async (f, i) => {
+      try {
+        const result = await analyzeAudio(f);
+        analyses[i] = result;
+        safeSetCards((prev) => prev.map((c, ci) =>
+          ci === acceptedOffset + i
+            ? { ...c, analyzing: false, bpm: result?.bpm ?? null, key: result?.key ?? null, scale: result?.scale ?? null }
+            : c,
+        ));
+      } catch {
+        safeSetCards((prev) => prev.map((c, ci) =>
+          ci === acceptedOffset + i ? { ...c, analyzing: false, analysisError: true } : c,
+        ));
+      }
+    }, ANALYSIS_CONCURRENCY);
 
     // Enqueue all files.
     accepted.forEach((file, i) => {
