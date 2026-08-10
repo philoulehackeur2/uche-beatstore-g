@@ -28,7 +28,7 @@ import { useEffect, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayGlyph, PauseGlyph } from './TransportIcons';
-import { audioSrc } from '@/lib/audio/url';
+import { audioSrc, publicAudioSrc } from '@/lib/audio/url';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
@@ -48,6 +48,13 @@ interface WavePlayerProps {
   track?: Track | null;
   /** Optional URL of a precomputed peaks JSON sidecar. */
   peaksUrl?: string | null;
+  /**
+   * Set on public surfaces (share links, storefront) where the caller's `url`
+   * is already anonymous-fetchable — a signed `/api/share/…` grant or a public
+   * R2/CDN clip. Routes through `publicAudioSrc` instead of `audioSrc`, because
+   * `/api/audio` requires a session and 401s for share-link recipients.
+   */
+  publicSrc?: boolean;
   hideControls?: boolean;
   onFinish?: () => void;
   height?: number;
@@ -61,6 +68,7 @@ export function WavePlayer({
   trackId,
   track,
   peaksUrl,
+  publicSrc = false,
   hideControls = false,
   onFinish,
   height = 40,
@@ -92,7 +100,7 @@ export function WavePlayer({
     setResolvedUrl(null);
     (async () => {
       if (!url) return;
-      let finalUrl = audioSrc(url);
+      let finalUrl = publicSrc ? publicAudioSrc(url) : audioSrc(url);
       if (trackId) {
         try {
           const offline = await getOfflineSrc(trackId);
@@ -111,7 +119,7 @@ export function WavePlayer({
       if (!aborted) setResolvedUrl(finalUrl);
     })();
     return () => { aborted = true; };
-  }, [url, trackId, retryNonce]);
+  }, [url, trackId, retryNonce, publicSrc]);
 
   const {
     ready, currentTime, duration, failed,

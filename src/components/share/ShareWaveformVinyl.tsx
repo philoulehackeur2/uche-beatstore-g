@@ -166,6 +166,7 @@ export function ShareWaveformVinyl({
           <WavePlayer
             url={track.audio_url}
             peaksUrl={track.peaks_url ?? null}
+            publicSrc
             trackId={track.id}
             track={toPlayerTrack(track)}
             height={48}

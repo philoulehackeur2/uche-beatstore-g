@@ -113,6 +113,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
         <WavePlayer
           url={activeTrack?.audio_url}
           peaksUrl={activeTrack?.peaks_url ?? null}
+          publicSrc
           onFinish={() => {}}
         />
         

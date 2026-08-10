@@ -9,7 +9,7 @@ import {
   Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Edit3,
   ChevronUp, ChevronDown, Check, X as XIcon, Pencil,
 } from 'lucide-react';
-import { audioSrc } from '@/lib/audio/url';
+import { publicAudioSrc } from '@/lib/audio/url';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
@@ -220,7 +220,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     seek,
   } = useWaveSurfer({
     container: waveRef,
-    url: (activeTrack && !useDawCanvas) ? audioSrc(activeTrack.audio_url) : null,
+    url: (activeTrack && !useDawCanvas) ? publicAudioSrc(activeTrack.audio_url) : null,
     peaksUrl: activeTrack?.peaks_url ?? null,
     height: 56,
     initialVolume: 0.8,
@@ -876,7 +876,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               // there's no audio collision.
               <PlayerCanvas
                 key={activeTrack.id}
-                url={audioSrc(activeTrack.audio_url)}
+                url={publicAudioSrc(activeTrack.audio_url)}
                 peaksUrl={activeTrack.peaks_url ?? null}
                 height={96}
                 enableRegions

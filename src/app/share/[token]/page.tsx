@@ -9,7 +9,7 @@ import type WaveSurferType from 'wavesurfer.js';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, X as XIcon } from 'lucide-react';
-import { audioSrc } from '@/lib/audio/url';
+import { publicAudioSrc } from '@/lib/audio/url';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
@@ -219,7 +219,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       // to the plain-audio fallback so the artist still hears the beat.
       w.on('error', () => { if (!cancelled) setWsFailed(true); });
       try {
-        w.load(audioSrc(activeTrack.audio_url));
+        w.load(publicAudioSrc(activeTrack.audio_url));
       } catch {
         if (!cancelled) setWsFailed(true);
       }
