@@ -2,6 +2,7 @@
 
 import { ChevronDown, X, Check } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { TRIAGE_STAGE_LABELS, TRIAGE_STAGE_ORDER, type TriageStage } from '@/lib/library/triage';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,12 @@ export interface LibraryFilters {
   genres: Set<string>;
   // State chips (first-class)
   statuses: Set<string>;
+  /**
+   * Pipeline stage — derived, not stored. Answers "what haven't I finished
+   * yet", which is the question that replaces "find a beat" once the vault
+   * outgrows what the producer can hold in their head. See lib/library/triage.
+   */
+  triage: Set<TriageStage>;
   // Advanced
   bpmMin: number | null;
   bpmMax: number | null;
@@ -41,6 +48,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   offlineOnly: false,
   genres: new Set(),
   statuses: new Set(),
+  triage: new Set(),
   bpmMin: null,
   bpmMax: null,
   keys: new Set(),
@@ -54,6 +62,7 @@ export function hasActiveFilters(f: LibraryFilters): boolean {
     f.offlineOnly ||
     f.genres.size > 0 ||
     f.statuses.size > 0 ||
+    f.triage.size > 0 ||
     f.bpmMin != null ||
     f.bpmMax != null ||
     f.keys.size > 0 ||
@@ -68,6 +77,7 @@ export function activeFilterCount(f: LibraryFilters): number {
     f.offlineOnly,
     f.genres.size > 0,
     f.statuses.size > 0,
+    f.triage.size > 0,
     f.bpmMin != null || f.bpmMax != null,
     f.keys.size > 0,
     f.scale !== 'all',
@@ -82,6 +92,7 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
     offlineOnly: f.offlineOnly,
     genres: Array.from(f.genres),
     statuses: Array.from(f.statuses),
+    triage: Array.from(f.triage),
     bpmMin: f.bpmMin,
     bpmMax: f.bpmMax,
     keys: Array.from(f.keys),
@@ -95,6 +106,7 @@ type SerializedLibraryFilters = {
   offlineOnly?: unknown;
   genres?: unknown;
   statuses?: unknown;
+  triage?: unknown;
   bpmMin?: unknown;
   bpmMax?: unknown;
   keys?: unknown;
@@ -111,6 +123,14 @@ export function deserializeFilters(raw: unknown): LibraryFilters {
     offlineOnly: r.offlineOnly === true,
     genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
     statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
+    // Drop unknown stage names — a saved view from an older build (or a
+    // hand-edited row) must not smuggle a value the filter can never match,
+    // which would silently render an empty library.
+    triage: new Set<TriageStage>(
+      (Array.isArray(r.triage) ? r.triage : []).filter(
+        (s): s is TriageStage => TRIAGE_STAGE_ORDER.includes(s as TriageStage),
+      ),
+    ),
     bpmMin: typeof r.bpmMin === 'number' ? r.bpmMin : null,
     bpmMax: typeof r.bpmMax === 'number' ? r.bpmMax : null,
     keys: new Set<string>(Array.isArray(r.keys) ? r.keys : []),
@@ -123,6 +143,12 @@ interface FilterBarProps {
   filters: LibraryFilters;
   onChange: (f: LibraryFilters) => void;
   embedded?: boolean;
+  /**
+   * Per-stage counts for the Stage menu. Computed by the caller over the
+   * loaded list (via `summarizeTriage`) so the menu can show how much work
+   * sits behind each option before you pick it. Omit to render bare labels.
+   */
+  triageCounts?: Record<TriageStage, number> | null;
 }
 
 const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
@@ -133,7 +159,7 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
   { value: 'remix', label: 'Remixes' },
 ];
 
-export function FilterBar({ filters, onChange, embedded = false }: FilterBarProps) {
+export function FilterBar({ filters, onChange, embedded = false, triageCounts = null }: FilterBarProps) {
   const set = (partial: Partial<LibraryFilters>) => onChange({ ...filters, ...partial });
 
   const toggleIn = (key: 'genres' | 'statuses' | 'keys', value: string) => {
@@ -144,6 +170,11 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
   const toggleGenre  = (g: string) => toggleIn('genres', g);
   const toggleStatus = (v: string) => toggleIn('statuses', v);
   const toggleKey    = (k: string) => toggleIn('keys', k);
+  const toggleTriage = (s: TriageStage) => {
+    const next = new Set(filters.triage);
+    if (next.has(s)) next.delete(s); else next.add(s);
+    set({ triage: next });
+  };
 
   const advancedCount = [
     filters.bpmMin != null || filters.bpmMax != null,
@@ -191,6 +222,21 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
           <MenuList>
             {STATUS_OPTIONS.map(({ value, label }) => (
               <MenuItem key={value} label={label} selected={filters.statuses.has(value)} onClick={() => toggleStatus(value)} />
+            ))}
+          </MenuList>
+        )}
+      </FacetMenu>
+
+      <FacetMenu label="Stage" count={filters.triage.size} width={200}>
+        {() => (
+          <MenuList>
+            {TRIAGE_STAGE_ORDER.map((stage) => (
+              <MenuItem
+                key={stage}
+                label={`${TRIAGE_STAGE_LABELS[stage]}${triageCounts ? ` · ${triageCounts[stage]}` : ''}`}
+                selected={filters.triage.has(stage)}
+                onClick={() => toggleTriage(stage)}
+              />
             ))}
           </MenuList>
         )}

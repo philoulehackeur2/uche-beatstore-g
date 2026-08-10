@@ -38,6 +38,7 @@ import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicP
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
+import { summarizeTriage, triageStage, type TriageStage } from '@/lib/library/triage';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
 import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
@@ -190,6 +191,9 @@ export default function LibraryPage() {
     genres: new Set<string>(),
     statuses: new Set<string>(),
     keys: new Set<string>(),
+    // Fresh Set per mount — DEFAULT_FILTERS is a module-level object, so
+    // reusing its Set would share mutations across every mount.
+    triage: new Set<TriageStage>(),
   }));
 
   // Re-read the cached-id list when the offline facet is switched on. The old
@@ -482,6 +486,8 @@ export default function LibraryPage() {
       if (filters.scale === 'minor' && t.scale !== 'minor') return false;
       if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
       if (filters.rating != null && (t.rating == null || t.rating < filters.rating)) return false;
+      // Pipeline stage — derived from the row, so it needs no extra fetch.
+      if (filters.triage.size > 0 && !filters.triage.has(triageStage(t, { hasDefaultPrice }))) return false;
       // Genre filter — track_tags come down from the API rich select
       if (filters.genres.size > 0) {
         const trackGenres: string[] = ((t as TrackWithInlineTags).track_tags ?? [])
@@ -538,7 +544,15 @@ export default function LibraryPage() {
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     }
     return sorted;
-  }, [tracks, search, cachedIds, sortMode, filters]);
+  }, [tracks, search, cachedIds, sortMode, filters, hasDefaultPrice]);
+
+  // Per-stage counts for the Stage menu. Scoped to the tracks loaded so far —
+  // same caveat as every other facet on this page until the filter work moves
+  // server-side.
+  const triageCounts = useMemo(
+    () => summarizeTriage(tracks, { hasDefaultPrice }),
+    [tracks, hasDefaultPrice],
+  );
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
@@ -1239,7 +1253,7 @@ export default function LibraryPage() {
         </div>
 
         {showFilters && !isMobileViewport && (
-          <FilterBar filters={filters} onChange={setFilters} />
+          <FilterBar filters={filters} onChange={setFilters} triageCounts={triageCounts} />
         )}
         <Drawer
           open={showFilters && isMobileViewport}
