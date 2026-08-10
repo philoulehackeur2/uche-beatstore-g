@@ -224,14 +224,18 @@ export function PlayerBar() {
           {/* Transport — center-right. No filled discs; the play button reads
               as the pill's "anchor" via larger glyph size, not a solid fill. */}
           <div className="flex items-center gap-0.5 shrink-0">
-            <button onClick={prev} className="w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
+            {/* Transport hit areas are 44px on phones (Apple's minimum touch
+                target) and shrink to 32px from md up, where a mouse makes the
+                smaller target fine. The glyph size is unchanged — this grows
+                the tappable box, not the visual weight. */}
+            <button onClick={prev} className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
               <PrevGlyph size={15} />
             </button>
             <button
               onClick={handlePrimaryPlay}
               disabled={!streamStatus.canAttemptPlayback}
               className={cn(
-                'glass-play-surface w-10 h-10 rounded-full flex items-center justify-center ml-0.5 mr-0.5 active:scale-95 transition-transform duration-150',
+                'glass-play-surface w-12 h-12 md:w-10 md:h-10 rounded-full flex items-center justify-center ml-0.5 mr-0.5 active:scale-95 transition-transform duration-150',
                 streamStatus.canAttemptPlayback ? 'hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
               )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -240,7 +244,7 @@ export function PlayerBar() {
             >
               {isBuffering ? <Loader2 size={18} className="animate-spin" /> : isPlaying ? <PauseGlyph size={20} /> : <PlayGlyph size={20} className="ml-0.5" />}
             </button>
-            <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
+            <button onClick={next} className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
               <NextGlyph size={15} />
             </button>
           </div>

@@ -2,6 +2,11 @@
 
 import { useEffect } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
+import {
+  MEDIA_SESSION_SEEK_OFFSET_SECONDS,
+  mediaSessionSkipMode,
+  seekFractionAfterOffset,
+} from '@/lib/audio/media-session';
 
 /**
  * Bridges the Zustand player store to the browser's Media Session API
@@ -25,6 +30,9 @@ export function MediaSessionBridge() {
   const setPlaying = usePlayer((s) => s.setPlaying);
   const progress = usePlayer((s) => s.progress);
   const seekTo = usePlayer((s) => s.seekTo);
+  // Subscribe to the length, not the array — a queue reorder shouldn't tear
+  // down and rebuild every action handler.
+  const queueLength = usePlayer((s) => s.queue.length);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
@@ -74,18 +82,48 @@ export function MediaSessionBridge() {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 
     const dur = () => usePlayer.getState().currentTrack?.duration_seconds || 0;
+    const seekBy = (offset: number) => {
+      const fraction = seekFractionAfterOffset(
+        usePlayer.getState().progress,
+        offset,
+        dur(),
+      );
+      if (fraction != null) seekTo(fraction);
+    };
+
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ['play',          () => setPlaying(true)],
-      ['pause',         () => setPlaying(false)],
-      ['stop',          () => setPlaying(false)],
-      ['nexttrack',     () => next()],
-      ['previoustrack', () => prev()],
-      // OS scrubber drag → seek to absolute time.
-      ['seekto', (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0 && typeof d.seekTime === 'number') seekTo(d.seekTime / t); }],
-      // Hardware ±10s (headphone double-tap, lock-screen skip buttons).
-      ['seekforward',  (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0) seekTo(Math.min(1, usePlayer.getState().progress + (d.seekOffset ?? 10) / t)); }],
-      ['seekbackward', (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0) seekTo(Math.max(0, usePlayer.getState().progress - (d.seekOffset ?? 10) / t)); }],
+      ['play',  () => setPlaying(true)],
+      ['pause', () => setPlaying(false)],
+      ['stop',  () => setPlaying(false)],
+      // OS scrubber drag → seek to absolute time. Independent of the skip
+      // buttons below, so it stays available in both modes.
+      ['seekto', (d: MediaSessionActionDetails) => {
+        const t = dur();
+        if (t > 0 && typeof d.seekTime === 'number') seekTo(d.seekTime / t);
+      }],
     ];
+
+    // Bind the OS skip-button pair to ONE of track-skip or seek — never both.
+    // See lib/audio/media-session for why registering both silently loses the
+    // track buttons on iOS.
+    const skipMode = mediaSessionSkipMode(queueLength);
+    if (skipMode === 'track') {
+      handlers.push(['nexttrack', () => next()], ['previoustrack', () => prev()]);
+    } else {
+      handlers.push(
+        ['seekforward',  (d: MediaSessionActionDetails) =>
+          seekBy(d.seekOffset ?? MEDIA_SESSION_SEEK_OFFSET_SECONDS)],
+        ['seekbackward', (d: MediaSessionActionDetails) =>
+          seekBy(-(d.seekOffset ?? MEDIA_SESSION_SEEK_OFFSET_SECONDS))],
+      );
+    }
+
+    // Actions we are NOT binding this pass must be actively cleared. Handlers
+    // live on the global mediaSession object, so a registration left over from
+    // a previous queue length would keep overriding the current mode.
+    const unused: MediaSessionAction[] = skipMode === 'track'
+      ? ['seekforward', 'seekbackward']
+      : ['nexttrack', 'previoustrack'];
 
     for (const [action, handler] of handlers) {
       try {
@@ -94,9 +132,16 @@ export function MediaSessionBridge() {
         // Not all actions are supported on every browser; ignore.
       }
     }
+    for (const action of unused) {
+      try {
+        navigator.mediaSession.setActionHandler(action, null);
+      } catch {
+        // ignore
+      }
+    }
 
     return () => {
-      for (const [action] of handlers) {
+      for (const action of [...handlers.map(([a]) => a), ...unused]) {
         try {
           navigator.mediaSession.setActionHandler(action, null);
         } catch {
@@ -104,7 +149,7 @@ export function MediaSessionBridge() {
         }
       }
     };
-  }, [togglePlay, next, prev, setPlaying, seekTo]);
+  }, [togglePlay, next, prev, setPlaying, seekTo, queueLength]);
 
   return null;
 }
