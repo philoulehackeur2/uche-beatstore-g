@@ -22,6 +22,7 @@ import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
 import { deriveContactKind, type ContactKind } from '@/lib/contacts/kind';
+import { deriveActivityTone } from '@/lib/contacts/tone';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -299,12 +300,13 @@ export function ContactsView({
     return map;
   }, [beatSends]);
 
-  // Derived activity tone (read-only) — distinct from the editable crm_status stage.
-  const toneFor = (contactId: string): ActivityTone => {
-    const last = lastSentByContact.get(contactId);
-    if (!last) return 'cold';
-    return (Date.now() - Date.parse(last)) / 86_400_000 <= 30 ? 'active' : 'engaged';
-  };
+  // Derived activity tone (read-only) — distinct from the editable crm_status
+  // stage. Purchases are part of the input: a buyer must never read as cold.
+  const toneFor = (contactId: string): ActivityTone =>
+    deriveActivityTone({
+      lastSentAt: lastSentByContact.get(contactId) ?? null,
+      purchases: purchasesByContact.get(contactId) ?? 0,
+    });
 
   const stats = useMemo(() => {
     const total = contacts.length;
