@@ -121,6 +121,52 @@ export function ContactsView({
     setSearchQuery(seg.filters.search ?? '');
   };
 
+  /** Rename in place. The API accepts a name-only patch, so the filters the
+   *  segment already stores don't have to be resent. */
+  const renameSegment = async (seg: Segment) => {
+    const name = window.prompt('Rename segment:', seg.name)?.trim();
+    if (!name || name === seg.name) return;
+    setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, name } : s)));
+    try {
+      const res = await fetch(`/api/contacts/segments/${seg.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success('Segment renamed');
+    } catch (err) {
+      setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, name: seg.name } : s)));
+      toast.error("Couldn't rename segment", err instanceof Error ? err.message : '');
+    }
+  };
+
+  /** Point an existing segment at whatever is filtered right now — the other
+   *  half of editing, and previously only possible by deleting and recreating. */
+  const updateSegmentFilters = async (seg: Segment) => {
+    const filters = {
+      ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+      ...(categoryFilter !== 'all' ? { category: categoryFilter } : {}),
+      ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+      sort: sortMode,
+    };
+    const previous = seg.filters;
+    setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, filters } : s)));
+    try {
+      const res = await fetch(`/api/contacts/segments/${seg.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filters }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setActiveSegmentId(seg.id);
+      toast.success('Segment updated', `"${seg.name}" now matches the current filters.`);
+    } catch (err) {
+      setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, filters: previous } : s)));
+      toast.error("Couldn't update segment", err instanceof Error ? err.message : '');
+    }
+  };
+
   const deleteSegment = async (seg: Segment) => {
     const ok = await confirmToast(`Delete segment "${seg.name}"?`, 'Your contacts are untouched.', { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true });
     if (!ok) return;
@@ -164,6 +210,9 @@ export function ContactsView({
   // purchases). Drives the "Hottest" sort + the per-row tier dot.
   const [leadScoreByContact, setLeadScoreByContact] = useState<Map<string, number>>(new Map());
   const [leadTierByContact, setLeadTierByContact] = useState<Map<string, string>>(new Map());
+  // The drivers behind each score (strongest first), for the row tooltip — a
+  // tier label with no explanation is not something you can act on.
+  const [leadReasonsByContact, setLeadReasonsByContact] = useState<Map<string, string[]>>(new Map());
   // Riding along with score/tier: the raw signal counts (see kind.ts) so the
   // list can show a Buyer/Artist/Lead badge and revenue/favorites inline
   // without a second round-trip.
@@ -178,19 +227,22 @@ export function ContactsView({
         if (cancelled || !d?.scores) return;
         const sMap = new Map<string, number>();
         const tMap = new Map<string, string>();
+        const rsnMap = new Map<string, string[]>();
         const revMap = new Map<string, number>();
         const purMap = new Map<string, number>();
         const favMap = new Map<string, number>();
-        type ScoreRow = { score: number; tier: string; revenue?: number; purchases?: number; favorites?: number };
+        type ScoreRow = { score: number; tier: string; reasons?: string[]; revenue?: number; purchases?: number; favorites?: number };
         for (const [id, v] of Object.entries(d.scores as Record<string, ScoreRow>)) {
           sMap.set(id, v.score);
           tMap.set(id, v.tier);
+          if (v.reasons?.length) rsnMap.set(id, v.reasons);
           if (v.revenue) revMap.set(id, v.revenue);
           if (v.purchases) purMap.set(id, v.purchases);
           if (v.favorites) favMap.set(id, v.favorites);
         }
         setLeadScoreByContact(sMap);
         setLeadTierByContact(tMap);
+        setLeadReasonsByContact(rsnMap);
         setRevenueByContact(revMap);
         setPurchasesByContact(purMap);
         setFavoritesByContact(favMap);
@@ -403,6 +455,7 @@ export function ContactsView({
             clearTags={() => setTagFilter(new Set())}
             categoryCount={categoryCount}
             segments={segments} activeSegmentId={activeSegmentId}
+            onRenameSegment={renameSegment} onUpdateSegmentFilters={updateSegmentFilters}
             onApplySegment={applySegment} onSaveSegment={saveSegment} onDeleteSegment={deleteSegment}
             onExport={exportFiltered} onAddContact={() => setShowAddModal(true)} onRefresh={refetch} refreshing={refreshing}
           />
@@ -449,6 +502,7 @@ export function ContactsView({
                 latestStatusByContact={latestStatusByContact}
                 leadScoreByContact={leadScoreByContact}
                 leadTierByContact={leadTierByContact}
+                leadReasonsByContact={leadReasonsByContact}
                 kindByContact={kindByContact}
                 revenueByContact={revenueByContact}
                 favoritesByContact={favoritesByContact}

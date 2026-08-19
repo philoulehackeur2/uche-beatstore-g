@@ -329,6 +329,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />
                 <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
                 <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
+                {/* `website` has existed on the row and the Contact type all
+                    along with no UI anywhere and no route that accepted it. */}
+                <DetailField icon={<Globe size={11} />}   label="Website"   value={contact.website}   onSave={(v) => patchField('website', v)} />
               </div>
             </section>
 

@@ -13,9 +13,10 @@ const log = createLogger('api.contacts.scores');
  * GET /api/contacts/scores
  *
  * Batched lead scores for every contact the producer owns, computed from
- * beat-send engagement (sends/opens/clicks) + purchases + buyer_favorites
- * matched by buyer email. Returns { scores: { [contactId]: { score, tier } } }
- * in 4 queries total (not N) so it scales to 500+ contacts.
+ * beat-send engagement (sends/opens/clicks), share-link plays, purchases, and
+ * buyer_favorites matched by buyer email. Returns
+ * { scores: { [contactId]: { score, tier, reasons, …counts } } } in 5 queries
+ * total (not N) so it scales to 500+ contacts.
  */
 export async function GET() {
   const auth = await requireUser();
@@ -27,7 +28,10 @@ export async function GET() {
     const { data: contacts } = await admin
       .from('contacts')
       .select('id, email')
-      .or(`user_id.eq.${userId},user_id.is.null`)
+      // Owner-only, matching /api/contacts and /api/beat_sends. Scoring an
+      // orphan row the rest of the CRM cannot open was half of why the
+      // pipeline numbers never reconciled.
+      .eq('user_id', userId)
       .limit(5000);
 
     const contactRows = contacts ?? [];
@@ -42,7 +46,7 @@ export async function GET() {
     // 2. Beat sends for those contacts — aggregate per contact in JS.
     const { data: sends } = await admin
       .from('beat_sends')
-      .select('contact_id, sent_at, opened_at, link_clicked_at')
+      .select('contact_id, sent_at, opened_at, link_clicked_at, share_token')
       .in('contact_id', contactIds)
       .limit(20000);
 
@@ -53,6 +57,10 @@ export async function GET() {
       if (!a) { a = { sends: 0, opens: 0, clicks: 0, plays: 0, favorites: 0, purchases: 0, revenue: 0, lastTouch: 0 }; agg.set(id, a); }
       return a;
     };
+    // share_token → the contacts it was sent to. Normally 1:1 (each send mints
+    // its own nanoid link), but a producer can reuse a token across contacts,
+    // and then a play genuinely cannot be attributed to one of them.
+    const contactsByToken = new Map<string, Set<string>>();
     for (const s of sends ?? []) {
       const a = touch(s.contact_id as string);
       a.sends++;
@@ -60,6 +68,36 @@ export async function GET() {
       if (s.link_clicked_at) a.clicks++;
       for (const ts of [s.sent_at, s.opened_at, s.link_clicked_at]) {
         if (ts) a.lastTouch = Math.max(a.lastTouch, new Date(ts as string).getTime());
+      }
+      const token = s.share_token as string | null;
+      if (token) {
+        const set = contactsByToken.get(token) ?? new Set<string>();
+        set.add(s.contact_id as string);
+        contactsByToken.set(token, set);
+      }
+    }
+
+    // Plays on those share links. scoreLead weights a play at 6 — above an
+    // open at 4 — but nothing ever populated the field, so the strongest
+    // pre-purchase engagement signal was silently absent from every score.
+    // Ambiguous tokens (sent to more than one contact) are skipped rather
+    // than counted for all of them, which would inflate every score involved.
+    const attributableTokens = [...contactsByToken.entries()]
+      .filter(([, set]) => set.size === 1)
+      .map(([token]) => token);
+    if (attributableTokens.length > 0) {
+      const { data: plays } = await admin
+        .from('share_plays')
+        .select('link_token, played_at')
+        .in('link_token', attributableTokens)
+        .limit(20000);
+      for (const p of plays ?? []) {
+        const set = contactsByToken.get(p.link_token as string);
+        const cid = set ? [...set][0] : undefined;
+        if (!cid) continue;
+        const a = touch(cid);
+        a.plays++;
+        if (p.played_at) a.lastTouch = Math.max(a.lastTouch, new Date(p.played_at as string).getTime());
       }
     }
 
@@ -105,8 +143,8 @@ export async function GET() {
     // without a second round-trip.
     const now = Date.now();
     const scores: Record<string, {
-      score: number; tier: LeadTier;
-      sends: number; purchases: number; revenue: number; favorites: number;
+      score: number; tier: LeadTier; reasons: string[];
+      sends: number; plays: number; purchases: number; revenue: number; favorites: number;
     }> = {};
     for (const id of contactIds) {
       const a = agg.get(id);
@@ -123,7 +161,11 @@ export async function GET() {
       });
       scores[id] = {
         score: r.score, tier: r.tier,
-        sends: a?.sends ?? 0, purchases: a?.purchases ?? 0,
+        // scoreLead already computes the human-readable drivers, strongest
+        // first. Dropping them left the list showing a tier dot nobody could
+        // interpret; the list now uses them as the dot's tooltip.
+        reasons: r.reasons,
+        sends: a?.sends ?? 0, plays: a?.plays ?? 0, purchases: a?.purchases ?? 0,
         revenue: a?.revenue ?? 0, favorites: a?.favorites ?? 0,
       };
     }

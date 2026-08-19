@@ -25,6 +25,8 @@ interface Props {
   latestStatusByContact: Map<string, string>;
   leadScoreByContact?: Map<string, number>;
   leadTierByContact?: Map<string, string>;
+  /** Score drivers per contact, strongest first — shown as the tier tooltip. */
+  leadReasonsByContact?: Map<string, string[]>;
   kindByContact?: Map<string, ContactKind>;
   revenueByContact?: Map<string, number>;
   favoritesByContact?: Map<string, number>;
@@ -48,6 +50,16 @@ const LEAD_TINTS: Record<string, string> = { hot: '#E8896A', warm: 'rgba(255,255
 // Text labels alongside the tint — a dot's color alone isn't an accessible
 // signal (WCAG 1.4.1 / "don't convey meaning by color alone").
 const LEAD_LABELS: Record<string, string> = { hot: 'Hot', warm: 'Warm', cold: 'Cold', new: 'New' };
+
+/**
+ * Tooltip for the lead-tier chip: the tier and score, then the drivers behind
+ * them. scoreLead has always returned `reasons` (strongest first) but the
+ * scores route used to drop them, leaving a label with nothing to justify it.
+ */
+function leadTitle(tier: string, score: number, reasons?: string[]): string {
+  const head = `${LEAD_LABELS[tier]} lead · score ${score}`;
+  return reasons?.length ? `${head} · ${reasons.join(' · ')}` : head;
+}
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -193,7 +205,7 @@ export function ContactsTable(p: Props) {
                       return (
                         <div>
                           {tier && tier !== 'new' && (
-                            <span className="inline-flex items-center gap-1.5" title={`${LEAD_LABELS[tier]} lead · score ${score}`}>
+                            <span className="inline-flex items-center gap-1.5" title={leadTitle(tier, score, p.leadReasonsByContact?.get(c.id))}>
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
                               <span className="text-[11px] font-medium tabular-nums" style={{ color: clr }}>
                                 {LEAD_LABELS[tier]} · {score}
@@ -292,7 +304,7 @@ export function ContactsTable(p: Props) {
                 {showLead && (
                   <span
                     className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full"
-                    title={`${LEAD_LABELS[tier]} lead · score ${score}`}
+                    title={leadTitle(tier, score, p.leadReasonsByContact?.get(c.id))}
                     style={{ background: `${leadClr}1f`, border: `1px solid ${leadClr}40` }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: leadClr }} />
