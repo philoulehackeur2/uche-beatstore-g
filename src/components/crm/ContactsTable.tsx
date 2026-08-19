@@ -87,7 +87,7 @@ export function ContactsTable(p: Props) {
           <thead className="sticky top-0 z-10 bg-[#0a0907]">
             <tr className="border-b border-[var(--border)] h-9">
               <th className="w-10 px-3">
-                <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer" />
+                <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer relative after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']" />
               </th>
               <SortHeader label="Contact" col="name" active={p.sortMode === 'name'} dir={p.sortDir} onSort={p.onSort} className="px-2" />
               <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden md:table-cell">Kind</th>
@@ -121,7 +121,7 @@ export function ContactsTable(p: Props) {
                 >
                   {/* Checkbox */}
                   <td className="px-3 align-middle">
-                    <input type="checkbox" checked={sel} onChange={() => p.onToggleSelect(c.id)} className="accent-[var(--accent)] cursor-pointer" aria-label={`Select ${c.name}`} />
+                    <input type="checkbox" checked={sel} onChange={() => p.onToggleSelect(c.id)} className="accent-[var(--accent)] cursor-pointer relative after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']" aria-label={`Select ${c.name}`} />
                   </td>
 
                   {/* Contact: avatar + name + sent ✓ */}
@@ -213,7 +213,7 @@ export function ContactsTable(p: Props) {
                             </span>
                           )}
                           {(revenue > 0 || favorites > 0) && (
-                            <p className="text-[10px] font-mono tabular-nums text-white/40 mt-0.5">
+                            <p className="text-[10px] font-mono tabular-nums text-white/60 mt-0.5">
                               {revenue > 0 && fmtMoney(revenue)}
                               {revenue > 0 && favorites > 0 && ' · '}
                               {favorites > 0 && (

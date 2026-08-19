@@ -1112,7 +1112,10 @@ function StorePage() {
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
-          {/* Mobile filters toggle */}
+          {/* Mobile filters toggle — hidden with the sidebar it opens when the
+              catalogue is empty, so the control can't open an absent panel.
+              Kept mounted while loading to avoid a toolbar reflow. */}
+          {(loading || tracks.length > 0) && (
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
@@ -1129,6 +1132,7 @@ function StorePage() {
               </span>
             )}
           </button>
+          )}
 
           {/* Search */}
           <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
@@ -1320,7 +1324,17 @@ function StorePage() {
           standard laptops. Sidebar stays sticky on the left. */}
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-10 md:py-14 flex gap-6 md:gap-8 items-start">
 
-        {/* Left sidebar — sticky, visible on lg+ */}
+        {/* Left sidebar — sticky, visible on lg+.
+            Suppressed entirely when the catalogue has nothing in it: six
+            filter groups (sort, type, genre, mood, key, scale, BPM) offering
+            to narrow zero results is noise, and it pushed the "no beats yet"
+            message off-centre. Keyed on the unfiltered catalogue, not on
+            `filtered`, so a search that legitimately returns nothing still
+            keeps the controls needed to undo it. Gated on `!loading` too, so
+            the sidebar isn't yanked out and popped back in while the first
+            fetch is still in flight — that would be a layout shift on every
+            visit, which is worse than the noise it removes. */}
+        {(loading || tracks.length > 0) && (
         <StoreSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -1368,6 +1382,7 @@ function StorePage() {
           availableKeys={availableKeys}
           accentColor={accentColor}
         />
+        )}
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
