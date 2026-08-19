@@ -122,7 +122,13 @@ export function ContactsToolbar(p: Props) {
       )}
 
       {/* Right cluster */}
-      <div className="flex items-center gap-2 ml-auto">
+      {/* Wraps on narrow screens. Without flex-wrap this group measured 419px
+          inside a 343px parent at 375px wide, pushing "Add Contact" (right
+          edge 435px) and "Import" (484px) outside the viewport — and because
+          nothing scrolls horizontally they were clipped, not merely off-screen,
+          making both actions unreachable on a phone. ml-auto only applies once
+          there is room to right-align. */}
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         {/* Segments */}
         <Popover
           align="right" width={240}
