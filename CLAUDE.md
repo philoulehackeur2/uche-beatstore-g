@@ -51,7 +51,7 @@ src/lib/                     auth/ contracts/ db.ts errors.ts log.ts
                              audio/ stems/ storage/ upload/ stripe/ supabase/
                              contacts/ offline/ types/ actions/
 src/proxy.ts                 Next 16 middleware (token refresh + protected paths)
-supabase/migrations/         001…047, idempotent, ending NOTIFY pgrst, 'reload schema';
+supabase/migrations/         001…111, idempotent, ending NOTIFY pgrst, 'reload schema';
 public/sw.js                 service worker (app shell only — audio uses IndexedDB)
 .github/workflows/ci.yml     tsc → vitest → next build on push + PR
 .githooks/pre-commit         opt-in via `git config core.hooksPath .githooks`
@@ -63,7 +63,7 @@ public/sw.js                 service worker (app shell only — audio uses Index
 
 **UI** — dark warm theme. `--bg-page #0a0907`, `--bg-card #14110d`, `--accent #D4BFA0` (burnt amber), text `#E8DCC8/#a08a6a/#6a5d4a`, borders `#1f1a13/#2d2620`. Type: H1 40px `font-heading`, labels 10px mono uppercase tracking-[0.2em]. Use `Dropdown` over `<select>`. Bulk = `BatchActionBar` + `Set<string>` selection state. Feedback = `toast.*` / `confirmToast` from `useToast`. Fonts: Akira Expanded (body), Synkopy (`.font-heading`), Panchang (`.font-mono`) — all `/public/fonts`, no CDN imports.
 
-**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table; owner-or-null SELECT pattern. Apply migrations on Supabase BEFORE merging dependent PRs. Latest applied = 106 (confirmed via a full clean replay of every migration — see `supabase/MIGRATIONS.md`). When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
+**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table. **Owner-only, not owner-or-null** — mig 097 retired the legacy `user_id IS NULL` allowance and mig 111 adopts remaining orphan contacts onto the owner. Service-role routes bypass RLS, so they must apply the owner filter themselves and must not re-add `,user_id.is.null`. Apply migrations on Supabase BEFORE merging dependent PRs. Latest confirmed-applied = 106; 107–111 are on disk with unverified status (see `supabase/MIGRATIONS.md`). When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
 
 **Auth** — Supabase via `@supabase/ssr`, Google OAuth. Refresh in `src/proxy.ts` (must run on `/api/*`). Public-by-design: `/share/*`, `/projects/share/*`, `/store/**`. Service-role key is server-only.
 
@@ -115,6 +115,8 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 - **Stripe webhook:** `/api/stripe/webhook` subscribed to `checkout.session.completed`, `charge.refunded`, `charge.dispute.created`.
 
 ## Gotchas
+- **Buyer emails are matched lowercased.** `contacts.email`, `license_purchases.buyer_email`, `buyer_favorites.email` and friends key the buyer→contact link. Normalise with `normalizeEmail` from `lib/contacts/email.ts` on **every** write — `contacts_user_email_uniq (user_id, email)` is case-sensitive, so raw casing forks one human into two contacts and makes their orders unfindable via `/store/orders`.
+- **Upserting contacts?** The only unique index is `(user_id, email)`. `onConflict: 'email'` raises Postgres 42P10 — and because supabase-js *resolves* with `{ error }` rather than throwing, a bare `try/catch` never sees it. Destructure `.error` and log it.
 - `"Could not find column X in schema cache"` → run `NOTIFY pgrst, 'reload schema';`, wait 10s.
 - **PostgREST `.or()` interpolation footgun** — commas inside a value break the filter because PostgREST treats them as condition separators. Validate any interpolated id (e.g. `safeSellerId()` in `/api/store/route.ts` for UUIDs) before building the filter string.
 - **Stripe SDK renames have bitten us twice.** Server: `ui_mode: 'embedded'` is removed → use `'embedded_page'`; `automatic_payment_methods` is rejected for embedded sessions, drop it. Client: `initEmbeddedCheckout` was removed in `@stripe/stripe-js@9.x` → use `stripe.createEmbeddedCheckoutPage({ clientSecret })`. Use the typed call (no `as any`) so the next rename fails at compile time.
