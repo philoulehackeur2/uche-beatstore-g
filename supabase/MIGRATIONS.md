@@ -55,10 +55,18 @@ here, so treat them as unapplied until checked against the target project:
   `/api/contacts/scores` and `/(dashboard)/contacts` — without it those legacy
   rows disappear from the CRM instead of being adopted.
 
+- `112_backfill_buyer_contacts.sql` — **data migration**. Reconciles past
+  purchases with the CRM: creates a contact for any paid buyer email that has
+  none, and marks every contact with a paid purchase as `crm_status='customer'`
+  / `buyer_pipeline_status='purchased'`. Only fills NULLs, so a hand-set stage
+  is never overwritten. Excludes the `unknown@invalid` sentinel. Needed because
+  the webhook fix only applies to future purchases — without it, existing
+  customers keep rendering as cold leads.
+
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 111. When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 112. When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
