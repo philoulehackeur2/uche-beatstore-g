@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { scoreLead, type LeadTier } from '@/lib/contacts/scoring';
+import { selectInChunks } from '@/lib/db-in-chunks';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,11 +45,14 @@ export async function GET() {
     }
 
     // 2. Beat sends for those contacts — aggregate per contact in JS.
-    const { data: sends } = await admin
+    // Chunked — one id per contact in the URL otherwise (see lib/db-in-chunks).
+    const sends = await selectInChunks<{
+      contact_id: string; sent_at: string | null; opened_at: string | null;
+      link_clicked_at: string | null; share_token: string | null;
+    }>(contactIds, (batch) => admin
       .from('beat_sends')
       .select('contact_id, sent_at, opened_at, link_clicked_at, share_token')
-      .in('contact_id', contactIds)
-      .limit(20000);
+      .in('contact_id', batch));
 
     type Agg = { sends: number; opens: number; clicks: number; plays: number; favorites: number; purchases: number; revenue: number; lastTouch: number };
     const agg = new Map<string, Agg>();
@@ -61,7 +65,7 @@ export async function GET() {
     // its own nanoid link), but a producer can reuse a token across contacts,
     // and then a play genuinely cannot be attributed to one of them.
     const contactsByToken = new Map<string, Set<string>>();
-    for (const s of sends ?? []) {
+    for (const s of sends) {
       const a = touch(s.contact_id as string);
       a.sends++;
       if (s.opened_at) a.opens++;
@@ -86,12 +90,11 @@ export async function GET() {
       .filter(([, set]) => set.size === 1)
       .map(([token]) => token);
     if (attributableTokens.length > 0) {
-      const { data: plays } = await admin
-        .from('share_plays')
-        .select('link_token, played_at')
-        .in('link_token', attributableTokens)
-        .limit(20000);
-      for (const p of plays ?? []) {
+      const plays = await selectInChunks<{ link_token: string; played_at: string | null }>(
+        attributableTokens,
+        (batch) => admin.from('share_plays').select('link_token, played_at').in('link_token', batch),
+      );
+      for (const p of plays) {
         const set = contactsByToken.get(p.link_token as string);
         const cid = set ? [...set][0] : undefined;
         if (!cid) continue;
@@ -123,12 +126,13 @@ export async function GET() {
     // unfiltered and mapped to contacts by email like purchases above.
     const emails = [...emailToContact.keys()];
     if (emails.length > 0) {
-      const { data: favorites } = await admin
-        .from('buyer_favorites')
-        .select('email, created_at')
-        .in('email', emails)
-        .limit(20000);
-      for (const f of favorites ?? []) {
+      // Emails are variable-length and there is no relation to join through,
+      // so chunking is the only option here.
+      const favorites = await selectInChunks<{ email: string; created_at: string | null }>(
+        emails,
+        (batch) => admin.from('buyer_favorites').select('email, created_at').in('email', batch),
+      );
+      for (const f of favorites) {
         const cid = emailToContact.get((f.email as string).toLowerCase().trim());
         if (!cid) continue;
         const a = touch(cid);

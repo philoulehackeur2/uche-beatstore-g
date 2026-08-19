@@ -980,13 +980,24 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
         setPromoCodes(promod.codes ?? []);
-        setTrackSummary({
-          ...summaryData,
-          producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
-        });
+        // Only store the summary if the request actually succeeded. A failed
+        // response still parses as JSON ({ error: '…' }), and spreading that
+        // made trackSummary truthy while `issues` / `producerPicks` stayed
+        // undefined — so every `trackSummary?.x.y` below dereferenced undefined
+        // and took the whole page down with it. Leaving it null instead lets
+        // the `?? allTracks…` fallbacks that already exist do their job.
+        if (trackSummaryRes.ok) {
+          setTrackSummary({
+            ...summaryData,
+            producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
+          });
+        } else {
+          console.error('store-summary failed; falling back to client-side counts', summaryData);
+          setTrackSummary(null);
+        }
         const firstTrackPage = await loadTrackPage({ search: '' });
         void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
-        setPreviewTracks((summaryData.producerPicks ?? []).slice(0, 3).map(mapTrackRow));
+        setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
         const p = pd.profile ?? {};
         setForm({
           display_name: p.display_name ?? '',
@@ -1234,14 +1245,14 @@ export default function StoreEditorPage() {
   /* ── Track featured toggle (migration 054) ── */
   const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
     const nextState = !currentlyFeatured;
-    const currentPickCount = trackSummary?.producerPicks.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
+    const currentPickCount = trackSummary?.producerPicks?.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
     if (nextState && currentPickCount >= 12) {
       toast.error("Producer's Picks is full", 'Remove one pick before adding another.');
       return;
     }
     const before = allTracks.find((track) => track.id === trackId)
       ?? producerPickCandidates.find((track) => track.id === trackId)
-      ?? trackSummary?.producerPicks.find((track) => track.id === trackId);
+      ?? trackSummary?.producerPicks?.find((track) => track.id === trackId);
     const after = before ? { ...before, store_featured: nextState } : null;
     if (before && after) patchTrackSummaryVisibility(before, after);
     if (before) {
@@ -1567,7 +1578,7 @@ export default function StoreEditorPage() {
   const producerPicks = trackSummary?.producerPicks ?? allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
   const producerPickIds = new Set(producerPicks.map((track) => track.id));
   const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
-  const listedMissingPeaksCount = trackSummary?.issues.missingPeaks.count
+  const listedMissingPeaksCount = trackSummary?.issues?.missingPeaks?.count
     ?? allTracks.filter((t) => t.store_listed && !t.peaks_url).length;
 
   const hasReadyPrice = (track: TrackRow): boolean => {
