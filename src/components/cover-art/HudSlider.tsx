@@ -71,7 +71,7 @@ export function HudSlider({
       <div className="flex items-baseline justify-between gap-2">
         <label
           htmlFor={id}
-          className="text-[9px] uppercase tracking-[0.18em] text-[#6A655C] transition-colors group-focus-within:text-[#D4BFA0]"
+          className="text-[9px] uppercase tracking-[0.18em] text-white/40 transition-colors group-focus-within:text-white"
         >
           {label}
         </label>
@@ -85,7 +85,7 @@ export function HudSlider({
             if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
           }}
           inputMode="decimal"
-          className="w-14 bg-transparent text-right font-mono text-[11px] tabular-nums text-[#EEE8DD] outline-none focus-visible:text-[#D4BFA0]"
+          className="w-14 bg-transparent text-right font-mono text-[11px] tabular-nums text-white/90 outline-none focus-visible:text-white"
         />
       </div>
 
@@ -101,22 +101,22 @@ export function HudSlider({
         // filled portion stays perfectly aligned with the native thumb.
         style={{
           background:
-            `linear-gradient(to right, #D4BFA0 0%, #D4BFA0 ${pct}%, #26241F ${pct}%, #26241F 100%)`,
+            `linear-gradient(to right, #F2F2F0 0%, #F2F2F0 ${pct}%, #1C1C1B ${pct}%, #1C1C1B 100%)`,
         }}
         className="
           h-[3px] w-full cursor-pointer appearance-none rounded-full outline-none
           [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#0D0D0A]
-          [&::-webkit-slider-thumb]:bg-[#EEE8DD]
+          [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#090907]
+          [&::-webkit-slider-thumb]:bg-[#F2F2F0]
           [&::-webkit-slider-thumb]:transition-transform
           hover:[&::-webkit-slider-thumb]:scale-125
           [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3
           [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full
-          [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#0D0D0A]
-          [&::-moz-range-thumb]:bg-[#EEE8DD]
-          focus-visible:ring-1 focus-visible:ring-[#D4BFA0] focus-visible:ring-offset-2
-          focus-visible:ring-offset-[#0D0D0A]
+          [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#090907]
+          [&::-moz-range-thumb]:bg-[#F2F2F0]
+          focus-visible:ring-1 focus-visible:ring-white/70 focus-visible:ring-offset-2
+          focus-visible:ring-offset-[#090907]
         "
       />
       {unit ? <span className="sr-only">{unit}</span> : null}

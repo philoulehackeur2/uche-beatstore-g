@@ -30,6 +30,7 @@ The producer's workspace. Surfaces:
 | `/projects` + `/projects/[id]` | Active production. Group tracks into projects, set BPM/key targets, add stems, add to public storefront as a bundle. |
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
 | `/studio` | Sketchpad: groove loops, jam, record. |
+| `/cover-art` | **Cover Art Studio.** Layer-based artwork editor — bring in your own images, generate one with AI, set type, build a collage, then export or attach it straight to a track / project / playlist / profile. See "Making cover art" below. |
 | `/contacts` + `/contacts/[id]` | CRM: artists you send beats to. Status pipeline: sent → opened → interested → negotiating → placed / pass. |
 | `/campaigns` | Outreach batches. Bulk-send a beat to a contact list. |
 | `/calendar` | Releases, sessions, deadlines, meetings. |
@@ -96,6 +97,19 @@ Either type `?promo=CODE` in any `/store/checkout*` URL, or enter it in the cart
 
 ### Buyer accounts (persistent, opt-in)
 A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth — the same auth system the producer uses) to get a library that follows them across devices: favorited tracks, listening history (last 100 plays), and custom playlists built from anything free/previewable/licensed. All three are keyed on the buyer's **email**, not a producer-scoped `user_id` — there's exactly one producer, so no scoping is needed. Writes only ever happen through `/api/store/me`, which is the sole path into `buyer_favorites` / `buyer_listening_history` / `buyer_playlists` (RLS blocks direct PostgREST access; see migration 060). This coexists with — and is separate from — the older `/store/account/[token]` flow: a 24h signed token, no real session, used by post-purchase delivery emails to resolve "purchases for this email" without requiring sign-in. A buyer who signs in for a persistent account and a buyer using an old delivery-email token are not automatically the same "buyer" from the app's point of view today (no merge step).
+
+### Producer: make cover art
+`/cover-art` opens the Cover Art Studio on a 3000x3000 artboard. Work is **autosaved** — covers live in IndexedDB (`antigravity-cover-art`), and the Files tab lists them for reopening, duplicating and deleting. There is no server-side storage of the document itself; only the flattened artwork is uploaded when you attach it.
+
+Artwork is a stack of **layers** — `text`, `image`, `shape`, `texture`, `waveform` — each with position, size, rotation, opacity and a blend mode. Ways in:
+
+- **Your own images** — upload, drag files onto the canvas, or paste from the system clipboard. Each image keeps its own aspect ratio, and every image layer has crop controls: fit (cover / contain / stretch), zoom, pan, corner radius, a mask (circle / arch / diamond) and a treatment (duotone / mineral / high-contrast / greyscale / bleach).
+- **AI generation** — the AI tab, when an image provider is configured server-side (see CLAUDE.md for the env vars). The prompt always excludes lettering, because the studio composes real text layers on top.
+- **Collage** — drop several images at once and a layout places them. Five layouts: grid, mosaic, filmstrip, stack, scatter. `Arrange all` / `Arrange selected` re-runs a layout over images already on the canvas.
+- **Directions** — four art directions (Brutalist Archive, De Roche Mineral, Industrial Editorial, Spectral Night) that replace the whole layer stack with a themed template.
+- **Waveform layers** — draw the track's real analysed peaks. Six shapes (bars, blocks, line, contour, circular, spectral) with controls for height, bar count, spacing, end caps, centre-or-baseline anchor, smoothing, normalised-vs-true levels, and colour. Hide or remove it outright from the same panel. Picking a track in the Source tab feeds its peaks into every waveform layer, and the source can be auditioned in place so the canvas reacts to the beat while you design. That reaction is preview-only and never baked into an export.
+
+Finish by exporting a raster or SVG at one of the export presets, or **Upload → Set as cover** to attach the artwork to a track, project, playlist, or the producer profile.
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
@@ -190,21 +204,23 @@ Both **genre** and **mood** are surfaced as separate facets on `/store`'s left s
 
 **Theme:** dark warm. Inspired by Soutter / Bacon / warm aubergine — "ink-on-bone inverted to warm near-black."
 
-| Token | Hex | Use |
+| Token | Value | Use |
 |---|---|---|
-| `--bg-page` | `#0a0907` | Page background |
-| `--bg-card` | `#14110d` | Card background |
-| `--bg-hover` | `#16130e` | Card hover |
-| `--accent` | `#D4BFA0` | Primary CTA, active state, brand |
-| Text primary | `#E8DCC8` | Body |
-| Text secondary | `#a08a6a` | Sub / hint |
-| Text tertiary | `#6a5d4a` / `#5a5142` / `#3a3328` | Faded labels |
-| Border | `#1f1a13` | Default |
-| Border hover | `#2d2620` | Hover |
-| Star rating | `#c8a84b` | Star gold (also wishlist heart) |
-| Free badge | `#6DC6A4` | Mint, for free downloads |
+| Page background | `#090907` | Behind everything |
+| Card / panel | `#0D0D0A` | Raised surfaces |
+| Text primary | `text-white/80` | Body |
+| Text secondary | `text-white/60` | Sub / hint |
+| Text tertiary | `text-white/40` | Labels, metadata |
+| Text faint | `text-white/30` | Disabled, watermark |
+| Border | `border-white/10` | Default |
+| Border hover | `border-white/20` | Hover / emphasis |
+| Mint | `#6DC6A4` | Free downloads, success, positive deltas |
+| Tan accent | `#c8a47a` | Sparing brand warmth |
+| Star gold | `#c8a84b` | Star rating, wishlist heart |
 
-**Type:** Akira Expanded (body, ships in `/public/fonts`), Synkopy (`.font-heading` — page titles), Panchang (`.font-mono` — metadata, labels). No CDN fonts. Labels: 10px mono uppercase `tracking-[0.2em]` text-`#6a5d4a`.
+Text and borders are **white at alpha**, never warm hexes — that is what keeps the surface reading as black and silver rather than brown.
+
+**Type:** Akira Expanded (body, ships in `/public/fonts`), Synkopy (`.font-heading` — page titles), Panchang (`.font-mono` — metadata, labels). No CDN fonts. Labels: 10px mono uppercase `tracking-[0.2em]` `text-white/40`.
 
 **Components:** no UI library. Primitives are hand-rolled (`Dropdown`, `BatchActionBar`, `useToast`, `confirmToast`, etc.). No Radix, no Headless UI.
 

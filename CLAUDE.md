@@ -48,6 +48,9 @@ src/lib/                     auth/ contracts/ db.ts errors.ts log.ts
                              local-store.ts naming.ts validate.ts env.ts
                              clipboard.ts slug.ts utils.ts dnd.ts
                              store/filters.ts (pure filter+sort helper)
+                             cover/ (cover art: geometry, collage, font-embed,
+                               document-store, image-generation — pure + Vitest
+                               apart from thin IndexedDB/fetch wrappers)
                              audio/ stems/ storage/ upload/ stripe/ supabase/
                              contacts/ offline/ types/ actions/
 src/proxy.ts                 Next 16 middleware (token refresh + protected paths)
@@ -61,13 +64,45 @@ public/sw.js                 service worker (app shell only — audio uses Index
 
 **API** — folder per resource, `route.ts` exports `GET/POST/PATCH/DELETE`. All mutations Zod-validated via `lib/contracts/`. Owner gating via `requireRowOwnership(table, id)` or `requireUser()` from `lib/auth/ownership.ts`. Service-role client (`createServiceClient()`) only after ownership verified. Errors: `{ error: string }` + `errorMessage(err)`. Logging: `createLogger('api.x.y')`.
 
-**UI** — dark warm theme. `--bg-page #0a0907`, `--bg-card #14110d`, `--accent #D4BFA0` (burnt amber), text `#E8DCC8/#a08a6a/#6a5d4a`, borders `#1f1a13/#2d2620`. Type: H1 40px `font-heading`, labels 10px mono uppercase tracking-[0.2em]. Use `Dropdown` over `<select>`. Bulk = `BatchActionBar` + `Set<string>` selection state. Feedback = `toast.*` / `confirmToast` from `useToast`. Fonts: Akira Expanded (body), Synkopy (`.font-heading`), Panchang (`.font-mono`) — all `/public/fonts`, no CDN imports.
+**UI** — near-black neutral surfaces, silver-on-black text, colour used only to signal.
 
-**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table; owner-or-null SELECT pattern. Apply migrations on Supabase BEFORE merging dependent PRs. Latest applied = 106 (confirmed via a full clean replay of every migration — see `supabase/MIGRATIONS.md`). When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
+*What components actually use* (counts are occurrences across `src/**/*.tsx`, so match these, not the CSS variables):
+
+| Role | Use | Count |
+|---|---|---|
+| Page background | `#090907` | 369 |
+| Card / panel | `#0D0D0A` | 152 |
+| Text primary | `text-white/80` | 398 |
+| Text secondary | `text-white/60` | 504 |
+| Text tertiary / labels | `text-white/40` | 1000 |
+| Text faint | `text-white/30` | 211 |
+| Border default | `border-white/10` | 808 |
+| Border hover / emphasis | `border-white/20` | 459 |
+| Mint (free, success, positive) | `#6DC6A4` | 235 |
+| Tan accent (sparing) | `#c8a47a` | 87 |
+| Star gold | `#c8a84b` | 15 |
+
+**Text and borders are white at alpha, not warm hexes.** `globals.css` does define `--bg-page` / `--bg-card` / `--accent` and a `--dr-*` scale, but components overwhelmingly bypass them, so a value copied from the variables lands off-palette against its neighbours. This table previously listed `#0a0907` / `#14110d` / `#D4BFA0` / `#E8DCC8` / `#6a5d4a` / `#1f1a13` — a warm set that survives almost nowhere in the app, and the cover art editor was built against it and came out visibly brown next to everything else. Verify against neighbouring components before trusting any palette written down here. Type: H1 40px `font-heading`, labels 10px mono uppercase tracking-[0.2em]. Use `Dropdown` over `<select>`. Bulk = `BatchActionBar` + `Set<string>` selection state. Feedback = `toast.*` / `confirmToast` from `useToast`. Fonts: Akira Expanded (body), Synkopy (`.font-heading`), Panchang (`.font-mono`) — all `/public/fonts`, no CDN imports.
+
+**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table; owner-or-null SELECT pattern. Apply migrations on Supabase BEFORE merging dependent PRs. Latest on disk = **109** (`109_default_artwork.sql`) — this line previously read 106, which was renumbered; check `ls supabase/migrations/` rather than trusting the number written here. When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
 
 **Auth** — Supabase via `@supabase/ssr`, Google OAuth. Refresh in `src/proxy.ts` (must run on `/api/*`). Public-by-design: `/share/*`, `/projects/share/*`, `/store/**`. Service-role key is server-only.
 
 **Players** — two: persistent `PlayerBar` (Zustand `usePlayer`) and DAW `PlayerCanvas` (own ws instance, mounted on project-share). Both via `useWaveSurfer`. Region-pinned comments use `region_start/end` (migration 013).
+
+**Cover Art Studio** (`/cover-art`, `components/cover-art/*`) — layer-based artwork editor. `CoverArtStudio.tsx` owns state; `StudioCanvas` handles pointer input; `LayerView` renders a layer; the panels are presentational. Rules that matter:
+
+- **The canvas and the export must agree.** `LayerView` (DOM) and `renderArtworkDocumentSvg` (SVG) draw the same document two different ways, so any new layer property has to be implemented in BOTH. Shared crop maths lives in `imageCropDefaults` / `imageFrameRect` precisely so the two cannot drift. We shipped a canvas that drew every image layer as a grey placeholder while the export drew the real thing; don't recreate that.
+- **Exports must embed fonts.** `svgToRasterBlob` rasterises through `new Image()`, and an SVG loaded as an image cannot read the page's `@font-face` rules or fetch `/fonts/*`. Anything leaving the app goes through `embedFontsInSvg` (`lib/cover/font-embed.ts`) or it ships in a fallback system face. Same reason images are inlined as data URIs rather than R2 URLs.
+- **Interaction maths is pure and tested.** `lib/cover/geometry.ts` (resize-with-rotation, snapping, group scaling), `lib/cover/collage.ts` (layouts), `lib/cover/waveform.ts` (resampling + bar geometry). Per the "pure-logic extract" rule below — this is exactly the logic that gets silently reverted when it hides inside a component.
+- **Persistence is IndexedDB, not localStorage** (`lib/cover/document-store.ts`, DB `antigravity-cover-art`). Image layers carry their bytes inline, so a collage is several megabytes and would blow localStorage's quota at the worst possible moment. Separate DB from `antigravity-offline` so version upgrades can't collide.
+- **Undo history is one atomic state** (`{ doc, past, future }`). It was three `useState`s with nested setState calls inside each other's updaters; React may run an updater twice, the stacks desynced, and redo silently did nothing.
+- **Waveforms downsample by bucket peak, never by point sampling.** `lib/cover/waveform.ts`. Interpolating between two source samples lands between transients as often as on them, so a kick disappears and the waveform reads as soft noise. There are also no frequency "lanes" — the old builder derived them from `index % 6` / `index % 3`, which is arithmetic on the bar's position and carries no audio information at all; it then painted them in two fixed blues that fought the warm palette. One colour, from the artwork's own palette.
+- **The studio uses the app's design tokens, not a parallel palette.** The original lab shipped its own near-miss set — `#EEE8DD` text, `#10100D` panels, `#0D0D0A` fields, `#C7B89D` accent, translucent `#EBE1CC1A` borders, and blue/teal waveform colours — which read as a different, browner product sitting inside the app. Everything now resolves to the documented tokens (`#0a0907`, `#14110d`, `#E8DCC8`, `#a08a6a`, `#6a5d4a`, `#D4BFA0`, borders `#1f1a13` / `#2d2620`). `defaultArtworkPalette` matches them too. Only the four art *directions* deliberately diverge, because differing is what a direction is for.
+- **Documents saved before a palette change keep their old palette**, since the palette is stored on the document. That is correct — it is the producer's artwork — but it means a stale saved cover is not evidence the tokens are wrong.
+- **The studio's height is `calc(100vh-10.5rem)`, derived from `(dashboard)/layout.tsx`'s `main.pt-14.pb-28`.** A guessed value was 68px too tall, so the page scrolled instead of the panels and the bottom of the inspector was unreachable. Change both together.
+- **The studio panels must collapse below ~1180px.** The rail plus both panels are 600px of fixed chrome; as plain grid columns they squeezed the canvas to a sliver and overflowed the container. Below that width they leave the grid and float over the canvas instead.
+- **Window pointer listeners attach unconditionally.** Gating the listener effect on a ref means gestures that change no state (resize, rotate) never get listeners at all, because setting a ref doesn't schedule a render.
 
 **Share variants** — `recipient_kind ∈ {client, producer, rapper, friend}` drives which `components/share/variants/*` renders.
 
@@ -102,7 +137,7 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 ## Env vars
 **Required prod:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` (public derivatives/assets), `R2_PRIVATE_BUCKET_NAME` (masters/WAV/stems), `NEXT_PUBLIC_R2_PUBLIC_URL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL=https://uche-beatstore-g.vercel.app`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `CRON_SECRET`.
 
-**Optional:** `MOISES_API_KEY` (legacy stems), `DEMUCS_SERVICE_URL` (current stems service), `NEXT_PUBLIC_AUDD_API_TOKEN`, `ENABLE_LOCAL_STORE=true`, `RESEND_WEBHOOK_SECRET` (`whsec_…`; enables `/api/resend/webhook` open/click tracking → `beat_sends.opened_at/link_clicked_at`. Unset = route accepts events without signature verification, dev only), `NEXT_PUBLIC_R2_CDN_URL` (Cloudflare-cached custom domain in front of the R2 bucket, e.g. `https://cdn.uche-beatstore.com`; when set, the bottom player's `SimpleAudioEngine` streams previews from it instead of `r2.dev`. Unset = direct `r2.dev` public URL — still bypasses the `/api/audio` proxy, just not edge-cached. See `lib/audio/cdn.ts`).
+**Optional:** `OPENAI_API_KEY` / `GEMINI_API_KEY` (either one enables AI image generation in the Cover Art Studio; read server-side only — `/api/cover/generate` reports which are configured and never accepts a key from the browser), `MOISES_API_KEY` (legacy stems), `DEMUCS_SERVICE_URL` (current stems service), `NEXT_PUBLIC_AUDD_API_TOKEN`, `ENABLE_LOCAL_STORE=true`, `RESEND_WEBHOOK_SECRET` (`whsec_…`; enables `/api/resend/webhook` open/click tracking → `beat_sends.opened_at/link_clicked_at`. Unset = route accepts events without signature verification, dev only), `NEXT_PUBLIC_R2_CDN_URL` (Cloudflare-cached custom domain in front of the R2 bucket, e.g. `https://cdn.uche-beatstore.com`; when set, the bottom player's `SimpleAudioEngine` streams previews from it instead of `r2.dev`. Unset = direct `r2.dev` public URL — still bypasses the `/api/audio` proxy, just not edge-cached. See `lib/audio/cdn.ts`).
 
 **Player audio path** — `tracks.audio_url`, `wav_url`, and stem URLs may be opaque `r2://bucket/key` references. Dashboard playback resolves those through authenticated `/api/audio`; public store playback uses `tracks.preview_url` through `/api/store/preview/[id]`. Never expose or rewrite a private `r2://` reference into public JSON. Public derivatives can still use `NEXT_PUBLIC_R2_CDN_URL`.
 
@@ -128,6 +163,10 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 - IndexedDB owns audio blobs; service worker owns app shell. Keep them separate.
 - **Worktree contamination** — sub-agents have created `.claude/worktrees/agent-*` that get locked on crash. Cleanup: `git worktree unlock <path>` → `git worktree remove --force <path>` → `git branch -D worktree-<id>`.
 - **Migration numbering races** — when two parallel branches both add migrations, both will claim the next number. Check `git log --all -- supabase/migrations/` before naming. We renumbered 040/041 → 046/047 once already.
+- **SVG-as-image is a sandbox.** Anything rasterised via `new Image()` — cover art export, share cards — cannot fetch *any* external resource: no fonts, no stylesheets, no cross-origin images. Inline it as a data URI or it will silently render wrong while the on-screen version looks right.
+- **Panchang has no glyph for the shift (U+21E7) or option (U+2325) symbols.** They render as tofu. Spell out "Shift" and "Alt" in keyboard hints; the command symbol is fine.
+- **`coverArtExportPresets` is a Record keyed by id, not an array.** `Object.values()` it before mapping.
+- **A centred overflowing scroll container clips its own start edge.** `place-items: center` makes the top/left of a zoomed-in artboard unreachable; use `place-items: safe center`.
 - **AGENTS.md is the product spec, not a build-order prompt.** Update it when you change the product, not when you change the code.
 
 ## Adding a feature

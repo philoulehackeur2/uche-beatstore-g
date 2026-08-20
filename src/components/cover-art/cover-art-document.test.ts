@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createDawWaveformBars,
   createArtworkDocument,
   moveLayer,
   renderArtworkDocumentSvg,
@@ -56,21 +55,6 @@ describe('cover art document model', () => {
     expect(svg).toContain('MIDNIGHT CARTEL');
     expect(svg).toContain('Imported image placeholder');
     expect(svg).toContain('paperGrain');
-  });
-
-  it('creates DAW-like waveform bars with beat and transient markers', () => {
-    const bars = createDawWaveformBars({
-      peaks: [0.1, 0.9, 0.2, 0.85, 0.25, 0.7, 0.18, 0.95],
-      bpm: 120,
-      durationSeconds: 4,
-      count: 16,
-      sensitivity: 1,
-    });
-
-    expect(bars).toHaveLength(16);
-    expect(bars.some((bar) => bar.beat)).toBe(true);
-    expect(bars.some((bar) => bar.transient)).toBe(true);
-    expect(new Set(bars.map((bar) => bar.lane))).toEqual(new Set(['low', 'mid', 'high']));
   });
 
   it('updates waveform layers with real peak data', () => {

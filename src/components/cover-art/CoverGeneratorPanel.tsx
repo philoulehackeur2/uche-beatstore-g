@@ -128,10 +128,10 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
         <div className="flex gap-2 border border-[#A9523566] bg-[#A952351A] p-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A95235]" />
           <div className="space-y-1">
-            <p className="text-[12px] text-[#EEE8DD]">No image provider configured.</p>
-            <p className="text-[11px] leading-relaxed text-[#706B61]">
-              Set <code className="text-[#D4BFA0]">OPENAI_API_KEY</code> or{' '}
-              <code className="text-[#D4BFA0]">GEMINI_API_KEY</code> in the server environment
+            <p className="text-[12px] text-white/90">No image provider configured.</p>
+            <p className="text-[11px] leading-relaxed text-white/40">
+              Set <code className="text-white">OPENAI_API_KEY</code> or{' '}
+              <code className="text-white">GEMINI_API_KEY</code> in the server environment
               (Vercel → Settings → Environment Variables), then redeploy. Keys stay server-side and
               are never sent to the browser.
             </p>
@@ -141,7 +141,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
 
       {providers && (providers.openai || providers.gemini) ? (
         <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#706B61]">Provider</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Provider</p>
           <div className="flex gap-2">
             {(['openai', 'gemini'] as Provider[]).filter((p) => providers[p]).map((p) => (
               <button
@@ -150,8 +150,8 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
                 onClick={() => setProvider(p)}
                 className={`border px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] transition ${
                   provider === p
-                    ? 'border-[#D4BFA0] bg-[#D4BFA01A] text-[#EEE8DD]'
-                    : 'border-[#EBE1CC1A] text-[#706B61] hover:border-[#EBE1CC33]'
+                    ? 'border-white/70 bg-white/10 text-white/90'
+                    : 'border-white/10 text-white/40 hover:border-white/20'
                 }`}
               >
                 {p === 'openai' ? 'OpenAI' : 'Gemini'}
@@ -162,7 +162,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
       ) : null}
 
       <div className="space-y-2">
-        <label htmlFor="cover-prompt" className="block text-[10px] uppercase tracking-[0.2em] text-[#706B61]">
+        <label htmlFor="cover-prompt" className="block text-[10px] uppercase tracking-[0.2em] text-white/40">
           Prompt
         </label>
         <textarea
@@ -171,7 +171,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
           placeholder="Describe the artwork — subject, texture, light…"
-          className="w-full resize-y border border-[#EBE1CC1A] bg-[#0D0D0A] p-2.5 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#D4BFA0] focus-visible:outline-none"
+          className="w-full resize-y border border-white/10 bg-[#090907] p-2.5 text-[12px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
         />
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
@@ -179,7 +179,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
               key={p.label}
               type="button"
               onClick={() => setPrompt(p.prompt)}
-              className="border border-[#EBE1CC1A] px-2 py-1 text-[10px] text-[#706B61] transition hover:border-[#EBE1CC33] hover:text-[#EEE8DD]"
+              className="border border-white/10 px-2 py-1 text-[10px] text-white/40 transition hover:border-white/20 hover:text-white/90"
             >
               {p.label}
             </button>
@@ -188,7 +188,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
       </div>
 
       <div className="space-y-2">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-[#706B61]">Colour influence</p>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Colour influence</p>
         <div className="flex flex-wrap gap-1.5">
           {PALETTE_KEYS.map(({ key, label }) => {
             const on = useColors.has(key);
@@ -199,12 +199,12 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
                 onClick={() => toggleColor(key)}
                 aria-pressed={on}
                 className={`flex items-center gap-1.5 border px-2 py-1 text-[10px] transition ${
-                  on ? 'border-[#D4BFA0] text-[#EEE8DD]' : 'border-[#EBE1CC1A] text-[#706B61]'
+                  on ? 'border-white/70 text-white/90' : 'border-white/10 text-white/40'
                 }`}
               >
                 <span
                   aria-hidden
-                  className="h-3 w-3 border border-[#EBE1CC33]"
+                  className="h-3 w-3 border border-white/20"
                   style={{ background: palette[key] }}
                 />
                 {label}
@@ -212,13 +212,13 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
             );
           })}
         </div>
-        <p className="text-[10px] text-[#4A463E]">
+        <p className="text-[10px] text-white/25">
           Selected colours are sent as exact hex values so the artwork matches your palette.
         </p>
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="cover-avoid" className="block text-[10px] uppercase tracking-[0.2em] text-[#706B61]">
+        <label htmlFor="cover-avoid" className="block text-[10px] uppercase tracking-[0.2em] text-white/40">
           Avoid (optional)
         </label>
         <input
@@ -226,7 +226,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           value={avoid}
           onChange={(e) => setAvoid(e.target.value)}
           placeholder="faces, people, clutter…"
-          className="w-full border border-[#EBE1CC1A] bg-[#0D0D0A] p-2 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#D4BFA0] focus-visible:outline-none"
+          className="w-full border border-white/10 bg-[#090907] p-2 text-[12px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
         />
       </div>
 
@@ -234,7 +234,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
         type="button"
         onClick={generate}
         disabled={busy || !prompt.trim() || !provider}
-        className="flex w-full items-center justify-center gap-2 border border-[#D4BFA0] bg-[#D4BFA0] px-3 py-2.5 text-[11px] uppercase tracking-[0.16em] text-[#0D0D0A] transition disabled:cursor-not-allowed disabled:border-[#EBE1CC1A] disabled:bg-transparent disabled:text-[#4A463E]"
+        className="flex w-full items-center justify-center gap-2 border border-white/70 bg-white/80 px-3 py-2.5 text-[11px] uppercase tracking-[0.16em] text-[#090907] transition disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-transparent disabled:text-white/25"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         {busy ? 'Generating…' : 'Generate cover'}
@@ -243,36 +243,36 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
       {error ? (
         <div className="flex gap-2 border border-[#A9523566] bg-[#A952351A] p-2.5">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A95235]" />
-          <p className="text-[11px] leading-relaxed text-[#EEE8DD]">{error}</p>
+          <p className="text-[11px] leading-relaxed text-white/90">{error}</p>
         </div>
       ) : null}
 
       {preview ? (
         <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#706B61]">Result</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Result</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={preview}
             alt="Generated cover artwork"
-            className="w-full border border-[#EBE1CC1A]"
+            className="w-full border border-white/10"
           />
-          <p className="text-[10px] text-[#4A463E]">
+          <p className="text-[10px] text-white/25">
             Added as an image layer. Use the canvas to position it.
           </p>
         </div>
       ) : (
-        <div className="flex items-center gap-2 border border-dashed border-[#EBE1CC1A] p-4 text-[11px] text-[#4A463E]">
+        <div className="flex items-center gap-2 border border-dashed border-white/10 p-4 text-[11px] text-white/25">
           <ImageIcon className="h-4 w-4" />
           No generated artwork yet.
         </div>
       )}
 
       {lastPrompt ? (
-        <details className="border border-[#EBE1CC1A] p-2">
-          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.2em] text-[#706B61]">
+        <details className="border border-white/10 p-2">
+          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.2em] text-white/40">
             Prompt actually sent
           </summary>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#706B61]">{lastPrompt}</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/40">{lastPrompt}</p>
         </details>
       ) : null}
     </div>
