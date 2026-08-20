@@ -17,6 +17,8 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 interface ShareLink {
   id: string;
@@ -26,7 +28,7 @@ interface ShareLink {
   content_title: string | null;
   kind: string;
   track_ids: string[];
-  tracks: Array<{ id: string; title: string; type: string }>;
+  tracks: Array<{ id: string; title: string; type: string; cover_url: string | null }>;
   plays: number;
   expires_at: string | null;
   revoked_at: string | null;
@@ -34,6 +36,10 @@ interface ShareLink {
   password_protected: boolean;
   created_at: string;
   href: string;
+  cover_url: string | null;
+  artwork_kind: ArtworkKind;
+  artwork_seed: string;
+  artwork_tags: string[];
 }
 
 const LINK_FILTERS = ['All', 'Active', 'Expired', 'Protected', 'Downloads'] as const;
@@ -339,6 +345,7 @@ export default function LinksPage() {
                       {selected && <Check size={11} className="text-black" strokeWidth={3} />}
                     </div>
                   }
+                  media={<LinkArtwork link={link} className="size-10" sizes="40px" />}
                   title={
                     <span className="flex items-center gap-2">
                       <span className={cn('truncate', !link.title && 'font-mono text-white/80')}>
@@ -401,76 +408,92 @@ export default function LinksPage() {
                     expired && 'opacity-40',
                   )}
                 >
-                  {/* Selection checkbox — click swallowed so it doesn't
-                      open the popup. Stays visible on hover even when
-                      the row isn't selected, so the user knows the
-                      affordance exists. */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedTokens((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(key)) next.delete(key);
-                        else next.add(key);
-                        return next;
-                      });
-                    }}
-                    className={cn(
-                      'absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
-                      selected
-                        ? 'bg-white border-white/30'
-                        : 'border-white/20 bg-[#090907] opacity-0 group-hover:opacity-100 hover:border-white/30',
-                    )}
-                  >
-                    {selected && <Check size={11} className="text-black" strokeWidth={3} />}
-                  </div>
+                  <div className="flex gap-3">
+                    {/* Cover leads the card. Everything else on a link is
+                        text, so the artwork is the only thing that makes one
+                        card distinguishable from twenty others at a glance. */}
+                    <div className="relative shrink-0">
+                      <LinkArtwork link={link} className="size-16 rounded-xl" sizes="64px" />
 
-                  {/* Title row — title dominant; flags + open shortcut quiet right. */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <h3 className={cn('truncate text-row-title', !link.title && 'font-mono text-white/80')}>
-                        {link.title || link.token}
-                      </h3>
-                      {isTop && (
-                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/20 text-white">
-                          Top
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5 text-white/60">
-                      {link.password_protected && <Lock size={11} aria-label="Password protected" />}
-                      {link.allow_downloads !== false && <Download size={11} aria-label="Downloads enabled" />}
-                      <a
-                        href={link.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="grid size-7 place-items-center rounded-full hover:bg-white/[0.04] hover:text-white transition-colors"
-                        title="Open share page"
+                      {/* Selection checkbox — click swallowed so it doesn't
+                          open the popup. Sits over the cover, and stays
+                          visible on hover even when the row isn't selected so
+                          the user knows the affordance exists. */}
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTokens((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          'absolute top-1 left-1 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
+                          selected
+                            ? 'bg-white border-white/30'
+                            : 'border-white/20 bg-[#090907]/80 opacity-0 group-hover:opacity-100 hover:border-white/30',
+                        )}
+                        role="checkbox"
+                        aria-checked={selected}
+                        aria-label={`Select ${link.title || link.token}`}
                       >
-                        <ExternalLink size={12} />
-                      </a>
+                        {selected && <Check size={11} className="text-black" strokeWidth={3} />}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* One quiet metadata line. */}
-                  <p className="mb-3 truncate text-meta">
-                    {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
-                    {expired ? (
-                      <span className="text-red-400"> · expired</span>
-                    ) : link.expires_at ? (
-                      ` · until ${formatDate(link.expires_at)}`
-                    ) : (
-                      ' · never expires'
-                    )}
-                  </p>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      {/* Title row — title dominant; flags + open shortcut quiet right. */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <h3 className={cn('truncate text-row-title', !link.title && 'font-mono text-white/80')}>
+                            {link.title || link.token}
+                          </h3>
+                          {isTop && (
+                            <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/20 text-white">
+                              Top
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5 text-white/60">
+                          {link.password_protected && <Lock size={11} aria-label="Password protected" />}
+                          {link.allow_downloads !== false && <Download size={11} aria-label="Downloads enabled" />}
+                          <a
+                            href={link.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="grid size-7 place-items-center rounded-full hover:bg-white/[0.04] hover:text-white transition-colors"
+                            title="Open share page"
+                          >
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      </div>
 
-                  {/* Engagement bar — thin, low-contrast relative play share. */}
-                  <div className="h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-white/30 transition-all duration-700 group-hover:bg-white/80"
-                      style={{ width: `${playPct}%` }}
-                    />
+                      {/* One quiet metadata line. */}
+                      <p className="mb-3 truncate text-meta">
+                        {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
+                        {expired ? (
+                          <span className="text-red-400"> · expired</span>
+                        ) : link.expires_at ? (
+                          ` · until ${formatDate(link.expires_at)}`
+                        ) : (
+                          ' · never expires'
+                        )}
+                      </p>
+
+                      {/* Engagement bar — thin, low-contrast relative play
+                          share. Pinned to the bottom so the bars line up
+                          across a row of cards regardless of title wrap. */}
+                      <div className="mt-auto h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-white/30 transition-all duration-700 group-hover:bg-white/80"
+                          style={{ width: `${playPct}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -556,6 +579,36 @@ export default function LinksPage() {
         />
       )}
     </DashboardLayout>
+  );
+}
+
+/**
+ * The cover a share shows.
+ *
+ * A links page is a list of things you sent someone, and a list of unlabelled
+ * tokens is unreadable at any real volume — the artwork is what makes a row
+ * recognisable before the title is read. Where the shared item has no cover of
+ * its own, `ArtworkFallback` resolves the producer's default artwork for that
+ * KIND (the project image for a project share, the playlist image for a
+ * playlist) and tints it per item, which is what the three slots in Settings
+ * are for.
+ */
+function LinkArtwork({ link, className, sizes }: { link: ShareLink; className?: string; sizes?: string }) {
+  return (
+    <div className={cn('relative shrink-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]', className)}>
+      <ArtworkFallback
+        src={link.cover_url}
+        // Falls back to the token so a share whose subject was deleted still
+        // gets a stable gradient rather than a shifting one.
+        seed={link.artwork_seed || link.token}
+        kind={link.artwork_kind ?? 'track'}
+        tags={link.artwork_tags}
+        sizes={sizes}
+        className="object-cover"
+      >
+        <Music size={14} aria-hidden="true" />
+      </ArtworkFallback>
+    </div>
   );
 }
 
@@ -670,6 +723,7 @@ function LinkPopup({
         <div className="relative z-10 p-5 md:p-6">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3 mb-5">
+            <LinkArtwork link={link} className="size-14 rounded-xl" sizes="56px" />
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white mb-1">Share link</p>
               <h2 className="text-[18px] font-medium text-white truncate">
@@ -723,10 +777,10 @@ function LinkPopup({
               <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {tracks.map((t) => (
                   <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-white/80">
-                    <div className="w-6 h-6 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
-                      <div className="w-full h-full flex items-center justify-center text-white/30">
-                        <Music size={10} />
-                      </div>
+                    <div className="relative w-7 h-7 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
+                      <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="28px" className="object-cover">
+                        <Music size={10} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <span className="truncate flex-1 text-white">{t.title}</span>
                     <span className="text-[9px] font-mono uppercase tracking-wider text-white/40 shrink-0">{t.type}</span>

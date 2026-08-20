@@ -19,13 +19,13 @@ import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
 import { ProjectChecklist, type ChecklistItem } from '@/components/projects/ProjectChecklist';
 import { ToplineRecorder } from '@/components/lyrics/ToplineRecorder';
 import { ProjectAnalyticsPanel } from '@/components/projects/ProjectAnalyticsPanel';
-import { Loader2, Camera, ListPlus } from 'lucide-react';
+import { Loader2, ListPlus } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
-import { seededGradient } from '@/lib/ui/cover-gradient';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { CoverEditor } from '@/components/ui/CoverEditor';
 
 type ProjectStatus = 'in_progress' | 'final' | 'archived';
 
@@ -53,6 +53,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
+  const [removingArt, setRemovingArt] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,6 +151,29 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setUploadingArt(false);
+    }
+  };
+
+  /** Clear the cover — the project falls back to the default project artwork. */
+  const handleArtRemove = async () => {
+    setRemovingArt(true);
+    try {
+      const patch = await fetch(`/api/projects/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cover_url: null }),
+      });
+      if (!patch.ok) {
+        const e = await patch.json().catch(() => ({}));
+        toast.error('Could not remove cover', e.error || `HTTP ${patch.status}`);
+        return;
+      }
+      toast.success('Cover removed');
+      fetchData();
+    } catch (err) {
+      toast.error('Could not remove cover', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setRemovingArt(false);
     }
   };
 
@@ -364,22 +388,21 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               instead of inside the header so it can be the dominant
               visual anchor on the project page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
-            <div
-              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-white/[0.04] rounded-[20px] border border-white/[0.05] overflow-hidden group relative cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
+            <CoverEditor
+              src={project?.cover_url}
+              seed={project?.id ?? 'p'}
+              kind="project"
+              inputRef={fileInputRef}
+              uploading={uploadingArt}
+              removing={removingArt}
+              onFile={handleArtChange}
+              onRemove={handleArtRemove}
+              removeLabel={project?.name}
+              priority
+              className="mx-auto max-w-[270px] rounded-[20px] sm:max-w-[360px] lg:max-w-none"
             >
-              {project?.cover_url ? (
-                <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[88px] sm:text-[112px] lg:text-[120px] font-light text-white/[0.07]" style={seededGradient(project?.id ?? 'p')}>
-                  {project?.name?.[0] || 'P'}
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                {uploadingArt ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
-              </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleArtChange} />
-            </div>
+              <span className="text-[88px] font-light sm:text-[112px] lg:text-[120px]">{project?.name?.[0] || 'P'}</span>
+            </CoverEditor>
           </div>
 
           <div className="min-w-0">

@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Trash2, Loader2, Pin, Tag } from 'lucide-react';
+import { MoreHorizontal, Image as ImageIcon, ImageOff, Pencil, FolderInput, Trash2, Loader2, Pin, Tag } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { PlaylistFolderSelect } from './PlaylistFolderSelect';
 import { PlaylistTagPicker } from './PlaylistTagPicker';
@@ -43,6 +43,13 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
       toast.success('Cover updated'); setOpen(false);
     } catch (err) { toast.error('Cover upload failed', err instanceof Error ? err.message : ''); setBusy(null); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  /** Clear the cover so the playlist falls back to the brand default again. */
+  const removeCover = async () => {
+    setOpen(false);
+    await patch({ cover_url: null }, 'cover');
+    toast.success('Cover removed');
   };
 
   const submitRename = async () => {
@@ -93,6 +100,9 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
                 <>
                   <MI icon={<Pin size={13} className={isPinned ? 'text-white font-bold' : ''} />} label={isPinned ? 'Unpin' : 'Pin to top'} busy={busy === 'pin'} onClick={async () => { await patch({ pinned: !isPinned }, 'pin'); setOpen(false); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); }} />
                   <MI icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
+                  {playlist.cover_url && (
+                    <MI icon={<ImageOff size={13} />} label="Remove cover" busy={busy === 'cover'} onClick={removeCover} />
+                  )}
                   <MI icon={<Pencil size={13} />} label="Rename" onClick={() => setRenaming(true)} />
                   <MI icon={<FolderInput size={13} />} label="Move to folders" onClick={() => { setShowFolders(true); setOpen(false); }} />
                   <MI icon={<Tag size={13} />} label="Edit tags" onClick={() => { setShowTags(true); setOpen(false); }} />
