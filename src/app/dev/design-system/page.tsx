@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { CoverArtStudioClient } from '@/components/cover-art/CoverArtStudioClient';
+import { CoverArtStudio } from '@/components/cover-art/CoverArtStudio';
 import { canAccessDesignSystemLab } from '@/design-system/dev-access';
 
 export const metadata = {
@@ -8,5 +8,5 @@ export const metadata = {
 
 export default function DesignSystemLabPage() {
   if (!canAccessDesignSystemLab()) notFound();
-  return <CoverArtStudioClient />;
+  return <CoverArtStudio surface="dev-lab" />;
 }

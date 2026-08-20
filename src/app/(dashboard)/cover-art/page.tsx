@@ -1,9 +1,9 @@
-import { CoverArtStudioClient } from '@/components/cover-art/CoverArtStudioClient';
+import { CoverArtStudio } from '@/components/cover-art/CoverArtStudio';
 
 export const metadata = {
   title: 'Cover Art Studio',
 };
 
 export default function CoverArtStudioPage() {
-  return <CoverArtStudioClient surface="cover-art-studio" />;
+  return <CoverArtStudio surface="cover-art-studio" />;
 }
