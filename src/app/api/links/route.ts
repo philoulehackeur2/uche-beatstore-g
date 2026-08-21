@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, requireUser } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
+import { selectIn } from '@/lib/db/chunked-in';
 
 /**
  * Which default-artwork slot a share borrows.
@@ -20,44 +21,6 @@ function artworkKindFor(contentType: string, trackCount: number): ArtworkKind {
   // Legacy ad-hoc shares carry no parent row: one track reads as a track, a
   // pack of them reads as a collection.
   return trackCount > 1 ? 'project' : 'track';
-}
-
-/**
- * How many ids go into one `.in()` filter.
- *
- * PostgREST takes its filters in the query string, so an `.in()` over every id
- * a producer owns becomes one enormous URL — at ~650 tracks that is roughly
- * 24KB of UUIDs, and the request is rejected outright with a bare "Bad
- * Request". The whole page then renders as "no share links yet", which reads
- * as an empty account rather than a failed request.
- *
- * 100 keeps each URL a few kilobytes. The queries fan out in parallel, so the
- * cost of splitting is one round trip, not one per chunk.
- */
-const ID_CHUNK = 100;
-
-function chunk<T>(items: T[], size = ID_CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-/**
- * Run one `.in()` query per chunk and merge the rows.
- *
- * Errors are surfaced rather than swallowed: a partial link list that looks
- * complete is worse than a visible failure, because the producer would assume
- * a share they sent had been deleted.
- */
-async function selectIn<T>(
-  build: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>,
-  ids: string[],
-): Promise<T[]> {
-  if (ids.length === 0) return [];
-  const results = await Promise.all(chunk(ids).map((slice) => build(slice)));
-  const failed = results.find((result) => result.error);
-  if (failed) throw failed.error;
-  return results.flatMap((result) => result.data ?? []);
 }
 
 type TrackSummary = {

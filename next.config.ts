@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
+import { allowedImageHostnames } from "./src/lib/images/remote-hosts";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 
@@ -44,13 +45,20 @@ const nextConfig: NextConfig = {
   },
   // Cover art lives in Cloudflare R2's public bucket. Allowlist it so
   // next/image can optimize (resize + AVIF/WebP) the storefront covers —
-  // the single biggest LCP win on the public store. r2.dev serves dev
-  // buckets; a custom domain would be added here too once wired.
+  // the single biggest LCP win on the public store.
+  //
+  // Built from the shared list rather than written out here, because
+  // CoverImage has to make the same judgement at render time: next/image
+  // THROWS for an unlisted hostname instead of firing onError, so a mismatch
+  // between these two lists is a crashed page, not a slow image. The custom
+  // CDN domain (NEXT_PUBLIC_R2_CDN_URL) is folded in automatically — it was
+  // missing here, so enabling that documented option would have broken every
+  // optimized cover.
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '*.r2.dev' },
-      { protocol: 'https', hostname: '*.r2.cloudflarestorage.com' },
-    ],
+    remotePatterns: allowedImageHostnames().map((hostname) => ({
+      protocol: 'https' as const,
+      hostname,
+    })),
   },
   serverExternalPackages: [
     'audio-decode',

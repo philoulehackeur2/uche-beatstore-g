@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, query, requireUser } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { selectIn } from '@/lib/db/chunked-in';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -173,7 +174,7 @@ export async function GET() {
 
     const rows = (data ?? []) as unknown as SummaryTrack[];
     const trackIds = rows.map((track) => track.id);
-    const [{ data: profileData, error: profileError }, { data: licenseData, error: licenseError }, trackLicenseResult] = await Promise.all([
+    const [{ data: profileData, error: profileError }, { data: licenseData, error: licenseError }, trackLicenseRows] = await Promise.all([
       owner.admin
         .from('creator_profiles')
         .select('license_lease_price_usd, license_exclusive_price_usd')
@@ -183,22 +184,25 @@ export async function GET() {
         .from('licenses')
         .select('id, price_usd, is_free')
         .eq('user_id', owner.userId),
-      trackIds.length > 0
-        ? owner.admin
+      // Chunked: this is every owned track, and one `.in()` over a full
+      // catalogue is rejected as "Bad Request", which surfaced as an empty
+      // "needs attention" panel rather than as an error.
+      selectIn<SummaryTrackLicense>(
+        (ids) => owner.admin
           .from('track_licenses')
           .select('track_id, license_id, price_override_usd, enabled')
-          .in('track_id', trackIds)
-        : Promise.resolve({ data: [], error: null }),
+          .in('track_id', ids),
+        trackIds,
+      ),
     ]);
     if (profileError) throw profileError;
     if (licenseError) throw licenseError;
-    if (trackLicenseResult.error) throw trackLicenseResult.error;
 
     return NextResponse.json(summarize(rows, {
       defaultLeasePriceUsd: profileData?.license_lease_price_usd ?? null,
       defaultExclusivePriceUsd: profileData?.license_exclusive_price_usd ?? null,
       licenses: (licenseData ?? []) as unknown as SummaryLicense[],
-      trackLicenses: (trackLicenseResult.data ?? []) as unknown as SummaryTrackLicense[],
+      trackLicenses: trackLicenseRows,
     }));
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
