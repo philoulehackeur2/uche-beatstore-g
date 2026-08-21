@@ -16,12 +16,15 @@
 
 import { Download, Heart } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { seededGradient } from '@/lib/ui/cover-gradient';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 import type { Track } from '@/lib/types';
 
-export type BandcampRemixTrack = Track;
+/** Tags ride along from /api/store; they steer the generated cover. */
+export type BandcampRemixTrack = Track & {
+  tags?: Array<{ tag: string; category?: string | null }> | null;
+};
 
 interface BandcampRemixCardProps {
   track: BandcampRemixTrack;
@@ -114,16 +117,17 @@ export default function BandcampRemixCard({
       <div
         className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#090907]"
       >
-        {track.cover_url ? (
-          <CoverImage
+        <div className="absolute inset-0">
+          <ArtworkFallback
             src={track.cover_url}
+            seed={track.id}
+            kind="track"
+            tags={artworkTagsOf(track.tags)}
             alt={track.title}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
-        ) : (
-          <div className="absolute inset-0" style={seededGradient(track.id)} />
-        )}
+        </div>
 
         {/* Gradient scrim */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/10" />

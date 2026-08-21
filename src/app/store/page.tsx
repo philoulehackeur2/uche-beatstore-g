@@ -35,6 +35,10 @@ import {
 } from '@/components/store/types';
 import { sanitizeUrl } from '@/components/store/helpers';
 import { normalizeThemeColor } from '@/lib/theme/colors';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
@@ -46,7 +50,6 @@ import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
 /* ─── Suspense wrapper ───────────────────────────────────────── */
@@ -179,13 +182,17 @@ function StoreSalesSpotlight({
                 aria-label={`Preview ${track.title}`}
                 className="group relative aspect-square overflow-hidden rounded-xl bg-[#090907] text-left"
               >
-                {track.cover_url ? (
-                  <CoverImage src={track.cover_url} alt="" sizes="104px" priority className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
-                ) : (
-                  <div className="grid h-full w-full place-items-center bg-white/[0.04] text-white/40">
-                    <Music size={28} />
-                  </div>
-                )}
+                <ArtworkFallback
+                  src={track.cover_url}
+                  seed={track.id}
+                  kind="track"
+                  tags={artworkTagsOf(track.tags)}
+                  sizes="104px"
+                  priority
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                >
+                  <Music size={28} aria-hidden="true" />
+                </ArtworkFallback>
                 <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
               </button>
               <div className="min-w-0">
@@ -234,13 +241,9 @@ function StoreSalesSpotlight({
           <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
             <div className="flex h-full gap-3">
               <Link href={`/store/projects/${project.id}`} className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-[#090907] sm:size-24">
-                {projectCover ? (
-                  <CoverImage src={projectCover} alt="" sizes="96px" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="grid h-full w-full place-items-center text-white/40">
-                    <Music size={22} />
-                  </div>
-                )}
+                <ArtworkFallback src={projectCover} seed={project.id} kind="project" sizes="96px" className="h-full w-full object-cover">
+                  <Music size={22} aria-hidden="true" />
+                </ArtworkFallback>
               </Link>
               <div className="flex min-w-0 flex-1 flex-col">
                 <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Bundle</p>
@@ -372,6 +375,10 @@ function StorePage() {
       const rawTracks = (data.tracks as StoreTrack[]) ?? [];
       return {
         creator: (data.creator ?? null) as CreatorProfile | null,
+        // The producer's default artwork, palette and tag colours. A buyer has
+        // no session, so this rides along with the catalogue rather than being
+        // fetched per card from a session-gated endpoint.
+        artworkTheme: (data.artworkTheme ?? null) as PublicArtworkTheme | null,
         tracks: normalizeStoreTracks(rawTracks),
         licenses: (data.licenses as LicenseTier[]) ?? [],
         featuredPlaylists: (data.featuredPlaylists as FeaturedPlaylist[]) ?? [],
@@ -389,6 +396,7 @@ function StorePage() {
     },
   });
   const creator = storeQuery.data?.creator ?? null;
+  const artworkTheme = storeQuery.data?.artworkTheme ?? null;
 
   // Social proof — "N sold this week" per track. Independent, best-effort
   // fetch: a failure here must never affect the catalogue itself, which is
@@ -965,6 +973,11 @@ function StorePage() {
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
 
   return (
+    // Every card below draws its own artwork when a beat has no cover. The
+    // provider is what makes that artwork the producer's rather than a
+    // generic accent wash — and what makes a beat look identical here and in
+    // the dashboard.
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907] pb-28"
       style={{
@@ -1585,5 +1598,6 @@ function StorePage() {
         @keyframes beat-pulse{0%,100%{box-shadow:0 0 0 1px var(--pulse-clr,rgba(231,215,190,0.2))}50%{box-shadow:0 0 0 3px var(--pulse-clr,rgba(231,215,190,0.15))}}
       `}</style>
     </div>
+    </ArtworkThemeProvider>
   );
 }

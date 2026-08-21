@@ -6,9 +6,9 @@ import {
   ListMusic, ChevronRight, X, Music, ShoppingBag, Layers,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
 import type { Track } from '@/lib/types';
 import type { FeaturedPlaylist, PlaylistTrackItem } from './types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Props {
   label?: string;
@@ -51,18 +51,19 @@ export function FeaturedPlaylistsStrip({
                     reduction applied to BeatCard and the store detail page. */}
                 <div className="mb-3 aspect-square w-full overflow-hidden rounded-xl bg-white/[0.06] p-px">
                   <div className="relative w-full h-full rounded-xl overflow-hidden bg-white/[0.04]">
-                    {pl.cover_url ? (
-                      <CoverImage
-                        src={pl.cover_url}
-                        sizes="(max-width: 640px) 45vw, 180px"
-                        priority={index === 0}
-                        className="object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-[#090907]">
-                        <Layers size={28} className="text-white/30" />
-                      </div>
-                    )}
+                    {/* A featured collection with no cover of its own borrows
+                        the first track's art before the brand default, so the
+                        strip shows what is inside rather than a glyph. */}
+                    <ArtworkFallback
+                      src={pl.cover_url ?? pl.tracks?.find((t) => t.cover_url)?.cover_url ?? null}
+                      seed={pl.id}
+                      kind="project"
+                      sizes="(max-width: 640px) 45vw, 180px"
+                      priority={index === 0}
+                      className="object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
+                    >
+                      <Layers size={28} aria-hidden="true" />
+                    </ArtworkFallback>
                     {/* Hover overlay */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <ChevronRight size={22} className="text-white" />
@@ -101,9 +102,16 @@ export function FeaturedPlaylistsStrip({
             className={`shrink-0 w-[120px] sm:w-[140px] text-left group transition-all ${expandedId === pl.id ? 'opacity-100' : ''}`}
           >
             <div className={`relative w-full aspect-square rounded-xl bg-white/[0.04] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-white/20 shadow-lg shadow-white/10' : 'border-white/10 group-hover:border-white/20'}`}>
-              {pl.cover_url
-                ? <CoverImage src={pl.cover_url} sizes="140px" priority={index === 0} className="object-cover" />
-                : <ListMusic size={24} className="text-white/30" />}
+              <ArtworkFallback
+                src={pl.cover_url ?? pl.tracks?.find((t) => t.cover_url)?.cover_url ?? null}
+                seed={pl.id}
+                kind="playlist"
+                sizes="140px"
+                priority={index === 0}
+                className="object-cover"
+              >
+                <ListMusic size={24} aria-hidden="true" />
+              </ArtworkFallback>
             </div>
             <p className="text-[11px] font-medium text-white truncate">{pl.name}</p>
             <p className="text-[9px] font-mono text-white/40 mt-0.5">{pl.tracks?.length ?? 0} tracks</p>
@@ -183,9 +191,9 @@ export function FeaturedPlaylistsStrip({
                         : <PlayGlyph size={11} className="ml-0.5" />}
                     </button>
                     <div className="relative w-8 h-8 rounded shrink-0 bg-[#090907] overflow-hidden">
-                      {t.cover_url
-                        ? <CoverImage src={t.cover_url} sizes="32px" className="object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
+                      <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="32px" className="object-cover">
+                        <Music size={12} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-[12px] font-medium truncate ${isCur ? 'text-white' : 'text-white'}`}>{t.title}</p>

@@ -1,11 +1,11 @@
 'use client';
 
-import NextImage from 'next/image';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track as CartTrack } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CreatorProfile {
   display_name?: string | null;
@@ -231,13 +231,9 @@ export function ShareTrackDetailsDrawer({
 
           {/* Cover */}
           <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 group shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
-            {cover ? (
-              <NextImage src={cover} alt="" fill sizes="440px" unoptimized className="object-cover transition-transform duration-500 group-hover:scale-105" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white/30">
-                <Music size={64} />
-              </div>
-            )}
+            <ArtworkFallback src={cover} seed={track.id} kind="track" sizes="440px" className="object-cover transition-transform duration-500 group-hover:scale-105">
+              <Music size={64} aria-hidden="true" />
+            </ArtworkFallback>
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handlePlayToggle}

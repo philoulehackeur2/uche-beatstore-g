@@ -21,6 +21,9 @@ import { GlassPage } from '@/components/store/GlassPage';
 import { ProducerProfile } from '@/components/store/ProducerProfile';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 interface ProjectTrack {
   id: string;
@@ -102,6 +105,7 @@ export default function StoreProjectPage({
         project: ProjectDetail;
         tracks: ProjectTrack[];
         creator: CreatorProfile | null;
+        artworkTheme: PublicArtworkTheme | null;
       };
     },
     retry: false,
@@ -109,6 +113,7 @@ export default function StoreProjectPage({
   const project = data?.project ?? null;
   const tracks = data?.tracks ?? [];
   const creator = data?.creator ?? null;
+  const artworkTheme = data?.artworkTheme ?? null;
   const notFound = isError || (!loading && !project);
 
   const accent = normalizeThemeColor(creator?.accent_color);
@@ -195,6 +200,7 @@ export default function StoreProjectPage({
   );
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <>
       <GlassPage coverUrl={project.cover_url} accentColor={accent}>
         <GlassPage.TabNav
@@ -264,6 +270,7 @@ export default function StoreProjectPage({
         Buy the bundle to unlock WAV downloads + producer-direct access.
       </p>
     </>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -315,9 +322,9 @@ function TrackList({
               className={`grid grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(0,1.4fr)_minmax(0,1fr)_70px] gap-3 items-center px-4 md:px-6 py-2.5 rounded-2xl transition-colors ${isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
             >
               <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
-                {t.cover_url
-                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="40px" className="object-cover">
+                  <Music size={14} aria-hidden="true" />
+                </ArtworkFallback>
                 {(isHov || isCur) && (
                   <button
                     onClick={(e) => {

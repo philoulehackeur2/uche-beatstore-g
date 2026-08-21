@@ -1,11 +1,11 @@
 'use client';
 
-import Image from 'next/image';
 import { X, Lock, Link2, Download, Calendar, Check, Copy, Loader2, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { errorMessage } from '@/lib/errors';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
 
@@ -81,20 +81,17 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
         {/* Header */}
         <div className="p-8 border-b border-white/10 bg-gradient-to-b from-[#0D0D0A] to-[#090907] flex items-start gap-5">
           <div className="w-16 h-16 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/20">
-            {coverUrl ? (
-              <Image
-                src={coverUrl}
-                alt=""
-                width={64}
-                height={64}
-                className="w-full h-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white/40 font-black text-2xl uppercase">
-                {title[0] || '?'}
-              </div>
-            )}
+            <ArtworkFallback
+              src={coverUrl}
+              // A share can be an ad-hoc pile of tracks with no parent row, so
+              // the first track id is the most stable identity available.
+              seed={projectId ?? trackIds?.[0] ?? title}
+              kind={kind === 'track' ? 'track' : 'project'}
+              sizes="64px"
+              className="object-cover"
+            >
+              <span className="font-black text-2xl uppercase">{title[0] || '?'}</span>
+            </ArtworkFallback>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white mb-2">Share {kind}</p>

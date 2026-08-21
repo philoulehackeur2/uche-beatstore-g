@@ -5,6 +5,7 @@ import { Loader2, Music, ChevronRight, ChevronDown, Plus, Search, Layers, X } fr
 import Link from 'next/link';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 /**
  * Discovery surface — the matching tool that seeds from the current track
@@ -221,11 +222,9 @@ export function SimilarTracks({ trackId, onPick }: Props) {
             const card = (
               <div className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors cursor-pointer h-full">
                 <div className="relative w-10 h-10 rounded-md overflow-hidden bg-[#090907] border border-white/10 shrink-0">
-                  {r.track.cover_url ? (
-                    <img loading="lazy" src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={14} /></div>
-                  )}
+                  <ArtworkFallback src={r.track.cover_url} seed={r.track.id} kind="track" sizes="40px" className="object-cover">
+                    <Music size={14} aria-hidden="true" />
+                  </ArtworkFallback>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-medium text-white truncate">{r.track.title}</p>

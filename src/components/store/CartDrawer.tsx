@@ -16,7 +16,7 @@ import { useHydrated } from '@/hooks/useHydrated';
 import type { Track } from '@/lib/types';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CartItem {
   id: string;
@@ -168,9 +168,9 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
             >
               <div className="relative w-10 h-10 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
-                {i.track.cover_url
-                  ? <CoverImage src={i.track.cover_url} sizes="40px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                <ArtworkFallback src={i.track.cover_url} seed={i.track.id} kind="track" sizes="40px" className="object-cover">
+                  <Music size={14} aria-hidden="true" />
+                </ArtworkFallback>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-medium text-white truncate">{i.track.title}</p>

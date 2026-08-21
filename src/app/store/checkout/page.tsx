@@ -11,7 +11,8 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
 import { getStoreSessionId, trackStoreEvent } from '@/lib/store/track-event';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 
 // Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
 // another Stripe account, which would silently route payments to that
@@ -576,13 +577,9 @@ function CheckoutContent() {
               {items.map((i) => (
                 <li key={i.id} className="py-4 flex gap-3.5 items-start">
                   <div className="relative w-12 h-12 rounded-lg bg-[#090907] border border-white/10 overflow-hidden shrink-0">
-                    {i.track.cover_url ? (
-                      <CoverImage src={i.track.cover_url} alt="" sizes="48px" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/40">
-                        <Music size={16} />
-                      </div>
-                    )}
+                    <ArtworkFallback src={i.track.cover_url} seed={i.track.id} kind="track" sizes="48px" className="w-full h-full object-cover">
+                      <Music size={16} aria-hidden="true" />
+                    </ArtworkFallback>
                   </div>
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="text-[11px] font-semibold text-white truncate">{i.track.title}</p>
@@ -790,6 +787,9 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
+    // Checkout works from the cart, not a catalogue, so it fetches the
+    // producer's artwork rather than receiving it with page data.
+    <PublicArtworkThemeProvider>
     <div className="min-h-screen bg-[#090907] text-white pt-4 pb-20">
       <Suspense fallback={
         <div className="min-h-[70vh] flex items-center justify-center">
@@ -799,5 +799,6 @@ export default function CheckoutPage() {
         <CheckoutContent />
       </Suspense>
     </div>
+    </PublicArtworkThemeProvider>
   );
 }

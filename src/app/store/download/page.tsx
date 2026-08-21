@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import type { Track } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -178,6 +180,9 @@ function DownloadPortal() {
   const totalFiles = tracks.reduce((sum, track) => sum + (track.downloads?.length ?? 0), 0);
 
   return (
+    // Post-purchase delivery resolves a purchase token, not a catalogue, so
+    // the artwork theme is fetched rather than carried in the payload.
+    <PublicArtworkThemeProvider>
     <div className="min-h-screen bg-[#090907] text-white">
       <div className="mx-auto max-w-4xl px-4 pb-24 pt-10 md:px-6">
 
@@ -260,13 +265,9 @@ function DownloadPortal() {
                     onClick={() => handlePlay(track)}
                     className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#090907] border border-white/10 shrink-0 group"
                   >
-                    {track.cover_url ? (
-                      <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/40">
-                        <Music size={20} />
-                      </div>
-                    )}
+                    <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" alt={track.title} sizes="64px" className="w-full h-full object-cover">
+                      <Music size={20} aria-hidden="true" />
+                    </ArtworkFallback>
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
                       {isTrackPlaying
                         ? <Pause size={16} fill="currentColor" className="text-white" />
@@ -378,6 +379,7 @@ function DownloadPortal() {
         </div>
       </div>
     </div>
+    </PublicArtworkThemeProvider>
   );
 }
 

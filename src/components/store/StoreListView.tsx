@@ -21,9 +21,10 @@ import {
   Plus, Download, Clock,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 
 interface Props {
   tracks: StoreTrack[];
@@ -108,9 +109,16 @@ export function StoreListView({
                 onClick={(e) => { e.stopPropagation(); onPlay(t); }}
                 className="relative size-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-[#090907]"
               >
-                {t.cover_url
-                  ? <CoverImage src={t.cover_url} sizes="36px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={13} /></div>}
+                <ArtworkFallback
+                  src={t.cover_url}
+                  seed={t.id}
+                  kind="track"
+                  tags={artworkTagsOf(t.tags)}
+                  sizes="44px"
+                  className="object-cover"
+                >
+                  <Music size={13} aria-hidden="true" />
+                </ArtworkFallback>
                 {(isHov || isCur) && (
                   <span
                     aria-hidden

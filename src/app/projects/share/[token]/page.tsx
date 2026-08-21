@@ -20,6 +20,8 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 interface ShareInfo {
   token: string;
@@ -113,6 +115,8 @@ interface ProjectShareResponse {
   tracks?: ShareTrack[];
   creator?: CreatorProfile | null;
   licenses?: LicenseTier[];
+  /** Default artwork + palette, so coverless tracks look branded here too. */
+  artworkTheme?: PublicArtworkTheme | null;
   error?: string;
 }
 
@@ -173,6 +177,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // the client variant; null in two cases: profile not filled out yet
   // OR recipient_kind isn't 'client' so we don't need it.
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -282,6 +287,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       setPlaylist(data.playlist ?? null);
       setShareTrackMeta(data.track ?? null);
       setShare(data.share ?? null);
+      setArtworkTheme(data.artworkTheme ?? null);
       setTracks(data.tracks ?? []);
       // Creator profile is optional — the API only returns it when the
       // owner has filled out their settings form. Client variant
@@ -753,6 +759,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   }
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <>
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-white flex flex-col">
@@ -1158,6 +1165,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       </main>
     </div>
     </>
+    </ArtworkThemeProvider>
   );
 }
 

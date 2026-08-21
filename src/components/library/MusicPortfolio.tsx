@@ -1,9 +1,9 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from 'react';
-import Image from 'next/image';
 import { gsap } from 'gsap';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 gsap.registerPlugin(ScrambleTextPlugin);
 
@@ -362,18 +362,7 @@ export default function MusicPortfolio({
                                     aria-label={`Play ${track.title}`}
                                     className="w-8 h-8 shrink-0 rounded overflow-hidden relative group/cover"
                                 >
-                                    {track.cover_url ? (
-                                        <Image
-                                            src={track.cover_url}
-                                            alt=""
-                                            width={32}
-                                            height={32}
-                                            className="w-full h-full object-cover"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907]" />
-                                    )}
+                                    <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="32px" className="object-cover" />
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
                                         {isCurrent && isPlaying ? (
                                             <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="text-white" aria-hidden="true">

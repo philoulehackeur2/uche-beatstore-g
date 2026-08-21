@@ -16,6 +16,7 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
   return (
@@ -445,13 +446,9 @@ export function ClientShareVariant({
                         onClick={() => onPlay(t)}
                         className="relative w-11 h-11 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0 focus:outline-none"
                       >
-                        {t.cover_url ? (
-                          <NextImage src={t.cover_url} alt="" fill sizes="44px" unoptimized className="object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <Music size={16} />
-                          </div>
-                        )}
+                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="44px" className="object-cover">
+                          <Music size={16} aria-hidden="true" />
+                        </ArtworkFallback>
                         <div className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${
                           isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         }`}>
@@ -657,13 +654,9 @@ export function ClientShareVariant({
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
             {/* Cover */}
             <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0">
-              {playingTrack.cover_url ? (
-                <NextImage src={playingTrack.cover_url} alt="" fill sizes="36px" unoptimized className="object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/30">
-                  <Music size={12} />
-                </div>
-              )}
+              <ArtworkFallback src={playingTrack.cover_url} seed={playingTrack.id} kind="track" sizes="36px" className="object-cover">
+                <Music size={12} aria-hidden="true" />
+              </ArtworkFallback>
             </div>
 
             {/* Track info */}

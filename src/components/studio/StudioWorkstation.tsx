@@ -36,6 +36,7 @@ import { StudioMixer } from '@/components/studio/sections/StudioMixer';
 import { StudioLastTake } from '@/components/studio/sections/StudioLastTake';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 type StemKey = 'vocals' | 'drums' | 'bass' | 'other';
 
@@ -617,17 +618,17 @@ export function StudioWorkstation() {
               <div className="rounded-2xl border border-[#0D0D0A] bg-[#090907] p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                  {active.cover_url ? (
-                    <img loading="lazy"
-                      src={audioSrc(active.cover_url) || active.cover_url}
-                      alt=""
-                      className="h-11 w-11 shrink-0 rounded-lg border border-white/10 object-cover sm:h-12 sm:w-12"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0D0D0A] sm:h-12 sm:w-12">
-                      <Music2 size={18} className="text-white/40" />
-                    </div>
-                  )}
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 sm:h-12 sm:w-12">
+                    <ArtworkFallback
+                      src={active.cover_url ? audioSrc(active.cover_url) || active.cover_url : null}
+                      seed={active.id}
+                      kind="track"
+                      sizes="48px"
+                      className="object-cover"
+                    >
+                      <Music2 size={18} aria-hidden="true" />
+                    </ArtworkFallback>
+                  </div>
                   <div className="min-w-0">
                     <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 sm:text-[10px] sm:tracking-[0.2em]">
                       Now in studio
