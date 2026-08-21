@@ -123,7 +123,7 @@ export function BeatComments({
       </div>
 
       {/* Composer */}
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-xl p-4 mb-6">
+      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl p-4 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-2 mb-2">
           <input
             type="text"

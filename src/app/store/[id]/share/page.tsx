@@ -341,7 +341,7 @@ function VerticalShareContent({
       <div className="fixed top-3 left-3 right-3 z-20 flex items-center gap-2 justify-between">
         <Link
           href={`/store/${id}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
         >
           <ArrowLeft size={11} />
           Exit
@@ -352,7 +352,7 @@ function VerticalShareContent({
               type="button"
               onClick={startRecord}
               disabled={recording}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-wider hover:bg-white/[0.05]/90 transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-wider hover:bg-white/[0.05] transition-colors disabled:opacity-40"
               title="Capture a 15-second WebM (Chromium browsers only)"
             >
               {recording ? <Loader2 size={11} className="animate-spin" /> : <Video size={11} />}
@@ -362,7 +362,7 @@ function VerticalShareContent({
           <button
             type="button"
             onClick={copyLink}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
           >
             <Copy size={11} />
             Copy link

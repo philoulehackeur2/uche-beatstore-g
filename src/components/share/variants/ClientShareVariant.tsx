@@ -642,7 +642,7 @@ export function ClientShareVariant({
 
       {/* ── Sticky Now-Playing bar ── */}
       {playingTrack && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-white/[0.02]/95 backdrop-blur-xl">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#090907]/95 backdrop-blur-xl">
           {/* Seek bar — full-width clickable strip at the very top of the bar */}
           <div
             onClick={handleSeekClick}

@@ -85,7 +85,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6">
       <div
-        className="relative rounded-2xl border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-xl overflow-hidden p-4 md:p-5"
+        className="relative rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl overflow-hidden p-4 md:p-5"
         style={{ boxShadow: `0 0 0 1px ${accentColor}1a` }}
       >
         {next.cover_url && (

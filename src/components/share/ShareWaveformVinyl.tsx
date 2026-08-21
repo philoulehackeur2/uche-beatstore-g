@@ -159,7 +159,7 @@ export function ShareWaveformVinyl({
       {/* Waveform visual — if parent waveRef is supplied, we let the parent's
           WaveSurfer handle layout/rendering directly to prevent audio collisions.
           Otherwise fall back to the standalone WavePlayer component. */}
-      <div className="w-full max-w-2xl bg-white/[0.02]/30 rounded-lg p-2 border border-white/[0.02]">
+      <div className="w-full max-w-2xl bg-white/[0.02] rounded-lg p-2 border border-white/[0.02]">
         {waveRef ? (
           <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
         ) : (

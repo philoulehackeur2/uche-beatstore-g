@@ -488,7 +488,7 @@ function CheckoutContent() {
         </div>
 
         {/* 2. Payment Section */}
-        <div className={`rounded-[20px] border transition-all duration-300 ${isEmailSubmitted ? 'border-white/10 bg-white/[0.04]' : 'border-white/20 bg-white/[0.04]/30 opacity-50 pointer-events-none'
+        <div className={`rounded-[20px] border transition-all duration-300 ${isEmailSubmitted ? 'border-white/10 bg-white/[0.04]' : 'border-white/20 bg-white/[0.04] opacity-50 pointer-events-none'
           } p-5 md:p-6`}>
           <div className="flex items-center gap-3 mb-5">
             <div className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-[11px] font-mono text-white/80 font-bold">

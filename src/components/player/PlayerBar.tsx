@@ -142,7 +142,7 @@ export function PlayerBar() {
             // off the page. Previously this stacked four shadow layers plus a
             // hover swap and a gradient sheen overlay — one signal is enough.
             'backdrop-blur-2xl border border-white/[0.10]',
-            'bg-white/[0.04]/55',
+            'bg-white/[0.04]',
             'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.55)]',
             'animate-in slide-in-from-bottom-4 fade-in duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.

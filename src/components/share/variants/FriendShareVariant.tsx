@@ -124,7 +124,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
                     key={t.id}
                     onClick={() => onPlay(t)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.015] transition-colors text-left ${
-                      active ? 'bg-white/[0.04]/60' : ''
+                      active ? 'bg-white/[0.04]' : ''
                     }`}
                   >
                     <span className="font-mono text-[9px] text-white/40 w-5 shrink-0 tabular-nums">{i + 1}</span>

@@ -207,7 +207,7 @@ export default function SettingsPage() {
             ) : (
               <Card className="divide-y divide-white/10 overflow-hidden">
                 {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]/50">
+                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]">
                     <div className="flex items-center gap-3">
                       <div className="w-7 h-7 rounded-full bg-[#0D0D0A] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
                         {m.name?.[0] || m.email[0]}
@@ -338,7 +338,7 @@ function ToggleRow({ title, description, on, onToggle }: { title: string; descri
       type="button"
       role="switch"
       aria-checked={on}
-      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.04]/50 px-6 py-4 text-left transition-colors hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
+      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.04] px-6 py-4 text-left transition-colors hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
       onClick={() => onToggle(!on)}
     >
       <div>

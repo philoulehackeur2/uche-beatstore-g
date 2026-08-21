@@ -46,9 +46,18 @@ function sourceFiles(): string[] {
 const EMPTY_MODIFIER = /(?:border|bg|text|ring|from|via|to|divide|shadow|outline|decoration|placeholder|accent|caret|fill|stroke)-(?:white|black)\/(?=["'`\s])/;
 
 /**
- * `ring-white/30/40` — two opacity modifiers stacked. Tailwind parses neither.
+ * Two opacity modifiers stacked. Tailwind parses none of these.
+ *
+ * Both halves may be bare (`ring-white/30/40`) or arbitrary (`bg-white/[0.04]/72`),
+ * and either half may come first — the scripted migration produced both orders,
+ * because it prefix-matched the colour token and left the *old* modifier dangling:
+ *   `bg-[#171511]/55`  -> `bg-white/[0.04]/55`   (bracket is the intended value)
+ *   `bg-white/[0.04]`  -> `hover:bg-white/90/[0.04]` (bracket is the leftover)
+ *
+ * The first version of this pattern only matched `\d+\/\d+`, so it saw none of
+ * the 55 bracket-form occurrences that were live in the tree at the time.
  */
-const DOUBLED_MODIFIER = /-(?:white|black)\/\d+\/\d+/;
+const DOUBLED_MODIFIER = /-(?:white|black)\/(?:\d+|\[[0-9.]+\])\/(?:\d+|\[[0-9.]+\])/;
 
 function findViolations(pattern: RegExp): string[] {
   const hits: string[] = [];

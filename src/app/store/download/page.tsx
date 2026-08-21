@@ -250,7 +250,7 @@ function DownloadPortal() {
                 className={`overflow-hidden rounded-[22px] border transition-all ${
                   isCurrent
                     ? 'border-white/20 bg-white/[0.04]'
-                    : 'border-white/10 bg-white/[0.04]/60'
+                    : 'border-white/10 bg-white/[0.04]'
                 }`}
               >
                 {/* Track header */}

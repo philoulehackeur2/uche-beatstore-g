@@ -257,7 +257,7 @@ export function TopBar() {
                     notifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]/40'}`}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]'}`}
                       >
                         <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
                           {notifIcon(n.kind)}
