@@ -26,6 +26,7 @@ import {
   type ProjectListItem,
 } from '@/lib/projects/filters';
 import { getCached, setCached } from '@/lib/client-cache';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Project extends ProjectListItem {
   status?: 'in_progress' | 'final' | 'archived';
@@ -279,7 +280,9 @@ export default function ProjectsPage() {
                   <Link key={p.id} href={`/projects/${p.id}`} onClick={() => trackRecentOpen(p.id)}
                     className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors min-w-[180px] max-w-[240px]">
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
-                      {p.cover_url || p.preview_covers?.[0] ? <img src={p.cover_url ?? p.preview_covers?.[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
+                      <ArtworkFallback src={p.cover_url ?? p.preview_covers?.[0] ?? null} seed={p.id} kind="project" sizes="32px" className="object-cover">
+                        <Music size={12} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <span className="text-[11px] font-medium text-white truncate">{p.name}</span>
                   </Link>

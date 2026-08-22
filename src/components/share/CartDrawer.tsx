@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X, ShoppingCart, Trash2, Loader2, Mail, ArrowRight, Music } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CartDrawerProps {
   shareToken: string;
@@ -107,13 +108,9 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
                 >
                   {/* Cover */}
                   <div className="w-11 h-11 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
-                    {item.track.cover_url ? (
-                      <img src={item.track.cover_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/30">
-                        <Music size={14} />
-                      </div>
-                    )}
+                    <ArtworkFallback src={item.track.cover_url} seed={item.track.id} kind="track" sizes="48px" className="object-cover">
+                      <Music size={14} aria-hidden="true" />
+                    </ArtworkFallback>
                   </div>
 
                   {/* Info */}

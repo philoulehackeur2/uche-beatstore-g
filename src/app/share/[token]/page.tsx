@@ -17,6 +17,9 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
 
@@ -95,6 +98,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [unlocking, setUnlocking] = useState(false);
   const [share, setShare] = useState<LegacyShareShape | null>(null);
   const [creator, setCreator] = useState<LegacyCreatorShape | null>(null);
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -141,6 +145,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       setShareTitle(data.share?.title || 'Shared tracks');
       setShare(data.share || null);
       setCreator(data.creator || null);
+      setArtworkTheme(data.artworkTheme ?? null);
       setAllowDownloads(data.share?.allow_downloads !== false);
       setRequiresPassword(false);
     } catch {
@@ -544,6 +549,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <>
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-white flex flex-col font-sans">
@@ -576,13 +582,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   className="absolute inset-0 rounded-full overflow-hidden bg-black animate-vinyl shadow-[0_8px_28px_rgba(0,0,0,0.6)]"
                   style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
                 >
-                  {activeTrack.cover_url ? (
-                    <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" draggable={false} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl font-light text-white/20 bg-gradient-to-br from-[#161520] to-[#090907]">
-                      {activeTrack.title[0]}
-                    </div>
-                  )}
+                  <ArtworkFallback src={activeTrack.cover_url} seed={activeTrack.id} kind="track" sizes="320px" className="object-cover">
+                    <span className="text-4xl font-light">{activeTrack.title[0]}</span>
+                  </ArtworkFallback>
                   {/* Concentric grooves — radial gradient with tight stops
                       gives the look of pressed-vinyl rings without
                       stacking 20 individual rings. Sits ABOVE the
@@ -748,6 +750,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       </main>
     </div>
     </>
+    </ArtworkThemeProvider>
   );
 }
 

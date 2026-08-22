@@ -20,6 +20,7 @@ import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Playlist extends PlaylistListItem {
   cover_url?: string | null;
@@ -175,7 +176,9 @@ export default function PlaylistsPage() {
                   <Link key={p.id} href={`/playlists/${p.id}`} onClick={() => trackRecentOpen(p.id)}
                     className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors min-w-[180px] max-w-[240px]">
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
-                      {p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/40"><ListMusic size={12} /></div>}
+                      <ArtworkFallback src={p.cover_url} seed={p.id} kind="playlist" sizes="32px" className="object-cover">
+                        <ListMusic size={12} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <span className="text-[11px] font-medium text-white truncate">{p.name}</span>
                   </Link>

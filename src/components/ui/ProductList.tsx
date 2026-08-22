@@ -4,6 +4,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 interface ProductListProps {
   children: ReactNode;
@@ -23,6 +25,9 @@ interface ProductListRowProps {
   title: string;
   coverUrl?: string | null;
   coverFallback?: ReactNode;
+  /** Row id. Supplying it turns a missing cover into generated brand artwork. */
+  artworkSeed?: string;
+  artworkKind?: ArtworkKind;
   eyebrow?: ReactNode;
   meta?: ReactNode;
   tags?: ReactNode;
@@ -42,6 +47,8 @@ export function ProductListRow({
   title,
   coverUrl,
   coverFallback,
+  artworkSeed,
+  artworkKind = 'track',
   eyebrow,
   meta,
   tags,
@@ -57,7 +64,13 @@ export function ProductListRow({
 }: ProductListRowProps) {
   const coverContent = (
     <>
-      {coverUrl ? (
+      {artworkSeed ? (
+        // A seed means the caller can identify the row, so a missing cover
+        // becomes brand artwork rather than a glyph.
+        <ArtworkFallback src={coverUrl} seed={artworkSeed} kind={artworkKind} sizes="48px" className="object-cover">
+          {coverFallback ?? <Music size={17} aria-hidden="true" />}
+        </ArtworkFallback>
+      ) : coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={coverUrl} alt="" className="h-full w-full object-cover" />
       ) : (

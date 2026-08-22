@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
+import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
 export const runtime = 'nodejs';
@@ -220,6 +222,7 @@ function localFilterAndSortTracks(
  *
  * Public-by-design endpoint that powers the /store page. Returns:
  *   creator:           CreatorProfile | null
+ *   artworkTheme:      PublicArtworkTheme (default artwork + palette + tag colours)
  *   tracks:            Array<Track + tags>
  *   featuredPlaylists: Array<{ id, name, cover_url, tracks[] }>
  *
@@ -293,6 +296,11 @@ export async function GET(req: NextRequest) {
 
       const localResponse = NextResponse.json({
         creator,
+        // Generated artwork needs the producer's images, palette and tag
+        // colours, and a buyer has no session to fetch them with.
+        // Tag-colour overrides are a Supabase-only table; the local dev store
+        // has none, so generated artwork falls back to the curated defaults.
+        artworkTheme: artworkThemeFromProfile(creator, {}),
         tracks: tracks.map(redactPublicTrackMedia),
         featuredPlaylists,
         featuredProjects,
@@ -307,20 +315,19 @@ export async function GET(req: NextRequest) {
 
     const admin = createServiceClient();
 
-    // Pick the canonical creator_profile — the one that actually has a
-    // display_name filled in. Without this, multi-profile databases (a
-    // common artefact of dev seeding + repeated OAuth round-trips for
-    // the same producer) lose the .limit(1) lottery to whichever empty
-    // row landed first, and the .or() scope clause below then filters
-    // out every real track because their user_id doesn't match the
-    // orphan profile's user_id. NULLS LAST puts populated rows first.
-    const profileOwner = await admin
-      .from('creator_profiles')
-      .select('user_id, display_name')
-      .order('display_name', { ascending: true, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-    let sellerId = profileOwner.data?.user_id as string | undefined;
+    // Pick the canonical creator_profile. Multi-profile databases are a
+    // common artefact of dev seeding and repeated OAuth round-trips for the
+    // same producer, and the `.or()` scope clause below filters the whole
+    // catalogue by whichever row wins — so choosing the wrong one serves an
+    // empty storefront over a full catalogue.
+    //
+    // This used to order by display_name with nulls last. That only separates
+    // rows while exactly one is named; when every row is unnamed — the normal
+    // state for a producer who never filled in their profile — the ordering
+    // has nothing to sort on and the winner is arbitrary. Ownership of the
+    // catalogue is the fact that actually identifies the producer.
+    const storeOwner = await resolveStoreOwner(admin);
+    let sellerId = storeOwner?.user_id as string | undefined;
     // Pre-validate the seller id once so each downstream `.or()` call is
     // working with a known-safe UUID (Postgrest treats commas in `.or()`
     // values as filter separators).
@@ -722,8 +729,12 @@ export async function GET(req: NextRequest) {
     // Public catalogue → CDN-cacheable. Short s-maxage so newly listed
     // tracks appear within ~30s; stale-while-revalidate keeps perceived
     // latency low while the cache refills.
+    // Never throws — a storefront without artwork beats a storefront that 500s.
+    const artworkTheme = await loadPublicArtworkTheme(admin, sellerId);
+
     const response = NextResponse.json({
       creator,
+      artworkTheme,
       tracks: safeTracks,
       featuredPlaylists,
       featuredProjects,

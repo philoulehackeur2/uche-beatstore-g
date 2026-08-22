@@ -13,7 +13,6 @@
  */
 
 import { useState, use, useMemo } from 'react';
-import Image from 'next/image';
 import {
   Loader2, ListMusic, Play, Pause, Music, ShoppingBag, Check,
   Headphones, Clock, Heart, MoreHorizontal,
@@ -30,6 +29,9 @@ import { ProducerProfile } from '@/components/store/ProducerProfile';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 import type { CartItem } from '@/hooks/useCart';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 interface PlaylistTrack {
   id: string;
@@ -109,6 +111,7 @@ export default function PlaylistPage({
         playlist: PlaylistShape;
         tracks: PlaylistTrack[];
         creator: Creator | null;
+        artworkTheme: PublicArtworkTheme | null;
         pricing_fallback?: { lease: number | null; exclusive: number | null };
       };
     },
@@ -116,6 +119,7 @@ export default function PlaylistPage({
   const playlist = data?.playlist ?? null;
   const tracks = useMemo(() => data?.tracks ?? [], [data?.tracks]);
   const creator = data?.creator ?? null;
+  const artworkTheme = data?.artworkTheme ?? null;
   const fallback = data?.pricing_fallback ?? { lease: null, exclusive: null };
   const error = queryError ? (queryError as Error).message : null;
 
@@ -282,6 +286,7 @@ export default function PlaylistPage({
   );
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div className={stickyVisible ? 'pb-20' : ''}>
       <GlassPage coverUrl={playlist.cover_url} accentColor={accent}>
         <GlassPage.TabNav
@@ -377,9 +382,9 @@ export default function PlaylistPage({
                         {/* Cover + title */}
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
-                            {t.cover_url
-                              ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-                              : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                            <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="40px" className="object-cover">
+                              <Music size={14} aria-hidden="true" />
+                            </ArtworkFallback>
                             {(isHov || isCur) && (
                               <button
                                 onClick={(e) => {
@@ -561,5 +566,6 @@ export default function PlaylistPage({
         </div>
       )}
     </div>
+    </ArtworkThemeProvider>
   );
 }

@@ -2,6 +2,9 @@
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Music, ExternalLink, Check, Copy } from 'lucide-react';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 /**
  * /embed/[id] — public, chrome-free, embeddable beat player.
@@ -48,6 +51,7 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
   const { id } = use(params);
   const [track, setTrack] = useState<EmbedTrack | null>(null);
   const [error, setError] = useState(false);
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
   const [topLevel] = useState(getTopLevelWindowState);
 
   useEffect(() => {
@@ -55,7 +59,10 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
     fetch(`/api/store/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('not found'))))
       .then((json) => {
-        if (alive) setTrack(json.track as EmbedTrack);
+        if (alive) {
+          setTrack(json.track as EmbedTrack);
+          setArtworkTheme((json.artworkTheme ?? null) as PublicArtworkTheme | null);
+        }
       })
       .catch(() => alive && setError(true));
     return () => {
@@ -72,10 +79,12 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center p-3">
-      {track ? <EmbedCard track={track} /> : <CardSkeleton />}
-      {topLevel && track && <EmbedSnippet id={id} />}
-    </div>
+    <ArtworkThemeProvider theme={artworkTheme}>
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center p-3">
+        {track ? <EmbedCard track={track} /> : <CardSkeleton />}
+        {topLevel && track && <EmbedSnippet id={id} />}
+      </div>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -163,14 +172,9 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
           className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 group"
           aria-label={playing ? 'Pause' : 'Play'}
         >
-          {track.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/80">
-              <Music size={24} />
-            </div>
-          )}
+          <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="96px" className="object-cover">
+            <Music size={24} aria-hidden="true" />
+          </ArtworkFallback>
           <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/45 transition-colors">
             <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-black">
               {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}

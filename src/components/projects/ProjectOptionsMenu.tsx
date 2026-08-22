@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  MoreHorizontal, Image as ImageIcon, Pencil, FolderInput,
+  MoreHorizontal, Image as ImageIcon, ImageOff, Pencil, FolderInput,
   Trash2, Loader2, Check, CircleDot, LayoutTemplate, Pin, Link2,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -86,6 +86,20 @@ export function ProjectOptionsMenu({
     }
   };
 
+  /**
+   * Take the cover off.
+   *
+   * Not the same as replacing it: a producer who wants their brand artwork
+   * back has, until now, had no way to say so — the only affordance was to
+   * upload something else. Clearing to null hands the item back to the
+   * per-kind default set in Settings.
+   */
+  const removeCover = async () => {
+    setOpen(false);
+    await patch({ cover_url: null }, 'cover');
+    toast.success('Cover removed');
+  };
+
   const submitRename = async () => {
     const n = nameDraft.trim();
     if (!n || n === project.name) { setRenaming(false); return; }
@@ -158,6 +172,9 @@ export function ProjectOptionsMenu({
                     busy={busy === 'pin'}
                     onClick={async () => { await patch({ pinned: !isPinned }, 'pin'); setOpen(false); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); }} />
                   <MenuItem icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
+                  {project.cover_url && (
+                    <MenuItem icon={<ImageOff size={13} />} label="Remove cover" busy={busy === 'cover'} onClick={removeCover} />
+                  )}
                   <MenuItem icon={<Pencil size={13} />} label="Rename" onClick={() => setRenaming(true)} />
                   <MenuItem icon={<FolderInput size={13} />} label="Move to folders" onClick={() => { setShowFolders(true); setOpen(false); }} />
                   <MenuItem icon={<Link2 size={13} />} label="Copy share link"

@@ -9,6 +9,7 @@ import { ProjectOptionsMenu } from './ProjectOptionsMenu';
 import { ProjectTagPicker } from './ProjectTagPicker';
 import { DeliveryPackButton } from './DeliveryPackButton';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Project {
   id: string;
@@ -107,13 +108,9 @@ export function ProjectDetailHeader(props: Props) {
           className="w-[160px] h-[160px] bg-white/[0.04] rounded-lg border border-white/10 overflow-hidden shrink-0 group relative cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
         >
-          {project?.cover_url ? (
-            <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-5xl font-light text-black">
-              {project?.name?.[0] || 'P'}
-            </div>
-          )}
+          <ArtworkFallback src={project?.cover_url} seed={project?.id ?? 'p'} kind="project" sizes="160px" className="object-cover">
+            <span className="text-5xl font-light">{project?.name?.[0] || 'P'}</span>
+          </ArtworkFallback>
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
             {uploadingArt ? <Loader2 size={16} className="animate-spin text-white" /> : <Camera size={16} className="text-white" />}
           </div>

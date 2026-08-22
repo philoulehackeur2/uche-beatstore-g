@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface ContentShare {
   id: string;
@@ -214,13 +215,15 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
           />
           <div className="relative z-10 flex items-start gap-4">
             <div className="w-14 h-14 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
-              {coverUrl ? (
-                <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40 font-black text-xl uppercase bg-gradient-to-br from-white/10 to-[#090907]">
-                  {contentTitle.charAt(0)}
-                </div>
-              )}
+              <ArtworkFallback
+                src={coverUrl}
+                seed={contentId}
+                kind={contentType === 'playlist' ? 'playlist' : contentType === 'track' ? 'track' : 'project'}
+                sizes="64px"
+                className="object-cover"
+              >
+                <span className="font-black text-xl uppercase">{contentTitle.charAt(0)}</span>
+              </ArtworkFallback>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-white uppercase tracking-[0.2em] mb-1">{CONTENT_LABELS[contentType]}</p>

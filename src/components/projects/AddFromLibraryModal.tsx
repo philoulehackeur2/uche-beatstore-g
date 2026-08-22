@@ -7,12 +7,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { X, Search, Music, Loader2, Check, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
 import { errorMessage } from '@/lib/errors';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Props {
   endpoint: string;
@@ -291,8 +291,10 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                       <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? 'bg-white border-white/30' : 'border-white/20'}`}>
                         {isSel && <Check size={11} className="text-black" />}
                       </div>
-                      <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-                        {t.cover_url ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized /> : <Music size={14} className="text-white/30" />}
+                      <div className="relative w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 shrink-0 overflow-hidden">
+                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="40px" className="object-cover">
+                          <Music size={14} aria-hidden="true" />
+                        </ArtworkFallback>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-white truncate">{t.title}</p>

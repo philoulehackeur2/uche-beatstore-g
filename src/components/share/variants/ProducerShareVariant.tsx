@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { useState } from 'react';
 import { Music, Play, Pause, SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 /**
  * Producer / loop-pack collab variant.
@@ -297,20 +297,9 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                       }`}
                     >
                       <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-white/10 shrink-0">
-                        {t.cover_url ? (
-                          <Image
-                            src={t.cover_url}
-                            alt=""
-                            width={36}
-                            height={36}
-                            className="w-full h-full object-cover"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <Music size={12} />
-                          </div>
-                        )}
+                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="36px" className="object-cover">
+                          <Music size={12} aria-hidden="true" />
+                        </ArtworkFallback>
                         {active && (
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                             {isPlaying ? (

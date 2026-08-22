@@ -15,8 +15,8 @@
 
 import { Heart, Download } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
-import { seededGradient } from '@/lib/ui/cover-gradient';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 import type { StoreTrack } from './types';
 
 // A single recent sale reads as a fluke, not momentum — the whole point of a
@@ -79,16 +79,21 @@ export function BeatCard({
     >
       {/* ── Cover — clicking anywhere opens the preview drawer ── */}
       <div className="relative w-full aspect-square overflow-hidden">
-        {track.cover_url ? (
-          <CoverImage
+        {/* A coverless beat used to get `seededGradient` — a colour with no
+            relationship to the producer's brand. ArtworkFallback draws the
+            default artwork set in Settings instead, tinted per beat, so the
+            same track looks the same to a buyer as it does in the library. */}
+        <div className="absolute inset-0">
+          <ArtworkFallback
             src={track.cover_url}
-            alt=""
+            seed={track.id}
+            kind="track"
+            tags={artworkTagsOf(track.tags)}
+            alt={track.title}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
           />
-        ) : (
-          <div className="absolute inset-0" style={seededGradient(track.id)} />
-        )}
+        </div>
 
         {/* Single scrim — carries the title legibility on its own. */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import NextImage from 'next/image';
 import bcrypt from 'bcryptjs';
 import { Lock, Download, Music } from 'lucide-react';
 import { WavePlayer } from '@/components/player/WavePlayer';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface PublicShareLink {
   password_hash?: string | null;
@@ -90,11 +90,9 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-8 border-b border-white/10 pb-12">
         <div className="relative w-48 h-48 bg-[#0D0D0A] rounded-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex items-center justify-center text-white/30 overflow-hidden">
-          {activeTrack?.cover_url ? (
-            <NextImage src={activeTrack.cover_url} alt="" fill sizes="192px" unoptimized className="object-cover" />
-          ) : (
-            <Music size={64} />
-          )}
+          <ArtworkFallback src={activeTrack?.cover_url} seed={activeTrack?.id ?? 'share'} kind="track" sizes="192px" className="object-cover">
+            <Music size={64} aria-hidden="true" />
+          </ArtworkFallback>
         </div>
         <div className="flex-1 text-center md:text-left space-y-4">
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Public Stream</p>
