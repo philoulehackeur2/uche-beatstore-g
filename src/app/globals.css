@@ -89,6 +89,19 @@
   font-display: swap;
 }
 
+/* La Bruja — script display face. Shipped in /public/fonts since the start but
+ * never registered, so nothing could reach it. Declared here so the Cover Art
+ * Studio's type library can offer it; `font-display: swap` plus the browser's
+ * own "only download a face something actually uses" rule means declaring it
+ * costs the rest of the app nothing. */
+@font-face {
+  font-family: 'La Bruja';
+  src: url('/fonts/LaBruja.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Design tokens — luxury beige revision.
  * The interface keeps its private-studio darkness, but the old coffee /
  * brown undertone has been cooled into graphite, parchment, and champagne.
