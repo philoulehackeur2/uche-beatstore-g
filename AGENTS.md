@@ -35,7 +35,7 @@ The producer's workspace. Surfaces:
 | `/campaigns` | Outreach batches. Bulk-send a beat to a contact list. |
 | `/calendar` | Releases, sessions, deadlines, meetings. |
 | `/links` | Every share link you've ever generated (track + project). |
-| `/store-editor` | Storefront WYSIWYG: hero image, bio, accent color, social links, license tiers, default prices, **featured playlists + projects** (drag to reorder, max 5 each), **beat listing toggle** (which tracks appear on `/store`). Includes a **Needs attention** panel listing beats that are store-listed but missing a cover / price / BPM+key. |
+| `/store-editor` | Storefront WYSIWYG: hero image, bio, accent color, social links, license tiers, default prices, **featured playlists + projects** (drag to reorder, max 5 each), **beat listing** (which tracks appear on `/store`). Each beat row edits its cover, title and lease price in place, keeps the on/off toggle visible, and puts picks / free download / voice tag / license tiers / reorder / scheduling in one ⋯ menu. The **Needs attention** panel (listed beats missing a cover / price / BPM+key) filters the list to the affected beats so they can be fixed there. |
 | `/sales` | Completed purchases — track licenses + project bundles merged. Stripe session deep-links, status pipeline. |
 | `/analytics` | Plays, sales count, gross USD, 30-day sparkline, top-25 tracks leaderboard, recent activity feed. |
 | `/profile` | The producer's identity. |
@@ -105,6 +105,8 @@ A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth
 The ⋯ menu holds only what is left, grouped by frequency and keyboard-navigable: the inline editors it can focus, then status, then cover/share, then Pin / Duplicate / Move to folders / Apply template, with Delete separated at the bottom. Duplicating copies the project's shape and its track list but never its `store_featured` flag — a copy should not appear on the public storefront by itself.
 
 The same rules apply to playlists, to the project and playlist grid cards (rename edits the card's own title), and to the track details drawer, where the title and tags are now editable rather than sending the producer to `/library/[id]`.
+
+`/store-editor` follows them too. Its Beat Listing rows previously carried seven icon-only buttons and a line of copy telling the producer to open the beat in the Library to set a price — the one screen for deciding what sells could not set a price. Cover, title and lease price are now edited in the row; the on/off toggle stays visible because it is what the section is for; everything else is in the row's ⋯ menu. A blank price still means "inherit the profile default", which is not the same as free.
 
 ### Producer: make cover art
 `/cover-art` opens the Cover Art Studio on a 3000x3000 artboard. Work is **autosaved** — covers live in IndexedDB (`antigravity-cover-art`), and the Files tab lists them for reopening, duplicating and deleting. There is no server-side storage of the document itself; only the flattened artwork is uploaded when you attach it.
