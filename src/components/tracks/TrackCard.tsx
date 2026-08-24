@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Track } from '@/lib/types';
-import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
+import { InlineText } from '@/components/ui/InlineText';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -34,6 +36,12 @@ interface TrackCardProps {
   onDelete?: (track: Track) => void;
   /** When provided, exposes "Share track" in the context menu. */
   onShare?: (track: Track) => void;
+  /** Dashboard rows only. Turns on inline rename — the title cell becomes a
+   *  field and the ⋯ menu grows a Rename item that focuses it. The public
+   *  storefront row omits it, so a visitor never gets an editor. */
+  editable?: boolean;
+  /** Called after an inline edit lands, so the page can refetch. */
+  onChanged?: () => void;
   /** When true the row renders a checkbox in the index column and the
    *  row's main click toggles selection instead of opening the drawer.
    *  Used by the library list when the user enters "Select" mode for
@@ -96,6 +104,8 @@ export function TrackCard({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  editable = false,
+  onChanged,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -112,8 +122,10 @@ export function TrackCard({
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [renaming, setRenaming] = useState(false);
+  // Optimistic title so the row updates the instant the field closes, without
+  // waiting for the page's refetch to come back.
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
   const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
   const stemStatus = track.stems_status as string | null | undefined;
   const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
@@ -133,8 +145,7 @@ export function TrackCard({
     })();
   }, [track.id]);
 
-  const handleSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const syncToDevice = async () => {
     if (!track.audio_url) return;
     setSyncProgress(0);
     try {
@@ -155,8 +166,7 @@ export function TrackCard({
     }
   };
 
-  const handleRemoveSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const removeFromCache = async () => {
     try {
       await removeCached(track.id);
       setIsCached(false);
@@ -167,14 +177,30 @@ export function TrackCard({
     }
   };
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
+  // A refetch that brings back a different title means the override is stale.
+  useEffect(() => { setTitleOverride(null); }, [track.title]);
+
+  const renameTrack = async (next: string) => {
+    if (!next) return false;
+    try {
+      const res = await fetch(`/api/tracks/${track.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error('Rename failed', j?.error || `HTTP ${res.status}`);
+        return false;
+      }
+      setTitleOverride(next);
+      onChanged?.();
+      return true;
+    } catch (err) {
+      toast.error('Rename failed', err instanceof Error ? err.message : 'Network error');
+      return false;
+    }
+  };
 
   const isCurrent = currentTrack?.id === track.id;
   const isActive = isCurrent && isPlaying;
@@ -199,6 +225,7 @@ export function TrackCard({
     else onClickDetails?.(track);
   };
 
+  const displayTitle = titleOverride ?? track.title;
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const { rate: rateTrack } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
@@ -220,6 +247,79 @@ export function TrackCard({
     e.stopPropagation();
     rateTrack(star);
   };
+
+  /**
+   * Row menu, ordered by how often a producer reaches for each item rather
+   * than by which subsystem owns it.
+   *
+   * Rename comes first and edits the row in place; the old menu's first item
+   * was "View details", which opened a 420px drawer whose own title was not
+   * editable. Offline sync and the two list-membership actions keep their own
+   * groups so the destructive row at the bottom is never adjacent to a
+   * routine one.
+   */
+  const rowMenuSections: MenuSection[] = [
+    {
+      id: 'edit',
+      items: [
+        {
+          id: 'rename', label: 'Rename', shortcut: 'R', shortcutKey: 'r',
+          hidden: !editable,
+          onSelect: () => setRenaming(true),
+        },
+        {
+          id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
+          hidden: !onClickDetails,
+          onSelect: () => onClickDetails?.(track),
+        },
+      ],
+    },
+    {
+      id: 'order',
+      items: [
+        {
+          id: 'up', label: 'Move up', hidden: !onMoveUp || moveControls !== 'menu',
+          disabled: isFirstInOrder, onSelect: () => onMoveUp?.(),
+        },
+        {
+          id: 'down', label: 'Move down', hidden: !onMoveDown || moveControls !== 'menu',
+          disabled: isLastInOrder, onSelect: () => onMoveDown?.(),
+        },
+      ],
+    },
+    {
+      id: 'content',
+      items: [
+        { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
+        {
+          id: 'uncache', label: 'Remove offline cache', hidden: !isCached,
+          onSelect: () => { void removeFromCache(); },
+        },
+        {
+          id: 'cache',
+          label: syncProgress !== null ? `Syncing (${Math.round(syncProgress * 100)}%)` : 'Sync to device',
+          hidden: isCached, busy: syncProgress !== null,
+          onSelect: () => { void syncToDevice(); return 'keep-open' as const; },
+        },
+      ],
+    },
+    {
+      id: 'membership',
+      items: [
+        {
+          id: 'remove', label: removeLabel, hidden: !onRemoveFromContext,
+          onSelect: () => onRemoveFromContext?.(track),
+        },
+      ],
+    },
+    {
+      id: 'danger',
+      danger: true,
+      items: [
+        { id: 'delete', label: 'Delete from library', hidden: !onDelete, onSelect: () => onDelete?.(track) },
+      ],
+    },
+  ];
 
   return (
     <div
@@ -307,13 +407,28 @@ export function TrackCard({
         )}
       </div>
 
-      {/* Title + core metadata */}
-      <div className="relative z-10 min-w-0">
-        <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
-          isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
-        }`}>
-          {track.title}
-        </h4>
+      {/* Title + core metadata. The title is the row's one inline editor:
+          renaming a beat used to mean opening the details drawer, and the
+          drawer's title was not editable either — the only rename lived on
+          /library/[id]. */}
+      <div className="relative z-10 min-w-0" onClick={(e) => { if (renaming) e.stopPropagation(); }}>
+        {renaming ? (
+          <InlineText
+            label="Track title"
+            value={displayTitle}
+            editing
+            onEditingChange={(v) => setRenaming(v)}
+            onSave={renameTrack}
+            maxLength={200}
+            inputClassName="text-[14px] font-semibold"
+          />
+        ) : (
+          <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
+            isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
+          }`}>
+            {displayTitle}
+          </h4>
+        )}
         {/* Metadata as discrete cells rather than a ' · ' string: BPM and key
             are the two values a producer scans for, and a run-on line makes
             them hunt. Separators are rendered, not typed, so a missing value
@@ -546,106 +661,16 @@ export function TrackCard({
         </>
       )}
 
-      {/* More */}
-      <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-            menuOpen
-              ? 'border-white/20 bg-white/[0.05] text-white'
-              : 'border-transparent text-[#8B8273] hover:bg-white/[0.06] hover:text-white'
-          }`}
-          aria-label="Track actions"
-          aria-expanded={menuOpen}
-        >
-          <MoreHorizontal size={14} />
-        </button>
-        {menuOpen && (
-          <div
-            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] py-1 animate-in fade-in slide-in-from-top-1"
-          >
-            {onClickDetails && (
-              <button
-                onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <Info size={12} className="text-white" /> View details
-              </button>
-            )}
-            {(onMoveUp || onMoveDown) && moveControls === 'menu' && (
-              <>
-                <button
-                  onClick={() => { setMenuOpen(false); onMoveUp?.(); }}
-                  disabled={isFirstInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronUp size={12} className="text-white" /> Move up
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); onMoveDown?.(); }}
-                  disabled={isLastInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronDown size={12} className="text-white" /> Move down
-                </button>
-              </>
-            )}
-            {onShare && (
-              <button
-                onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <Share2 size={12} className="text-white" /> Share track
-              </button>
-            )}
-            
-            {isCached ? (
-              <button
-                onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#0D0D0A]"
-              >
-                <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
-              </button>
-            ) : (
-              <button
-                onClick={(e) => { handleSync(e); }}
-                disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-50"
-              >
-                {syncProgress !== null ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin text-white shrink-0" />
-                    <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={12} className="text-white shrink-0" />
-                    <span>Sync to device</span>
-                  </>
-                )}
-              </button>
-            )}
-            {onRemoveFromContext && (
-              <button
-                onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <MinusCircle size={12} className="text-white/80" /> {removeLabel}
-              </button>
-            )}
-            {onDelete && (
-              <>
-                <div className="my-1 border-t border-white/10" />
-                <button
-                  onClick={() => { setMenuOpen(false); onDelete(track); }}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
-                >
-                  <Trash2 size={12} /> Delete from library
-                </button>
-              </>
-            )}
-          </div>
-        )}
+      {/* Row actions. Grouped by frequency, destructive last, keyboard
+          navigable — see components/ui/ActionMenu. */}
+      <div className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <ActionMenu
+          sections={rowMenuSections}
+          align="right"
+          label="Track actions"
+          width={224}
+          triggerClassName="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[#8B8273] transition-colors hover:bg-white/[0.06] hover:text-white"
+        />
       </div>
     </div>
   );

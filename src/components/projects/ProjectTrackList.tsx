@@ -25,6 +25,8 @@ interface Props {
   onToggleSelectMode?: () => void;
   /** Called after a drag-to-reorder completes with the new ordered id list. */
   onReorder?: (orderedIds: string[]) => void;
+  /** Refetch after a row edits a track in place (inline rename). */
+  onTrackChanged?: () => void;
 }
 
 type InlineTrackTag = { tag: string; category?: string | null };
@@ -43,7 +45,7 @@ export function ProjectTrackList({
   onSelectTrack, onPlayTrack, onRemoveTrack, onDeleteTrack,
   onAddFromLibrary, onShowUpload,
   selectedIds, onToggleSelect, onSelectAll,
-  selectMode = false, onToggleSelectMode, onReorder,
+  selectMode = false, onToggleSelectMode, onReorder, onTrackChanged,
 }: Props) {
   // Internal tag filter — derive available tags from all tracks, let user
   // narrow within the already type/search filtered list.
@@ -258,6 +260,8 @@ export function ProjectTrackList({
                 draggableTrack={false}
                 onRemoveFromContext={(t) => onRemoveTrack(t.id)}
                 removeLabel="Remove from project"
+                editable
+                onChanged={onTrackChanged}
                 onDelete={(t) => onDeleteTrack(t.id)}
                 selectable={selectable}
                 selected={selectable && selectedIds!.has(track.id)}

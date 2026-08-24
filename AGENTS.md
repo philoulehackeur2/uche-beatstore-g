@@ -82,7 +82,7 @@ Drag/drop file in `/library` → R2 multipart upload (`/api/upload/{init,part,co
 `/store-editor` → Beat Listing section → toggle the track on (writes `tracks.store_listed=true`) → optionally set per-track lease / exclusive prices in `/library/[id]`. If no per-track override, the public store falls back to `creator_profiles.license_{lease,exclusive}_price_usd`.
 
 ### Producer: sell a whole project as a bundle
-Open the project in `/projects/[id]` → Storefront card → set `description` + `price_usd` → in `/store-editor` → Featured Projects → drag to reorder + toggle on. The project then renders on `/store` as a `BandcampRemixCard`-style tile when listed alongside tracks, and on its own detail page at `/store/projects/[id]`.
+Open the project in `/projects/[id]` → write the `description` inline in the header (it autosaves, and it is the same copy the bundle page shows) → set `price_usd` in the Storefront card → in `/store-editor` → Featured Projects → drag to reorder + toggle on. The project then renders on `/store` as a `BandcampRemixCard`-style tile when listed alongside tracks, and on its own detail page at `/store/projects/[id]`.
 
 ### Buyer: license a track
 `/store` → preview → add to cart → cart drawer (`useCart` Zustand, persisted) → checkout → email + optional promo → Stripe embedded form → webhook writes `license_purchases` (idempotent on `stripe_session_id`) → Resend email with `/store/download?session_id=…` link → buyer downloads MP3 (lease) or WAV + stems (exclusive).
@@ -97,6 +97,14 @@ Either type `?promo=CODE` in any `/store/checkout*` URL, or enter it in the cart
 
 ### Buyer accounts (persistent, opt-in)
 A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth — the same auth system the producer uses) to get a library that follows them across devices: favorited tracks, listening history (last 100 plays), and custom playlists built from anything free/previewable/licensed. All three are keyed on the buyer's **email**, not a producer-scoped `user_id` — there's exactly one producer, so no scoping is needed. Writes only ever happen through `/api/store/me`, which is the sole path into `buyer_favorites` / `buyer_listening_history` / `buyer_playlists` (RLS blocks direct PostgREST access; see migration 060). This coexists with — and is separate from — the older `/store/account/[token]` flow: a 24h signed token, no real session, used by post-purchase delivery emails to resolve "purchases for this email" without requiring sign-in. A buyer who signs in for a persistent account and a buyer using an old delivery-email token are not automatically the same "buyer" from the app's point of view today (no merge step).
+
+### Producer: manage a project without leaving it
+
+`/projects/[id]` is the project's command center, not a read-only view with an edit button. Editable in place, with no navigation and no modal: **title** (click it, Enter saves), **status** (a visible three-way segmented control), **tags** (pills you remove in one click; a popover to add), **target BPM** and **target key** (click the stat chip), **description** (autosaves — it is the storefront copy too, so there is one description, not two), **cover** (click the artwork), and every track's **title** and **rating** straight from its row.
+
+The ⋯ menu holds only what is left, grouped by frequency and keyboard-navigable: the inline editors it can focus, then status, then cover/share, then Pin / Duplicate / Move to folders / Apply template, with Delete separated at the bottom. Duplicating copies the project's shape and its track list but never its `store_featured` flag — a copy should not appear on the public storefront by itself.
+
+The same rules apply to playlists, to the project and playlist grid cards (rename edits the card's own title), and to the track details drawer, where the title and tags are now editable rather than sending the producer to `/library/[id]`.
 
 ### Producer: make cover art
 `/cover-art` opens the Cover Art Studio on a 3000x3000 artboard. Work is **autosaved** — covers live in IndexedDB (`antigravity-cover-art`), and the Files tab lists them for reopening, duplicating and deleting. There is no server-side storage of the document itself; only the flattened artwork is uploaded when you attach it.

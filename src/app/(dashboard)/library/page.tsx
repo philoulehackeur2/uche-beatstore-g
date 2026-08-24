@@ -1432,6 +1432,8 @@ export default function LibraryPage() {
                   onPlayClick={() => playTrack(t)}
                   onDelete={(track) => handleDeleteTrack(track)}
                   onShare={(track) => setShareTarget(track)}
+                  editable
+                  onChanged={() => { void fetchTracks(); }}
                   selectable={selectMode && sortMode !== 'store_order'}
                   selected={selectedIds.has(t.id)}
                   onSelectChange={(track, sel) => setSelectedIds((prev) => {
