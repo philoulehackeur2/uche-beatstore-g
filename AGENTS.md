@@ -78,6 +78,8 @@ Each variant lives in `src/components/share/variants/*` and consumes the same `/
 ### Producer: upload a track
 Drag/drop file in `/library` → R2 multipart upload (`/api/upload/{init,part,complete,abort}`) → Essentia.js BPM + key extraction → AudD danceability + energy → row written to `tracks` with `audio_url`, peaks JSON, computed metadata → realtime channel (`useRealtimeTable`) refreshes the library.
 
+Uploads run in the persistent **Uploads tray**, which is mounted globally and survives navigation. Once a file finishes, its row **names and tags the track it just created, in the tray** — the moment the producer still knows what the file is. Without that, a beat lands in the library titled `beat_final_v3_140.wav` and fixing it means finding it again later. A row that finished without a track id (a `/complete` that returned nothing) shows no editor rather than one bound to nothing.
+
 ### Producer: list a track for sale
 `/store-editor` → Beat Listing section → toggle the track on (writes `tracks.store_listed=true`) → optionally set per-track lease / exclusive prices in `/library/[id]`. If no per-track override, the public store falls back to `creator_profiles.license_{lease,exclusive}_price_usd`.
 
