@@ -128,7 +128,7 @@ function RowMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
+      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
     >
       {track.wav_url && (
         <a

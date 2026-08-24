@@ -50,6 +50,22 @@ const EMPTY_MODIFIER = /(?:border|bg|text|ring|from|via|to|divide|shadow|outline
  */
 const DOUBLED_MODIFIER = /-(?:white|black)\/\d+\/\d+/;
 
+/**
+ * `bg-white/[0.04]/70` — the same defect wearing an arbitrary value.
+ *
+ * The pattern above only matches plain numeric modifiers, so this form went
+ * uncaught: 52 of them survived across 30 files, including the Settings page's
+ * team rows and preference toggles, the player bar, the share variants and the
+ * upload drop zone. Every one of those backgrounds rendered as nothing.
+ *
+ * They are the residue of the same scripted migration (commit 3fe5698), which
+ * rewrote `bg-[#171511]/70` to `bg-white/[0.04]/70` — swapping the colour and
+ * leaving the original alpha dangling behind it. The fix is to drop the
+ * trailing modifier, matching every sibling the migration handled correctly;
+ * multiplying the two would make these surfaces darker than their neighbours.
+ */
+const DOUBLED_ARBITRARY_MODIFIER = /-(?:white|black)\/\[[0-9.]+\]\/\d+/;
+
 function findViolations(pattern: RegExp): string[] {
   const hits: string[] = [];
   for (const file of sourceFiles()) {
@@ -80,6 +96,14 @@ describe('Tailwind opacity modifiers', () => {
     expect(
       violations,
       `Found ${violations.length} class(es) with two stacked opacity modifiers. These compile to no CSS:\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('has no doubled modifiers on arbitrary values (e.g. `bg-white/[0.04]/70`)', () => {
+    const violations = findViolations(DOUBLED_ARBITRARY_MODIFIER);
+    expect(
+      violations,
+      `Found ${violations.length} class(es) stacking a modifier onto an arbitrary opacity value. These compile to no CSS:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 });

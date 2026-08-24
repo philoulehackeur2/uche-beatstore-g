@@ -67,13 +67,30 @@ export default function SettingsPage() {
     })();
   }, []);
 
+  /**
+   * Optimistic, but it rolls back and says so.
+   *
+   * This used to `.catch(() => undefined)` without checking `res.ok`, so a
+   * rejected save left the switch sitting in its new position: the producer
+   * saw "Lossless exports: on" and got MP3s.
+   */
   const savePrefs = async (next: Prefs) => {
+    const previous = prefs;
     setPrefs(next);
-    await fetch('/api/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
-    }).catch(() => undefined);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setPrefs(previous);
+      toast.error('Preference not saved', err instanceof Error ? err.message : 'Try again');
+    }
   };
 
   const handleErase = async (e: React.FormEvent) => {
@@ -117,13 +134,17 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
-      if (res.ok) {
-        setSuccess(true);
-        setInviteEmail('');
-        setTimeout(() => setSuccess(false), 3000);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        // Previously: `if (res.ok) {…}` with no else and a console.error in
+        // the catch. A rejected invite looked identical to no click at all.
+        throw new Error(j?.error || `HTTP ${res.status}`);
       }
+      setSuccess(true);
+      setInviteEmail('');
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error(err);
+      toast.error('Invite not sent', err instanceof Error ? err.message : 'Try again');
     } finally {
       setSending(false);
     }
@@ -172,8 +193,12 @@ export default function SettingsPage() {
 
           {/* License Builder */}
           <section>
+            {/* Straight to the canonical builder. This used to point at
+                /settings/licenses, a page whose entire content is a notice
+                saying the builder moved to the store editor — so reaching it
+                cost two navigations through a tombstone. */}
             <Link
-              href="/settings/licenses"
+              href="/store-editor#licenses"
               className="group block"
             >
               <Card interactive className="flex items-center gap-5 p-6">
@@ -207,7 +232,7 @@ export default function SettingsPage() {
             ) : (
               <Card className="divide-y divide-white/10 overflow-hidden">
                 {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]/50">
+                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]">
                     <div className="flex items-center gap-3">
                       <div className="w-7 h-7 rounded-full bg-[#0D0D0A] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
                         {m.name?.[0] || m.email[0]}
@@ -338,15 +363,18 @@ function ToggleRow({ title, description, on, onToggle }: { title: string; descri
       type="button"
       role="switch"
       aria-checked={on}
-      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.04]/50 px-6 py-4 text-left transition-colors hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
+      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.02] px-6 py-4 text-left transition-colors hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
       onClick={() => onToggle(!on)}
     >
       <div>
         <p className="text-[12px] font-medium text-white">{title}</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
-      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-white' : 'bg-white/[0.05] border border-white/20'}`}>
-        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-white/40'}`} />
+      {/* The knob was `bg-white` on a `bg-white` track when on — a solid white
+          pill with no visible thumb, so the only way to read the switch was to
+          remember which side it started on. */}
+      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#6DC6A4]' : 'bg-white/[0.05] border border-white/20'}`}>
+        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-[#090907]' : 'left-[3px] bg-white/40'}`} />
       </div>
     </button>
   );

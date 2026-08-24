@@ -486,7 +486,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 underneath the active track work so it reads like admin,
                 not the main project surface. */}
             {project && (
-              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02]/70 p-3">
+              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
                 <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Checklist {project.checklist?.length ? `· ${project.checklist.filter((item) => item.done).length}/${project.checklist.length}` : ''}
                 </summary>
@@ -502,7 +502,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
             {/* Storefront — moved below creation controls so commerce does
                 not compete with the primary project workspace on mobile. */}
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04]/80 p-4 sm:p-5">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Storefront
@@ -561,7 +561,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
         <PageContainer className="pt-0 pb-12">
-          <div className="rounded-2xl border border-white/20 bg-white/[0.02]/55 p-3 sm:p-4">
+          <div className="rounded-2xl border border-white/20 bg-white/[0.02] p-3 sm:p-4">
             <ProjectCommentsPanel
               projectId={params.id as string}
               tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}

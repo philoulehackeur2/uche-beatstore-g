@@ -80,7 +80,7 @@ export function ShareMenu({
         {open && (
           <div
             role="menu"
-            className="absolute right-0 top-12 z-30 w-60 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
+            className="absolute right-0 top-12 z-30 w-60 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
           >
             <button
               role="menuitem"

@@ -115,7 +115,7 @@ export function ArtistBioBlock({ creator, accentColor }: Props) {
               <ChevronDown size={11} className={`transition-transform ${licenseExpanded ? 'rotate-180' : ''}`} />
             </button>
             {licenseExpanded && (
-              <p className="mt-2 text-[11px] font-mono text-[var(--text-readable)] leading-relaxed whitespace-pre-wrap bg-white/[0.04]/60 rounded-lg px-3 py-2 border border-white/10">
+              <p className="mt-2 text-[11px] font-mono text-[var(--text-readable)] leading-relaxed whitespace-pre-wrap bg-white/[0.04] rounded-lg px-3 py-2 border border-white/10">
                 {creator.license_notes}
               </p>
             )}
@@ -128,7 +128,7 @@ export function ArtistBioBlock({ creator, accentColor }: Props) {
           {creator?.display_name && (
             <Link
               href={`/store/producer/${slugify(creator.display_name)}`}
-              className="tap group inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04]/70 px-3 text-[11px] font-mono uppercase tracking-wider text-white/80 transition-colors hover:border-white/20 hover:text-white"
+              className="tap group inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[11px] font-mono uppercase tracking-wider text-white/80 transition-colors hover:border-white/20 hover:text-white"
             >
               View full profile
               <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5" />

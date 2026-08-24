@@ -483,7 +483,7 @@ export default function PlaylistPage({
                             <MoreHorizontal size={14} />
                           </button>
                           {menuFor === t.id && (
-                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
+                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
                               <button
                                 onClick={() => { addOne(t, 'lease'); setMenuFor(null); }}
                                 disabled={lp == null}
@@ -531,7 +531,7 @@ export default function PlaylistPage({
 
       {/* Sticky bulk-action bar (only when selection > 0) */}
       {stickyVisible && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02]/90 border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02] border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="text-[12px] text-white flex items-center gap-2">
               <span className="font-bold tabular-nums">{selected.size}</span>

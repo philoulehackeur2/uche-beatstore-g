@@ -181,7 +181,9 @@ function Section({
   const panelId = `store-editor-section-${id}`;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+    /* `section-<id>` is the scroll anchor the hash deep-link targets; the
+       panel keeps its own `store-editor-section-<id>` for aria-controls. */
+    <section id={`section-${id}`} className="scroll-mt-24 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
       <button
         type="button"
         onClick={onToggle}
@@ -794,6 +796,26 @@ export default function StoreEditorPage() {
     });
 
   const producerPicksOpen = openSections.has('producer-picks');
+
+  /**
+   * Deep-link to a section by hash — `/store-editor#licenses`.
+   *
+   * Every section already has a stable `id`, but nothing read the URL, so
+   * links from elsewhere in the app could only land the producer at the top
+   * of a fourteen-section accordion and leave them to find the right one.
+   * Settings in particular pointed at /settings/licenses, a page whose entire
+   * content is a notice saying the builder moved here.
+   */
+  useEffect(() => {
+    const id = window.location.hash.replace('#', '');
+    if (!id) return;
+    openSection(id);
+    // Wait a frame so the panel has expanded before scrolling to it.
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`section-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     setVisibleTrackRows(TRACK_LIST_BATCH_SIZE);
