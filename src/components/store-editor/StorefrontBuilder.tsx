@@ -38,6 +38,8 @@ import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
+import { HistoryPanel } from './HistoryPanel';
+import { recordSnapshot } from '@/lib/store-editor/history';
 
 type BuilderState = {
   doc: StoreLayout;
@@ -77,7 +79,9 @@ export function StorefrontBuilder({
   const [breakpoint, setBreakpoint] = useState<StoreBreakpoint>('desktop');
   const [zoom, setZoom] = useState(1);
   const [autoFit, setAutoFit] = useState(true);
-  const [panel, setPanel] = useState<'sections' | 'theme'>('sections');
+  const [panel, setPanel] = useState<'sections' | 'theme' | 'history'>('sections');
+  /** Bumped after a snapshot lands, so an open history list picks it up. */
+  const [historyKey, setHistoryKey] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [compact, setCompact] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -152,7 +156,14 @@ export function StorefrontBuilder({
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       onPersist(layout)
-        .then(() => setSaveState('saved'))
+        .then(async () => {
+          setSaveState('saved');
+          // Snapshot AFTER the server accepts it, so history never offers to
+          // restore a version that was never actually saved. `recordSnapshot`
+          // decides for itself whether this one is worth keeping, and swallows
+          // its own failures — history is an aid, not part of the save path.
+          if (await recordSnapshot(layout)) setHistoryKey((key) => key + 1);
+        })
         .catch((error: unknown) => {
           setSaveState('idle');
           toast.error(error instanceof Error ? error.message : 'Could not save the layout.');
@@ -364,7 +375,7 @@ export function StorefrontBuilder({
         )}
         >
           <div className="flex shrink-0 border-b border-white/10">
-            {(['sections', 'theme'] as const).map((tab) => (
+            {(['sections', 'theme', 'history'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -435,10 +446,17 @@ export function StorefrontBuilder({
                 ) : null}
               </div>
             </>
-          ) : (
+          ) : panel === 'theme' ? (
             <ThemePanel
               theme={layout.theme}
               onChange={(patch) => commit((current) => ({ ...current, theme: { ...current.theme, ...patch } }))}
+            />
+          ) : (
+            <HistoryPanel
+              refreshKey={historyKey}
+              // Through `commit`, so a restore lands on the undo stack like any
+              // other edit and an unwanted one is a single ⌘Z away.
+              onRestore={(restored) => commit(() => restored)}
             />
           )}
         </aside>
