@@ -18,10 +18,10 @@
  */
 
 import { normalizeLayout, type StoreLayout } from './layout';
-
-const DB_NAME = 'antigravity-store-editor';
-const DB_VERSION = 1;
-const STORE_SNAPSHOTS = 'snapshots';
+import {
+  STORE_SNAPSHOTS, deleteRecord, deleteRecords, getRecord, openStoreEditorDb, putRecord,
+  readAllRecords,
+} from './db';
 
 /** How many snapshots to keep. Beyond this the oldest are dropped. */
 export const HISTORY_LIMIT = 30;
@@ -153,30 +153,10 @@ export function formatSnapshotAge(takenAt: string, now = Date.now()): string {
 
 /* ── IndexedDB ──────────────────────────────────────────────────────────── */
 
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) {
-        db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
 export async function listSnapshots(): Promise<SnapshotSummary[]> {
-  const db = await openDatabase();
+  const db = await openStoreEditorDb();
   try {
-    const records = await new Promise<unknown[]>((resolve, reject) => {
-      const request = db.transaction(STORE_SNAPSHOTS, 'readonly')
-        .objectStore(STORE_SNAPSHOTS)
-        .getAll();
-      request.onsuccess = () => resolve(request.result as unknown[]);
-      request.onerror = () => reject(request.error);
-    });
+    const records = await readAllRecords(db, STORE_SNAPSHOTS);
     return sortSnapshots(records.filter(isLayoutSnapshot).map(toSummary));
   } finally {
     db.close();
@@ -184,15 +164,9 @@ export async function listSnapshots(): Promise<SnapshotSummary[]> {
 }
 
 export async function loadSnapshot(id: string): Promise<StoreLayout | null> {
-  const db = await openDatabase();
+  const db = await openStoreEditorDb();
   try {
-    const record = await new Promise<unknown>((resolve, reject) => {
-      const request = db.transaction(STORE_SNAPSHOTS, 'readonly')
-        .objectStore(STORE_SNAPSHOTS)
-        .get(id);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    const record = await getRecord(db, STORE_SNAPSHOTS, id);
     // Normalised on the way out: a snapshot taken before a new section kind or
     // theme key existed must still restore into something renderable.
     return isLayoutSnapshot(record) ? normalizeLayout(record.layout) : null;
@@ -202,13 +176,7 @@ export async function loadSnapshot(id: string): Promise<StoreLayout | null> {
 }
 
 async function latestSnapshot(db: IDBDatabase): Promise<LayoutSnapshot | null> {
-  const records = await new Promise<unknown[]>((resolve, reject) => {
-    const request = db.transaction(STORE_SNAPSHOTS, 'readonly')
-      .objectStore(STORE_SNAPSHOTS)
-      .getAll();
-    request.onsuccess = () => resolve(request.result as unknown[]);
-    request.onerror = () => reject(request.error);
-  });
+  const records = await readAllRecords(db, STORE_SNAPSHOTS);
   return sortSnapshots(records.filter(isLayoutSnapshot))[0] ?? null;
 }
 
@@ -222,35 +190,20 @@ async function latestSnapshot(db: IDBDatabase): Promise<LayoutSnapshot | null> {
  */
 export async function recordSnapshot(layout: StoreLayout): Promise<boolean> {
   try {
-    const db = await openDatabase();
+    const db = await openStoreEditorDb();
     try {
       const latest = await latestSnapshot(db);
       if (!shouldSnapshot(layout, latest)) return false;
 
       const snapshot = createSnapshot(layout);
-      await new Promise<void>((resolve, reject) => {
-        const request = db.transaction(STORE_SNAPSHOTS, 'readwrite')
-          .objectStore(STORE_SNAPSHOTS)
-          .put(snapshot);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
+      await putRecord(db, STORE_SNAPSHOTS, snapshot);
 
       // Prune after writing rather than before, so a crash mid-write can only
       // ever leave MORE history than intended, never less.
-      const all = await new Promise<unknown[]>((resolve, reject) => {
-        const request = db.transaction(STORE_SNAPSHOTS, 'readonly')
-          .objectStore(STORE_SNAPSHOTS)
-          .getAll();
-        request.onsuccess = () => resolve(request.result as unknown[]);
-        request.onerror = () => reject(request.error);
-      });
+      const all = await readAllRecords(db, STORE_SNAPSHOTS);
       const keep = new Set(pruneSnapshots(all.filter(isLayoutSnapshot)).map((item) => item.id));
       const doomed = all.filter(isLayoutSnapshot).filter((item) => !keep.has(item.id));
-      if (doomed.length > 0) {
-        const store = db.transaction(STORE_SNAPSHOTS, 'readwrite').objectStore(STORE_SNAPSHOTS);
-        doomed.forEach((item) => store.delete(item.id));
-      }
+      deleteRecords(db, STORE_SNAPSHOTS, doomed.map((item) => item.id));
       return true;
     } finally {
       db.close();
@@ -261,15 +214,9 @@ export async function recordSnapshot(layout: StoreLayout): Promise<boolean> {
 }
 
 export async function deleteSnapshot(id: string): Promise<void> {
-  const db = await openDatabase();
+  const db = await openStoreEditorDb();
   try {
-    await new Promise<void>((resolve, reject) => {
-      const request = db.transaction(STORE_SNAPSHOTS, 'readwrite')
-        .objectStore(STORE_SNAPSHOTS)
-        .delete(id);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+    await deleteRecord(db, STORE_SNAPSHOTS, id);
   } finally {
     db.close();
   }

@@ -15,7 +15,7 @@
  * is happening rather than leaving it to be inferred.
  */
 
-import { Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { Bookmark, ClipboardPaste, Copy, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import {
   overriddenKeys, resolveSection, supportsSetting,
@@ -27,6 +27,7 @@ import {
   updateCanvasBlock, type CanvasBlockKind,
 } from '@/lib/store-editor/canvas-blocks';
 import type { CanvasBlock } from '@/lib/store-editor/layout';
+import type { SectionStyle } from '@/lib/store-editor/section-style';
 
 const VARIANTS: Partial<Record<StoreSection['kind'], { value: string; label: string }[]>> = {
   hero: [
@@ -63,6 +64,7 @@ function Label({ children, overridden, onReset }: {
 
 export function SectionInspector({
   section, breakpoint, onSet, onClear, onContent, onBlocks, selectedBlockId, onSelectBlock,
+  clipboardStyle, onCopyStyle, onPasteStyle, canPasteStyle, pasteStyleLabel, onSaveToLibrary,
 }: {
   section: StoreSection | null;
   breakpoint: StoreBreakpoint;
@@ -73,6 +75,13 @@ export function SectionInspector({
   onBlocks?: (blocks: CanvasBlock[]) => void;
   selectedBlockId?: string | null;
   onSelectBlock?: (id: string | null) => void;
+  /** Reuse actions. Supplied by the builder, which owns the clipboard. */
+  clipboardStyle?: SectionStyle | null;
+  onCopyStyle?: () => void;
+  onPasteStyle?: () => void;
+  canPasteStyle?: boolean;
+  pasteStyleLabel?: string;
+  onSaveToLibrary?: () => void;
 }) {
   if (!section) {
     return (
@@ -103,6 +112,50 @@ export function SectionInspector({
             : `Editing ${breakpoint} only — desktop is unchanged`}
         </p>
       </div>
+
+      {/* Reuse. Kept at the top because these act on the section as a whole,
+          before any of the per-field controls below. */}
+      {onCopyStyle || onSaveToLibrary ? (
+        <div className="flex items-center gap-1 border-b border-white/10 px-4 py-2.5">
+          {onCopyStyle ? (
+            <button
+              type="button"
+              onClick={onCopyStyle}
+              title="Copy this section's spacing, width and alignment"
+              className="flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+            >
+              <Copy size={11} /> Copy style
+            </button>
+          ) : null}
+          {onPasteStyle ? (
+            <button
+              type="button"
+              onClick={onPasteStyle}
+              disabled={!canPasteStyle}
+              // Disabled rather than hidden when it does not apply: a button
+              // that vanishes leaves you wondering whether the copy worked.
+              title={
+                !clipboardStyle ? 'Copy a style from another section first'
+                  : canPasteStyle ? pasteStyleLabel
+                    : 'This section does not use any of the copied settings'
+              }
+              className="flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:text-white/20"
+            >
+              <ClipboardPaste size={11} /> Paste
+            </button>
+          ) : null}
+          {onSaveToLibrary ? (
+            <button
+              type="button"
+              onClick={onSaveToLibrary}
+              title="Save this section to reuse it later"
+              className="ml-auto flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+            >
+              <Bookmark size={11} /> Save
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-4 px-4 py-4">
         <label className="grid gap-1.5">

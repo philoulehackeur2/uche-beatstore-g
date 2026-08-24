@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check, Loader2, Monitor, Plus, Redo2, Smartphone, Tablet, Undo2,
+  Check, Loader2, Monitor, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
@@ -40,6 +40,14 @@ import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
 import { HistoryPanel } from './HistoryPanel';
 import { recordSnapshot } from '@/lib/store-editor/history';
+import {
+  deleteSavedSection, listSavedSections, loadSavedSection, saveSection,
+  type SavedSectionSummary,
+} from '@/lib/store-editor/library';
+import {
+  applySectionStyle, copySectionStyle, describeStyle, styleAppliesTo,
+  type SectionStyle,
+} from '@/lib/store-editor/section-style';
 
 type BuilderState = {
   doc: StoreLayout;
@@ -87,6 +95,17 @@ export function StorefrontBuilder({
   const [adding, setAdding] = useState(false);
   /** Selected free-form block inside a `canvas` section, if any. */
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  /** Copied presentation, waiting to be pasted onto another section. */
+  const [clipboardStyle, setClipboardStyle] = useState<SectionStyle | null>(null);
+  const [saved, setSaved] = useState<SavedSectionSummary[]>([]);
+
+  const refreshLibrary = useCallback(() => {
+    // Failures are swallowed: the library is a convenience, and IndexedDB is
+    // denied outright in some private-browsing modes.
+    listSavedSections().then(setSaved).catch(() => setSaved([]));
+  }, []);
+
+  useEffect(() => { refreshLibrary(); }, [refreshLibrary]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -426,7 +445,7 @@ export function StorefrontBuilder({
                   <Plus size={12} /> Add section
                 </button>
                 {adding ? (
-                  <div className="absolute bottom-12 left-2 right-2 z-40 border border-white/20 bg-[#0D0D0A] shadow-[0_0_40px_rgba(0,0,0,0.7)]">
+                  <div className="absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto border border-white/20 bg-[#0D0D0A] shadow-[0_0_40px_rgba(0,0,0,0.7)]">
                     {addableKinds.map((kind) => (
                       <button
                         key={kind}
@@ -442,6 +461,52 @@ export function StorefrontBuilder({
                         {kind}
                       </button>
                     ))}
+
+                    {/* The producer's own saved blocks, alongside the built-in
+                        kinds — reusing one should be no harder than adding a
+                        blank section, because it is the same intention. */}
+                    {saved.length > 0 ? (
+                      <>
+                        <p className="border-t border-white/10 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+                          Saved
+                        </p>
+                        {saved.map((item) => (
+                          <span key={item.id} className="group flex items-center">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const section = await loadSavedSection(item.id);
+                                if (!section) {
+                                  toast.error('That saved section could not be read.');
+                                  return;
+                                }
+                                commit((current) => addSection(current, section));
+                                setSelectedId(section.id);
+                                setAdding(false);
+                              }}
+                              className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/90"
+                            >
+                              {item.name}
+                              <span className="ml-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/25">
+                                {item.kind}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Delete saved section ${item.name}`}
+                              title="Delete from library"
+                              onClick={async () => {
+                                await deleteSavedSection(item.id);
+                                refreshLibrary();
+                              }}
+                              className="grid size-6 shrink-0 place-items-center text-white/25 transition-colors hover:text-white/90"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </span>
+                        ))}
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -570,6 +635,30 @@ export function StorefrontBuilder({
             onClear={clearOverride}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
+            clipboardStyle={clipboardStyle}
+            onCopyStyle={() => {
+              if (!selected) return;
+              setClipboardStyle(copySectionStyle(selected));
+              toast.success(`Copied the style from ${selected.name}.`);
+            }}
+            onPasteStyle={() => {
+              if (!selected || !clipboardStyle) return;
+              commit((current) => updateSection(
+                current, selected.id, (item) => applySectionStyle(item, clipboardStyle),
+              ));
+            }}
+            canPasteStyle={Boolean(selected && clipboardStyle && styleAppliesTo(selected, clipboardStyle))}
+            pasteStyleLabel={clipboardStyle ? describeStyle(clipboardStyle) : ''}
+            onSaveToLibrary={async () => {
+              if (!selected) return;
+              try {
+                const name = await saveSection(selected);
+                refreshLibrary();
+                toast.success(`Saved "${name}" — reuse it from Add section.`);
+              } catch {
+                toast.error('Could not save that section.');
+              }
+            }}
             onBlocks={(blocks) => {
               if (!selectedId) return;
               commit((current) => updateSection(current, selectedId, (item) => ({
