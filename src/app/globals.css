@@ -198,6 +198,11 @@
   --z-popover: 200;
   --z-drawer: 220;
   --z-modal: 240;
+  /* Above --z-modal on purpose. `confirmToast` is called from inside
+   * modals, and a confirm dialog rendered *behind* the surface that
+   * triggered it is unreachable. A transient notification is always
+   * the topmost thing on screen. */
+  --z-toast: 260;
   --dur-fast: 160ms;
   --dur-med: 260ms;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
@@ -534,6 +539,65 @@ body {
 
   .glass-play-spin {
     animation: none;
+  }
+}
+
+/* ── Toast: iOS-style top-center notification banner ───────────────────
+
+   Positioning note: the centering translate lives on the *container*
+   (flex justify-center), never on the card. The entrance keyframe animates
+   `transform`, so a `-translate-x-1/2` on the same element would be
+   overwritten mid-animation and the card would fly in off-centre.
+
+   The glass recipe is spelled out here rather than in Tailwind utilities
+   because the utility form of this — `bg-white/[0.04]/72` — stacks two
+   opacity modifiers, matches no utility, and compiles to nothing. That
+   mistake is already live on 53 elements in this app; it silently drops the
+   translucent base and leaves the blur sitting on top of nothing. */
+.toast-surface {
+  /* Deliberately sets no `border`. This rule is unlayered and Tailwind's
+     utilities live in @layer utilities, so an unlayered `border:` shorthand
+     would beat the per-kind `border-emerald-900/40` / `border-red-900/40`
+     classes on the card and flatten every toast to one colour. The border
+     width comes from the card's own `border` utility. */
+  /* Warm near-black at 72% — --bg-card with the page showing through. */
+  background: rgba(20, 17, 13, 0.72);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* Drop, overshoot, settle — the iOS banner arc. The 60% keyframe carries it
+   6% past its resting place so the stop reads as physical rather than as an
+   animation ending. `--ease-spring` is already the iOS curve. */
+@keyframes toast-drop-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -140%, 0) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, 6%, 0) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.toast-enter {
+  animation: toast-drop-in 420ms var(--ease-spring) both;
+}
+
+/* The overshoot is the part that has to go — a card that travels past its
+   mark and springs back is exactly the vestibular trigger this query exists
+   for. Fade in place instead; the notification still announces itself. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+    opacity: 1;
   }
 }
 
