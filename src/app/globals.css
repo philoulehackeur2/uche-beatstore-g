@@ -563,10 +563,12 @@ body {
    overwritten mid-animation and the card would fly in off-centre.
 
    The glass recipe is spelled out here rather than in Tailwind utilities
-   because the utility form of this — `bg-white/[0.04]/72` — stacks two
-   opacity modifiers, matches no utility, and compiles to nothing. That
-   mistake is already live on 53 elements in this app; it silently drops the
-   translucent base and leaves the blur sitting on top of nothing. */
+   because the utility form of it would stack a second opacity modifier onto
+   an arbitrary one, match no utility, and compile to nothing — the defect
+   `lib/ui/tailwind-classes.test.ts` exists to catch. (The example is not
+   written out literally here: that test scans source text, and a comment
+   quoting the bad pattern fails it.) It silently drops the translucent base
+   and leaves the blur sitting on top of nothing. */
 .toast-surface {
   /* Deliberately sets no `border`. This rule is unlayered and Tailwind's
      utilities live in @layer utilities, so an unlayered `border:` shorthand
