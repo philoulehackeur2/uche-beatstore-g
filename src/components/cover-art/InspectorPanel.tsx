@@ -25,7 +25,7 @@ import {
 import {
   ColorField, FieldLabel, NumberField, PanelSection, SegmentedField, SliderField, StudioButton,
 } from './StudioControls';
-import { AdjustSection, EffectsSection } from './FxInspector';
+import { AdjustSection, EffectsSection, MoodSection } from './FxInspector';
 import { FontPicker } from './FontPicker';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { cn } from '@/lib/utils';
@@ -102,6 +102,7 @@ export function InspectorPanel({
   onDistribute,
   onRemoveSelected,
   onResizeArtboard,
+  onRestyle,
 }: {
   document: ArtworkDocument;
   selectedIds: string[];
@@ -111,6 +112,7 @@ export function InspectorPanel({
   onDistribute: (axis: 'x' | 'y') => void;
   onRemoveSelected: () => void;
   onResizeArtboard: (width: number, height: number, mode: ArtboardResizeMode) => void;
+  onRestyle: (moodId: string) => void;
 }) {
   const selected = doc.layers.filter((layer) => selectedIds.includes(layer.id));
   const layer = selected.length === 1 ? selected[0] : null;
@@ -192,6 +194,7 @@ export function InspectorPanel({
           {/* Effects live on the layer base, so every type gets them — a drop
               shadow on a title and a blur on a photograph go through the same
               code path rather than each being a special case. */}
+          <MoodSection scope="selection" onRestyle={onRestyle} />
           <AdjustSection fx={layer.fx} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
           <EffectsSection fx={layer.fx} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
         </>
@@ -209,6 +212,7 @@ export function InspectorPanel({
       {selected.length === 0 ? (
         <>
           <ArtboardSection doc={doc} onResizeArtboard={onResizeArtboard} />
+          <MoodSection scope="document" onRestyle={onRestyle} />
           <PanelSection title="Canvas">
             <ColorField
               label="Background"

@@ -31,6 +31,7 @@ import { fetchCoverAttachOptions, type CoverAttachOption, type CoverAttachTarget
 import { buildCollage, collageFrame, type CollageLayoutId } from '@/lib/cover/collage';
 import { fitRectInside } from '@/lib/cover/geometry';
 import { resizeArtboard } from '@/lib/cover/artboard';
+import { restyleDocument } from '@/lib/cover/restyle';
 import { resolveExport, type ExportSettings } from '@/lib/cover/export-settings';
 import { embedFontsInSvg } from '@/lib/cover/font-embed';
 import {
@@ -1554,6 +1555,12 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               // the kind of change someone tries and then wants to take back.
               onResizeArtboard={(width, height, mode) => updateDocument(
                 (current) => resizeArtboard(current, width, height, mode),
+              )}
+              // One undo step, and scoped to the selection when there is one —
+              // trying a mood on the title before committing the whole cover is
+              // how a designer actually works.
+              onRestyle={(moodId) => updateDocument(
+                (current) => restyleDocument(current, moodId, selectedIds),
               )}
               onRemoveSelected={() => {
                 updateDocument((current) => removeLayers(current, selectedIds));

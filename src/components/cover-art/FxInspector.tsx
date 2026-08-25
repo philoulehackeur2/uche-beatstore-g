@@ -25,6 +25,7 @@ import {
   type ArtworkGlow, type ArtworkGradientMap, type ArtworkLayerFx, type ArtworkShadow,
 } from '@/lib/cover/effects';
 import { HudSlider } from './HudSlider';
+import { moods } from '@/lib/cover/restyle';
 import { ColorField, FieldLabel, PanelSection } from './StudioControls';
 import { cn } from '@/lib/utils';
 
@@ -164,6 +165,41 @@ function EffectRow({ name, enabled, onAdd, onRemove, children }: {
 const DEFAULT_SHADOW: ArtworkShadow = { x: 12, y: 16, blur: 24, color: '#000000', opacity: 0.55 };
 const DEFAULT_GLOW: ArtworkGlow = { blur: 28, color: '#F2F2F0', opacity: 0.45 };
 const DEFAULT_GRADIENT_MAP: ArtworkGradientMap = { from: '#0C0C0A', to: '#C8A47A', amount: 0.85 };
+
+/**
+ * Whole-cover moods.
+ *
+ * Distinct from the effect PRESETS below, which touch one layer: a mood
+ * restyles typography, effects and palette together across the artwork while
+ * leaving positions and content alone. It is one undo step.
+ */
+export function MoodSection({ onRestyle, scope }: {
+  onRestyle: (moodId: string) => void;
+  scope: 'selection' | 'document';
+}) {
+  return (
+    <PanelSection title="Mood">
+      <p className="text-[11px] leading-relaxed text-white/40">
+        {scope === 'selection'
+          ? 'Restyles the selected layers. Your positions and words stay put.'
+          : 'Restyles the whole cover. Your layout, images and words stay put.'}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {moods.map((mood) => (
+          <button
+            key={mood.id}
+            type="button"
+            title={mood.hint}
+            onClick={() => onRestyle(mood.id)}
+            className="border border-white/10 px-2 py-1 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+          >
+            {mood.name}
+          </button>
+        ))}
+      </div>
+    </PanelSection>
+  );
+}
 
 export function EffectsSection({ fx, onPatchFx }: { fx: ArtworkLayerFx | undefined; onPatchFx: FxPatch }) {
   const r = fxDefaults(fx);

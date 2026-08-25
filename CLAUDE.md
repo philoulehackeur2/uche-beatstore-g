@@ -112,6 +112,8 @@ public/sw.js                 service worker (app shell only — audio uses Index
 - **Artboard resizing scales effects too** (`lib/cover/artboard.ts`). Blur/shadow/glow/chromatic are document units — a 24-unit blur is a haze at 3000px and a smear at 1080px.
 - **Export settings resolve honestly** (`lib/cover/export-settings.ts`). A transparent JPEG gives you a BLACK plate, so `resolveExport` drops the request and reports it in `notes` for the UI to surface rather than silently doing something else.
 
+**Cover Art moods** (`lib/cover/restyle.ts`) — `restyleDocument` changes how existing work FEELS without replacing it: typography, effects and palette move together, while positions, sizes, text and image sources stay put. Distinct from `coverArtDirections`, which call `createArtworkDocument` and throw the layer stack away. Deliberately NOT a model call: a mood is a curated set of parameter choices, so this is instant, free, offline, identical every time and one undo step, where an LLM emitting layer JSON would be slower, cost per press and occasionally fail to parse. Tracking is SCALED not set, `fx` is merged with the mood winning on keys it names, and locked layers and groups are skipped (a group holds no pixels; restyling its wrapper would double the effect on its contents).
+
 **Cover Art groups + rulers**:
 
 - **Nesting is a `parentId` pointer on the flat `layers` array, not a `children` tree.** Every existing consumer that walks `document.layers` still sees every layer. Children keep ABSOLUTE document coordinates — a group is a wrapper for opacity/blend/organisation, NOT a coordinate space, which is the only reason `lib/cover/geometry.ts` needs no knowledge of groups.
