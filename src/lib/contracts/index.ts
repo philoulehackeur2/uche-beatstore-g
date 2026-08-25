@@ -87,6 +87,25 @@ export const TrackPatchBodySchema = z.object({
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
+// PATCH /api/tracks/[id]/stem-files — rename / recategorise one stem file.
+//
+// The categories mirror the route's own allow-list, `topline` included: a
+// topline is a recorded idea rather than a deliverable stem, and the producer
+// share filters on exactly that value.
+export const STEM_FILE_CATEGORIES = [
+  'vocals', 'drums', 'bass', 'melody', 'fx', 'other', 'topline',
+] as const;
+
+export const StemFilePatchBodySchema = z.object({
+  file_id: z.string().min(1),
+  label: z.string().min(1).max(120).optional(),
+  category: z.enum(STEM_FILE_CATEGORIES).optional(),
+}).strict().refine(
+  (b) => b.label !== undefined || b.category !== undefined,
+  { message: 'Nothing to update' },
+);
+export type StemFilePatchBody = z.infer<typeof StemFilePatchBodySchema>;
+
 // ── Projects ────────────────────────────────────────────────────────────
 
 export const PROJECT_STATUSES = ['in_progress', 'final', 'archived'] as const;

@@ -108,6 +108,38 @@ describe('ActionMenu', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  /**
+   * The regression this exists for: "Edit title" in a project's ⋯ menu opened
+   * the inline field and it vanished in the same frame. `invoke` awaits
+   * onSelect, so React had already mounted and focused the field by the time
+   * the menu restored focus to its trigger — which blurred it, and a
+   * save-on-blur field with an unchanged value closes itself.
+   */
+  it('leaves focus alone when the item moved it somewhere deliberate', async () => {
+    const field = document.createElement('input');
+    field.setAttribute('aria-label', 'Project title');
+    document.body.appendChild(field);
+
+    renderMenu([{
+      id: 'e',
+      items: [{ id: 'title', label: 'Edit title', onSelect: () => { field.focus(); } }],
+    }]);
+    open();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit title' }));
+
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(document.activeElement).toBe(field);
+    field.remove();
+  });
+
+  it('still returns focus to the trigger for a plain command', async () => {
+    renderMenu([{ id: 'e', items: [{ id: 'pin', label: 'Pin to top', onSelect: () => {} }] }]);
+    open();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin to top' }));
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Options' }));
+  });
+
   it('does not trap focus — the panel is focusable but tabbable rows are not caged', () => {
     renderMenu([{ id: 'e', items: [{ id: 'a', label: 'A', onSelect: () => {} }] }]);
     open();

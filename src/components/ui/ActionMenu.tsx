@@ -72,11 +72,28 @@ export function ActionMenu({
     setCoords(null);
   }, []);
 
-  /** Close and hand focus back to the trigger — the dismissal path for Escape
-   *  and for any item that does not ask to keep the menu open. */
+  /**
+   * Close, and hand focus back to the trigger — but only if the item did not
+   * move focus somewhere deliberate.
+   *
+   * `invoke` awaits `onSelect`, so by the time this runs React has already
+   * flushed whatever the item did. An item that opens an inline editor (the
+   * "Edit title" pattern, where the menu focuses the page's real field rather
+   * than growing its own) has therefore already focused that field. Taking
+   * focus back would blur it — and since `ui/InlineText` saves on blur and a
+   * no-op save closes the editor, the field opened and shut in the same frame
+   * and the menu item looked like it did nothing at all.
+   *
+   * Focus still on the menu (or nowhere) means the item was a plain command,
+   * and the trigger is the right place to land.
+   */
   const closeAndRestore = useCallback(() => {
+    const active = document.activeElement;
+    const focusUnclaimed = active === null
+      || active === document.body
+      || (menuRef.current?.contains(active) ?? false);
     close();
-    triggerRef.current?.focus();
+    if (focusUnclaimed) triggerRef.current?.focus();
   }, [close]);
 
   /**
