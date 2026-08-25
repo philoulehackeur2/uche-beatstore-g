@@ -7,6 +7,10 @@ export function useTags(trackId: string) {
 
   const { data: tags = [], isLoading } = useQuery<string[]>({
     queryKey: ['tags', trackId],
+    // The drawer mounts its hooks unconditionally (its `track` can be null
+    // mid-session), so it passes '' rather than skipping the hook. Don't turn
+    // that into a request for `/api/tracks//tags`.
+    enabled: !!trackId,
     queryFn: async () => {
       const res = await fetch(`/api/tracks/${trackId}/tags`);
       if (!res.ok) throw new Error('Failed to fetch tags');

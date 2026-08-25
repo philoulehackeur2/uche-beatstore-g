@@ -58,14 +58,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [tempTitle, setTempTitle] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddFromLibrary, setShowAddFromLibrary] = useState(false);
-  const [editingTargets, setEditingTargets] = useState(false);
-  const [targetBpm, setTargetBpm] = useState<string>('');
-  const [targetKey, setTargetKey] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
   const [priceUsd, setPriceUsd] = useState<string>('');
   const [savingStorefront, setSavingStorefront] = useState(false);
   // Multi-select state — Set for O(1) toggle. Mirrors playlists +
@@ -87,10 +81,6 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       const prData = await prRes.json();
       if (prData.project) {
         setProject(prData.project);
-        setTempTitle(prData.project.name);
-        setTargetBpm(prData.project.bpm_target ? String(prData.project.bpm_target) : '');
-        setTargetKey(prData.project.key_target || '');
-        setDescription(prData.project.description ?? '');
         setPriceUsd(
           prData.project.price_usd != null ? String(prData.project.price_usd) : '',
         );
@@ -212,21 +202,19 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     }
   };
 
-  const handleRename = async () => {
-    if (!tempTitle.trim() || tempTitle === project?.name) {
-      setIsEditingTitle(false);
-      return;
-    }
-    const ok = await patchProject({ name: tempTitle.trim() });
-    if (ok) setIsEditingTitle(false);
+  // The three header editors below all funnel into patchProject and report
+  // back whether the save landed, so an inline field can stay open on a
+  // rejected save instead of closing over a value the server never took.
+  const handleRename = async (next: string) => {
+    if (!next) return false;
+    return patchProject({ name: next });
   };
 
-  const saveTargets = async () => {
-    const bpm = targetBpm ? parseInt(targetBpm, 10) : null;
-    const key = targetKey.trim() || null;
-    const ok = await patchProject({ bpm_target: bpm, key_target: key });
-    if (ok) setEditingTargets(false);
-  };
+  const saveTargets = (patch: { bpm_target?: number | null; key_target?: string | null }) =>
+    patchProject(patch);
+
+  const saveDescription = (next: string) =>
+    patchProject({ description: next === '' ? null : next });
 
   const setStatus = async (status: ProjectStatus) => {
     await patchProject({ status });
@@ -243,22 +231,20 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     setTogglingStoreFeatured(false);
   };
 
-  const saveStorefront = async () => {
+  /**
+   * Price is the only field left on the storefront card — the description
+   * moved up into the header, where it is autosaved next to the project it
+   * describes rather than behind a Save button at the bottom of the page.
+   */
+  const savePrice = async () => {
     setSavingStorefront(true);
-    const trimmed = description.trim();
     const priceParsed = priceUsd.trim() === '' ? null : Number.parseFloat(priceUsd);
     if (priceParsed != null && (Number.isNaN(priceParsed) || priceParsed < 0)) {
       toast.error('Invalid price', 'Enter a non-negative number');
       setSavingStorefront(false);
       return;
     }
-    await patchProject(
-      {
-        description: trimmed === '' ? null : trimmed,
-        price_usd: priceParsed,
-      },
-      'Storefront details saved',
-    );
+    await patchProject({ price_usd: priceParsed }, 'Price saved');
     setSavingStorefront(false);
   };
 
@@ -416,40 +402,26 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 hideCover=true because the page renders its own bigger
                 cover in the column to the left. */}
             <ProjectDetailHeader
-              hideCover
-          project={project}
-          trackCount={filtered.length}
-          totalDuration={totalDuration}
-          uploadingArt={uploadingArt}
-          fileInputRef={fileInputRef}
-          onArtChange={handleArtChange}
-          onSetStatus={setStatus}
-          isEditingTitle={isEditingTitle}
-          tempTitle={tempTitle}
-          setTempTitle={setTempTitle}
-          onTitleEditStart={() => setIsEditingTitle(true)}
-          onTitleEditCancel={() => { setIsEditingTitle(false); setTempTitle(project?.name || ''); }}
-          onTitleSave={handleRename}
-          editingTargets={editingTargets}
-          targetBpm={targetBpm}
-          setTargetBpm={setTargetBpm}
-          targetKey={targetKey}
-          setTargetKey={setTargetKey}
-          onTargetsEditStart={() => setEditingTargets(true)}
-          onTargetsEditCancel={() => setEditingTargets(false)}
-          onTargetsSave={saveTargets}
-          onPlay={handlePlayProject}
-          onShare={() => setShowShareModal(true)}
-          onAddFromLibrary={() => setShowAddFromLibrary(true)}
-          onToggleUpload={() => setShowUpload(!showUpload)}
-          playDisabled={!filtered.length}
-          shareDisabled={!tracks.length}
-          storeFeatured={project?.store_featured}
-          onToggleStoreFeatured={toggleStoreFeatured}
-          storeFeaturedPending={togglingStoreFeatured}
-          onChanged={fetchData}
-          onDeleted={() => { window.location.href = '/projects'; }}
-        />
+              project={project}
+              trackCount={filtered.length}
+              totalDuration={totalDuration}
+              onSetStatus={setStatus}
+              onRename={handleRename}
+              onSaveTargets={saveTargets}
+              onSaveDescription={saveDescription}
+              onPlay={handlePlayProject}
+              onShare={() => setShowShareModal(true)}
+              onAddFromLibrary={() => setShowAddFromLibrary(true)}
+              onToggleUpload={() => setShowUpload(!showUpload)}
+              /* The cover lives in the column to the left and shares this
+                 file input, so "Edit cover" in the ⋯ menu opens the same
+                 picker clicking the artwork does. */
+              onEditCover={() => fileInputRef.current?.click()}
+              playDisabled={!filtered.length}
+              shareDisabled={!tracks.length}
+              onChanged={fetchData}
+              onDeleted={() => { window.location.href = '/projects'; }}
+            />
 
         {/* Upload Zone */}
         {showUpload && (
@@ -487,6 +459,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onDeleteTrack={(id) => handleDeleteTrack(id)}
           onAddFromLibrary={() => setShowAddFromLibrary(true)}
           onShowUpload={() => setShowUpload(true)}
+          onTrackChanged={fetchData}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}
@@ -519,7 +492,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 underneath the active track work so it reads like admin,
                 not the main project surface. */}
             {project && (
-              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02]/70 p-3">
+              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
                 <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Checklist {project.checklist?.length ? `· ${project.checklist.filter((item) => item.done).length}/${project.checklist.length}` : ''}
                 </summary>
@@ -535,7 +508,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
             {/* Storefront — moved below creation controls so commerce does
                 not compete with the primary project workspace on mobile. */}
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04]/80 p-4 sm:p-5">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Storefront
@@ -553,51 +526,33 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                   {togglingStoreFeatured ? 'Saving...' : project?.store_featured ? 'In store' : 'List in store'}
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    maxLength={10000}
-                    placeholder="Describe this project..."
-                    className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors resize-none leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
+              {/* Price only. The storefront description is the project
+                  description, and it is now edited in the header rather than
+                  in a second textarea five sections further down the page. */}
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-[180px]">
+                  <label htmlFor="project-price" className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
                     Price (USD)
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/50">$</span>
                     <input
+                      id="project-price"
                       type="number"
                       min="0"
                       step="0.01"
                       value={priceUsd}
                       onChange={(e) => setPriceUsd(e.target.value)}
+                      onBlur={savePrice}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                       placeholder="0.00"
                       className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
                     />
                   </div>
                   <p className="text-[9px] font-mono text-white/40 mt-1.5">
-                    Leave blank to hide from store.
+                    {savingStorefront ? 'Saving…' : 'Saves on blur. Blank hides it from the store.'}
                   </p>
                 </div>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button
-                  type="button"
-                  onClick={saveStorefront}
-                  disabled={savingStorefront}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
-                >
-                  {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
-                  {savingStorefront ? 'Saving...' : 'Save storefront'}
-                </button>
               </div>
             </div>
 
@@ -612,7 +567,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
         <PageContainer className="pt-0 pb-12">
-          <div className="rounded-2xl border border-white/20 bg-white/[0.02]/55 p-3 sm:p-4">
+          <div className="rounded-2xl border border-white/20 bg-white/[0.02] p-3 sm:p-4">
             <ProjectCommentsPanel
               projectId={params.id as string}
               tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}

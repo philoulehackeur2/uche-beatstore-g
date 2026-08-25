@@ -312,7 +312,7 @@ export function ShareTrackDetailsDrawer({
           {track.description && (
             <div className="space-y-2">
               <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/80">Description</p>
-              <p className="text-[12px] text-white/80 leading-relaxed bg-white/[0.04]/30 border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
+              <p className="text-[12px] text-white/80 leading-relaxed bg-white/[0.04] border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
                 {track.description}
               </p>
             </div>
@@ -357,7 +357,7 @@ export function ShareTrackDetailsDrawer({
             </div>
           ) : (
             shareToken && (
-              <div className="bg-white/[0.04]/20 border border-white/[0.02] rounded-xl p-4 flex gap-3 text-white/60">
+              <div className="bg-white/[0.04] border border-white/[0.02] rounded-xl p-4 flex gap-3 text-white/60">
                 <Info size={14} className="shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-relaxed">
                   Preview only. No prices set for this track yet.
@@ -377,7 +377,7 @@ export function ShareTrackDetailsDrawer({
 
 function StatCell({ label, value, accent }: { label: string; value: string; accent?: 'minor' | 'major' }) {
   return (
-    <div className="bg-white/[0.04]/50 border border-white/20 rounded-xl p-3 text-center">
+    <div className="bg-white/[0.04] border border-white/20 rounded-xl p-3 text-center">
       <p className="text-[8px] font-mono uppercase tracking-widest text-white/40">{label}</p>
       <p className={`text-[13px] font-bold mt-1 font-mono ${
         accent === 'minor' ? 'text-[#c8a47a]' :

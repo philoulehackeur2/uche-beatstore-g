@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { Check, Pin } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InlineText } from './InlineText';
 import type { CSSProperties, ReactNode } from 'react';
 import { ArtworkFallback } from './ArtworkFallback';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
@@ -41,8 +43,12 @@ interface MediaCardProps {
   selectMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
-  /** Options menu node, rendered top-right over the cover. */
-  optionsMenu?: ReactNode;
+  /** Options menu, rendered top-right over the cover. Pass a function to get
+   *  `startRename`, which flips the card's title into an inline field — that is
+   *  how a ⋯ menu offers Rename without owning a second editor of its own. */
+  optionsMenu?: ReactNode | ((args: { startRename: () => void }) => ReactNode);
+  /** Enables inline rename. Return false to keep the field open on failure. */
+  onRename?: (next: string) => Promise<boolean> | boolean;
   /** Extra overlay content (play button bottom-left, count badge bottom-right…). */
   overlay?: ReactNode;
 }
@@ -65,9 +71,12 @@ export function MediaCard({
   selected,
   onToggleSelect,
   optionsMenu,
+  onRename,
   overlay,
 }: MediaCardProps) {
   const covers = (previewCovers ?? []).filter(Boolean) as string[];
+  const [renaming, setRenaming] = useState(false);
+  const canRename = !!onRename;
 
   const coverBlock = (
     <div
@@ -114,7 +123,11 @@ export function MediaCard({
       )}
 
       {!selectMode && optionsMenu && (
-        <div className="absolute right-2 top-2 z-10">{optionsMenu}</div>
+        <div className="absolute right-2 top-2 z-10">
+          {typeof optionsMenu === 'function'
+            ? optionsMenu({ startRename: () => setRenaming(true) })
+            : optionsMenu}
+        </div>
       )}
 
       {selectMode && (
@@ -134,6 +147,17 @@ export function MediaCard({
 
   const textBlock = (
     <>
+      {renaming && canRename ? (
+        <InlineText
+          label="Name"
+          value={title}
+          editing
+          onEditingChange={setRenaming}
+          onSave={onRename!}
+          maxLength={200}
+          inputClassName="text-[13px] sm:text-[15px] font-bold"
+        />
+      ) : (
       <h3
         className={cn(
           'truncate text-[13px] font-bold leading-tight transition-colors sm:text-[15px]',
@@ -142,6 +166,7 @@ export function MediaCard({
       >
         {title}
       </h3>
+      )}
       {meta && (
         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-meta text-white/40">
           {meta}
@@ -159,7 +184,7 @@ export function MediaCard({
     );
   }
 
-  if (href) {
+  if (href && !renaming) {
     return (
       <Link href={href} onClick={onOpen} className="group block min-w-0">
         {coverBlock}

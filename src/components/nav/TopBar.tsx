@@ -257,7 +257,7 @@ export function TopBar() {
                     notifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]/40'}`}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]'}`}
                       >
                         <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
                           {notifIcon(n.kind)}
@@ -431,7 +431,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
           ref={ref as (el: HTMLButtonElement | null) => void}
           onClick={toggle}
           aria-expanded={open}
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-current={active ? 'page' : undefined}
           className={cn(
             'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-tight transition-colors',
@@ -451,7 +451,12 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
       )}
     >
       {(close) => (
-        <div className="p-1" role="menu">
+        /* A list of destinations, not a command menu. It used to declare
+           role="menu" with role="menuitem" links, which tells a screen reader
+           to expect arrow-key navigation this popover never implemented —
+           and the ARIA menu pattern is for application commands, not links.
+           A labelled nav list keeps Tab working the way links already do. */
+        <nav className="p-1" aria-label={`${group.label} pages`}>
           {group.items.map((it) => {
             const itemActive = isItemActive(it.href, pathname);
             const ItemIcon = it.icon;
@@ -459,7 +464,6 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
               <Link
                 key={it.href}
                 href={it.href}
-                role="menuitem"
                 onClick={close}
                 aria-current={itemActive ? 'page' : undefined}
                 className={cn(
@@ -472,7 +476,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
               </Link>
             );
           })}
-        </div>
+        </nav>
       )}
     </Popover>
   );

@@ -21,6 +21,17 @@ import { TrackMetadataEditor } from '@/components/tracks/drawer/TrackMetadataEdi
 import { TrackNotesEditor } from '@/components/tracks/drawer/TrackNotesEditor';
 import { DrawerActionList } from '@/components/tracks/drawer/DrawerActionList';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { InlineText } from '@/components/ui/InlineText';
+import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
+import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { useTags } from '@/hooks/useTags';
+
+/** Track tag vocabulary — the shared taxonomy, in scanning order. */
+const TRACK_TAG_GROUPS: TagGroup[] = Object.entries(TAG_TAXONOMY).map(([category, options]) => ({
+  category,
+  label: category,
+  options: options as readonly string[],
+}));
 
 // Type/Status options moved into drawer/TrackMetadataEditor along with
 // the editor UI itself.
@@ -120,6 +131,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isReplacing, setIsReplacing] = useState(false);
   const panelRef = useDialogBehavior({ open: true, onClose });
+  // Same rule as the three hooks above: unconditional, because `track` can go
+  // null mid-session and a hook that disappears crashes the render.
+  const { tags, toggleTag } = useTags(trackProp?.id ?? '');
 
   if (!track) return null;
 
@@ -405,8 +419,20 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   Insights
                 </button>
               </div>
-              {/* Title */}
-              <h2 className="text-xl font-black text-white uppercase tracking-tighter truncate leading-none mb-2">{track.title}</h2>
+              {/* Title — editable right here. It used to be static text, so
+                  renaming a beat meant leaving the drawer for /library/[id]. */}
+              <InlineText
+                label="Track title"
+                value={track.title}
+                onSave={async (next) => {
+                  if (!next) return false;
+                  await patchTrack({ title: next });
+                  return true;
+                }}
+                maxLength={200}
+                className="mb-2 -mx-1 px-1 text-xl font-black uppercase leading-none tracking-tighter text-white"
+                inputClassName="text-xl font-black uppercase tracking-tighter"
+              />
               {/* Key / BPM / type meta strip */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[9px] font-mono uppercase tracking-widest text-white/60 bg-white/[0.05] border border-white/20 px-2 py-0.5 rounded">
@@ -568,6 +594,19 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 })}
                 onSaved={onUpdate}
               />
+
+              {/* Tags — inline, with per-pill remove. Editing a beat's tags
+                  previously required leaving the drawer for the full
+                  /library/[id] page; the drawer showed none of them. */}
+              <div className="border-b border-white/10 px-6 py-5">
+                <h3 className="mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Tags</h3>
+                <InlineTagStrip
+                  subject="track"
+                  tags={tags}
+                  groups={TRACK_TAG_GROUPS}
+                  onToggle={({ tag, category, active }) => toggleTag.mutate({ tag, category, active })}
+                />
+              </div>
 
               {/* Type / Status / Rating — extracted to drawer/TrackMetadataEditor. */}
               <TrackMetadataEditor

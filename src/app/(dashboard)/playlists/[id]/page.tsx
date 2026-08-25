@@ -629,6 +629,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   isLastInOrder={trackIndex === tracks.length - 1}
                   onRemoveFromContext={() => removeTrack(track.id)}
                   removeLabel="Remove from playlist"
+                  editable
+                  onChanged={fetchData}
                 />
               );
             })

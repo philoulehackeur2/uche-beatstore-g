@@ -393,7 +393,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
         {/* ── Readiness checklist ── */}
         {!exclusiveSold && (
-          <div className="px-5 py-3 border-b border-white/10 bg-white/[0.02]/40">
+          <div className="px-5 py-3 border-b border-white/10 bg-white/[0.02]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
                 Listing readiness · {readyCount}/{checks.length}

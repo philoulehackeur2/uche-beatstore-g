@@ -422,7 +422,7 @@ export default function MusicPortfolio({
                                         {(track.tags ?? []).slice(0, 2).map((tag) => (
                                             <span
                                                 key={tag}
-                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/[0.04]/80 border border-white/[0.08] backdrop-blur-sm"
+                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm"
                                             >
                                                 {tag}
                                             </span>

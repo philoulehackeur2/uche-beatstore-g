@@ -18,6 +18,7 @@ import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
 import { MediaCard } from '@/components/ui/MediaCard';
+import { renameCollection } from '@/lib/ui/rename-collection';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import {
   filterAndSortProjects,
@@ -310,9 +311,18 @@ export default function ProjectsPage() {
                   pinned={project.pinned}
                   onTogglePin={(e) => togglePin(project, e)}
                   pinBusy={togglingPin === project.id}
-                  optionsMenu={
-                    <ProjectOptionsMenu project={project} onChanged={refreshProjectsAndFolders} onDeleted={fetchProjects} />
-                  }
+                  /* Rename edits the card's own title in place; the menu just
+                     focuses it, so there is one rename UI, not two. */
+                  onRename={(next) => renameCollection('projects', project.id, next, refreshProjectsAndFolders)}
+                  optionsMenu={({ startRename }) => (
+                    <ProjectOptionsMenu
+                      project={project}
+                      trackCount={project.track_count ?? undefined}
+                      onChanged={refreshProjectsAndFolders}
+                      onDeleted={fetchProjects}
+                      onEditTitle={startRename}
+                    />
+                  )}
                   meta={
                     <>
                       <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>

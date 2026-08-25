@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react';
 import { Track } from '@/lib/types';
-import { Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
+import { Music, Star } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { Popover } from '@/components/ui/Popover';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -182,60 +182,39 @@ export function TrackGridCard({
             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
-            <Popover
+            <ActionMenu
               align="right"
-              width={192}
-              trigger={({ toggle, ref }) => (
-                <button
-                  ref={ref as (el: HTMLButtonElement | null) => void}
-                  onClick={(e) => { e.stopPropagation(); toggle(); }}
-                  className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-colors"
-                  aria-label="Track actions"
-                >
-                  <MoreHorizontal size={13} />
-                </button>
-              )}
-            >
-              {(close) => (
-                <>
-                  {onClickDetails && (
-                    <button
-                      onClick={() => { close(); onClickDetails(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-                    >
-                      <Info size={12} className="text-white" /> View details
-                    </button>
-                  )}
-                  {onShare && (
-                    <button
-                      onClick={() => { close(); onShare(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-                    >
-                      <Share2 size={12} className="text-white" /> Share track
-                    </button>
-                  )}
-                  {onRemoveFromContext && (
-                    <button
-                      onClick={() => { close(); onRemoveFromContext(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-                    >
-                      <MinusCircle size={12} className="text-white/80" /> {removeLabel}
-                    </button>
-                  )}
-                  {onDelete && (
-                    <>
-                      <div className="my-1 border-t border-white/10" />
-                      <button
-                        onClick={() => { close(); onDelete(track); }}
-                        className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
-                      >
-                        <Trash2 size={12} /> Delete from library
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </Popover>
+              width={200}
+              label="Track actions"
+              triggerClassName="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+              sections={[
+                {
+                  id: 'edit',
+                  items: [
+                    {
+                      id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
+                      hidden: !onClickDetails, onSelect: () => onClickDetails?.(track),
+                    },
+                    { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
+                  ],
+                },
+                {
+                  id: 'membership',
+                  items: [
+                    {
+                      id: 'remove', label: removeLabel, hidden: !onRemoveFromContext,
+                      onSelect: () => onRemoveFromContext?.(track),
+                    },
+                  ],
+                },
+                {
+                  id: 'danger', danger: true,
+                  items: [
+                    { id: 'delete', label: 'Delete from library', hidden: !onDelete, onSelect: () => onDelete?.(track) },
+                  ],
+                },
+              ]}
+            />
           </div>
         )}
       </div>

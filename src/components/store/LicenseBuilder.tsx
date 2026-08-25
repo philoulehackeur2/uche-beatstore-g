@@ -223,7 +223,7 @@ export function LicenseBuilder() {
           <div
             key={l.id}
             className={`rounded-2xl border transition-all ${
-              isExpanded ? 'border-white/20 bg-white/[0.04]' : 'border-white/10 bg-white/[0.04]/60'
+              isExpanded ? 'border-white/20 bg-white/[0.04]' : 'border-white/10 bg-white/[0.04]'
             }`}
           >
             {/* Row header */}

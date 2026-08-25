@@ -11,6 +11,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { MediaCard } from '@/components/ui/MediaCard';
 import { PlaylistFilterBar } from '@/components/playlists/PlaylistFilterBar';
 import { PlaylistOptionsMenu } from '@/components/playlists/PlaylistOptionsMenu';
+import { renameCollection } from '@/lib/ui/rename-collection';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { filterAndSortPlaylists, DEFAULT_PLAYLIST_FILTERS, type PlaylistFilterState, type PlaylistListItem } from '@/lib/playlists/filters';
@@ -220,9 +221,17 @@ export default function PlaylistsPage() {
                   selectMode={selectMode}
                   selected={selectedIds.has(playlist.id)}
                   onToggleSelect={toggleSelected}
-                  optionsMenu={
-                    <PlaylistOptionsMenu playlist={playlist} onChanged={refreshPlaylistsAndFolders} onDeleted={fetchPlaylists} />
-                  }
+                  /* Rename edits the card's own title in place; the menu just
+                     focuses it, so there is one rename UI, not two. */
+                  onRename={(next) => renameCollection('playlists', playlist.id, next, refreshPlaylistsAndFolders)}
+                  optionsMenu={({ startRename }) => (
+                    <PlaylistOptionsMenu
+                      playlist={playlist}
+                      onChanged={refreshPlaylistsAndFolders}
+                      onDeleted={fetchPlaylists}
+                      onEditTitle={startRename}
+                    />
+                  )}
                   overlay={
                     <>
                       <button
