@@ -560,8 +560,10 @@ body {
      would beat the per-kind `border-emerald-900/40` / `border-red-900/40`
      classes on the card and flatten every toast to one colour. The border
      width comes from the card's own `border` utility. */
-  /* Warm near-black at 72% — --bg-card with the page showing through. */
-  background: rgba(20, 17, 13, 0.72);
+  /* The card surface at 72% — #0D0D0A with the page showing through. The
+     first cut used rgba(20, 17, 13, …), the old warm #14110d, which reads
+     brown against the neutral near-black every other panel in the app uses. */
+  background: rgba(13, 13, 10, 0.72);
   backdrop-filter: blur(24px) saturate(1.6);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
   box-shadow:
