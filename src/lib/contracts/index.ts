@@ -436,6 +436,36 @@ export type ShareCreateBody = z.infer<typeof ShareCreateBodySchema>;
 // number here. All fields optional; unknown keys are dropped (not .strict) so
 // the route's existing whitelist-by-destructure stays the source of truth.
 const numericLike = z.union([z.number(), z.string()]).nullish();
+/**
+ * A storefront layout, bounded rather than exhaustively typed.
+ *
+ * `passthrough` on the section object is deliberate: section settings grow, and
+ * a producer's saved storefront must keep round-tripping when they do. The
+ * caps are the actual protection — an unbounded sections array or an
+ * unbounded string is what would let a hand-rolled request bloat a row that is
+ * read on every storefront render. The DB carries a hard 256KB check too.
+ */
+const StoreLayoutSchema = z.object({
+  version: z.number().int().min(1).max(1000),
+  sections: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1).max(120),
+          kind: z.string().min(1).max(60),
+          name: z.string().max(200).optional(),
+          locked: z.boolean().optional(),
+          base: z.record(z.string(), z.unknown()),
+          overrides: z.record(z.string(), z.unknown()).optional(),
+          content: z.record(z.string(), z.unknown()).optional(),
+        })
+        .passthrough(),
+    )
+    .max(60),
+  theme: z.record(z.string(), z.unknown()),
+  updatedAt: z.string().max(40).optional(),
+});
+
 export const CreatorProfilePatchSchema = z.object({
   display_name: z.string().max(200).nullish(),
   bio: z.string().max(10000).nullish(),
@@ -485,6 +515,19 @@ export const CreatorProfilePatchSchema = z.object({
   voice_tag_interval_seconds: numericLike,
   bundle_discount_threshold: numericLike,
   bundle_discount_percent: numericLike,
+  /**
+   * Storefront section layout + theme.
+   *
+   * Structure is checked here only far enough to reject something that is not
+   * a layout at all and to bound the size — the same posture as
+   * `default_artwork_palette`. The real coercion happens on READ, in
+   * `normalizeLayout`, which drops unknown section kinds and fills in theme
+   * keys added since the document was saved. Validating exhaustively here
+   * instead would mean a layout saved today stops being accepted the moment a
+   * new section kind ships, which is the wrong failure for a producer's
+   * existing storefront.
+   */
+  store_layout: StoreLayoutSchema.nullish(),
 });
 export type CreatorProfilePatch = z.infer<typeof CreatorProfilePatchSchema>;
 
