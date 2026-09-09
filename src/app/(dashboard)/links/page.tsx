@@ -735,7 +735,7 @@ function LinkPopup({
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/[0.06] hover:border-white/[0.12] transition-colors"
             >
               <X size={14} />
             </button>

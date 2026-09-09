@@ -46,25 +46,29 @@ function sourceFiles(): string[] {
 const EMPTY_MODIFIER = /(?:border|bg|text|ring|from|via|to|divide|shadow|outline|decoration|placeholder|accent|caret|fill|stroke)-(?:white|black)\/(?=["'`\s])/;
 
 /**
- * `ring-white/30/40` — two opacity modifiers stacked. Tailwind parses neither.
- */
-const DOUBLED_MODIFIER = /-(?:white|black)\/\d+\/\d+/;
-
-/**
- * `bg-white/[0.04]/70` — the same defect wearing an arbitrary value.
+ * Two opacity modifiers stacked on one utility. Tailwind parses neither, so
+ * the class compiles to nothing and the surface it was meant to paint is
+ * transparent.
  *
- * The pattern above only matches plain numeric modifiers, so this form went
- * uncaught: 52 of them survived across 30 files, including the Settings page's
- * team rows and preference toggles, the player bar, the share variants and the
- * upload drop zone. Every one of those backgrounds rendered as nothing.
+ * Both halves can be plain (`ring-white/30/40`) or arbitrary
+ * (`bg-white/[0.04]/70`, `hover:bg-white/90/[0.04]`, `bg-white/[0.02]/[0.98]`),
+ * and this codebase has had all four permutations at once. Earlier versions of
+ * this guard matched only `\d+/\d+`, then only `[…]/\d+`, and each narrower
+ * pattern left a live population behind: 52 of the `[…]/\d+` form across 30
+ * files, then 6 more of the `\d+/[…]` form on the white close buttons in the
+ * links page, both share modals, the store list row and the store sidebar.
  *
- * They are the residue of the same scripted migration (commit 3fe5698), which
- * rewrote `bg-[#171511]/70` to `bg-white/[0.04]/70` — swapping the colour and
- * leaving the original alpha dangling behind it. The fix is to drop the
- * trailing modifier, matching every sibling the migration handled correctly;
- * multiplying the two would make these surfaces darker than their neighbours.
+ * They are all residue of the scripted colour migration (commit 3fe5698),
+ * which rewrote `bg-[#171511]/70` to `bg-white/[0.04]/70` — swapping the
+ * colour and leaving the original alpha dangling behind it. The fix is to drop
+ * the leftover modifier, matching every sibling the migration handled
+ * correctly; multiplying the two would make these surfaces darker than their
+ * neighbours.
+ *
+ * One pattern covering every permutation, so there is no narrower variant left
+ * to slip through.
  */
-const DOUBLED_ARBITRARY_MODIFIER = /-(?:white|black)\/\[[0-9.]+\]\/\d+/;
+const DOUBLED_MODIFIER = /-(?:white|black)\/(?:\d+|\[[0-9.]+\])\/(?:\d+|\[[0-9.]+\])/;
 
 function findViolations(pattern: RegExp): string[] {
   const hits: string[] = [];
@@ -91,19 +95,11 @@ describe('Tailwind opacity modifiers', () => {
     ).toEqual([]);
   });
 
-  it('has no doubled opacity modifiers (e.g. `ring-white/30/40`)', () => {
+  it('has no doubled opacity modifiers, in any permutation', () => {
     const violations = findViolations(DOUBLED_MODIFIER);
     expect(
       violations,
       `Found ${violations.length} class(es) with two stacked opacity modifiers. These compile to no CSS:\n${violations.join('\n')}`,
-    ).toEqual([]);
-  });
-
-  it('has no doubled modifiers on arbitrary values (e.g. `bg-white/[0.04]/70`)', () => {
-    const violations = findViolations(DOUBLED_ARBITRARY_MODIFIER);
-    expect(
-      violations,
-      `Found ${violations.length} class(es) stacking a modifier onto an arbitrary opacity value. These compile to no CSS:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 });
