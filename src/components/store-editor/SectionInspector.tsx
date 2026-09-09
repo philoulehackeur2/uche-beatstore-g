@@ -40,14 +40,19 @@ const VARIANTS: Partial<Record<StoreSection['kind'], { value: string; label: str
   ],
 };
 
-function Label({ children, overridden, onReset }: {
+function Label({ children, overridden, onReset, scope }: {
   children: React.ReactNode;
   overridden?: boolean;
   onReset?: () => void;
+  /** How many of a multi-selection this control reaches. Empty when it is one. */
+  scope?: string;
 }) {
   return (
     <span className="flex items-center justify-between gap-2">
-      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{children}</span>
+      <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+        {children}
+        {scope ? <span className="ml-1.5 normal-case tracking-normal text-white/25">{scope}</span> : null}
+      </span>
       {overridden ? (
         <button
           type="button"
@@ -65,6 +70,7 @@ function Label({ children, overridden, onReset }: {
 export function SectionInspector({
   section, breakpoint, onSet, onClear, onContent, onBlocks, selectedBlockId, onSelectBlock,
   clipboardStyle, onCopyStyle, onPasteStyle, canPasteStyle, pasteStyleLabel, onSaveToLibrary,
+  scope,
 }: {
   section: StoreSection | null;
   breakpoint: StoreBreakpoint;
@@ -82,6 +88,13 @@ export function SectionInspector({
   canPasteStyle?: boolean;
   pasteStyleLabel?: string;
   onSaveToLibrary?: () => void;
+  /**
+   * How wide the edits below actually reach, when more than one section is
+   * selected. Reports "4 of 6 sections" rather than "6" where the other two
+   * do not honour the setting — a control that silently applies to half of
+   * what is highlighted is worse than one that admits it.
+   */
+  scope?: { total: number; describe: (key: keyof SectionSettings) => string };
 }) {
   if (!section) {
     return (
@@ -105,7 +118,14 @@ export function SectionInspector({
   return (
     <div className="min-h-0 overflow-y-auto">
       <div className="border-b border-white/10 px-4 py-3">
-        <p className="truncate text-[13px] text-white/90">{section.name}</p>
+        <p className="truncate text-[13px] text-white/90">
+          {scope && scope.total > 1 ? `${scope.total} sections selected` : section.name}
+        </p>
+        {scope && scope.total > 1 ? (
+          <p className="mt-0.5 truncate text-[11px] text-white/40">
+            Editing from {section.name}
+          </p>
+        ) : null}
         <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">
           {breakpoint === 'desktop'
             ? 'Editing the base — applies to every device'
@@ -159,7 +179,7 @@ export function SectionInspector({
 
       <div className="space-y-4 px-4 py-4">
         <label className="grid gap-1.5">
-          <Label overridden={isOverridden('visible')} onReset={() => onClear('visible')}>Visible</Label>
+          <Label overridden={isOverridden('visible')} onReset={() => onClear('visible')} scope={scope?.describe('visible')}>Visible</Label>
           <div className="grid grid-cols-2 gap-1">
             {[true, false].map((value) => (
               <button
@@ -182,7 +202,7 @@ export function SectionInspector({
 
         {variants ? (
           <div className="grid gap-1.5">
-            <Label overridden={isOverridden('variant')} onReset={() => onClear('variant')}>Layout</Label>
+            <Label overridden={isOverridden('variant')} onReset={() => onClear('variant')} scope={scope?.describe('variant')}>Layout</Label>
             <Dropdown
               aria-label="Section layout"
               value={settings.variant}
@@ -194,7 +214,7 @@ export function SectionInspector({
 
         {can('columns') ? (
         <div className="grid gap-1.5">
-          <Label overridden={isOverridden('columns')} onReset={() => onClear('columns')}>Columns</Label>
+          <Label overridden={isOverridden('columns')} onReset={() => onClear('columns')} scope={scope?.describe('columns')}>Columns</Label>
           <div className="grid grid-cols-6 gap-1">
             {[1, 2, 3, 4, 5, 6].map((count) => (
               <button
@@ -217,7 +237,7 @@ export function SectionInspector({
         ) : null}
 
         <label className="grid gap-1.5">
-          <Label overridden={isOverridden('spacing')} onReset={() => onClear('spacing')}>Spacing</Label>
+          <Label overridden={isOverridden('spacing')} onReset={() => onClear('spacing')} scope={scope?.describe('spacing')}>Spacing</Label>
           <span className="flex items-center gap-2">
             <input
               type="range"
@@ -236,7 +256,7 @@ export function SectionInspector({
         </label>
 
         <div className="grid gap-1.5">
-          <Label overridden={isOverridden('width')} onReset={() => onClear('width')}>Width</Label>
+          <Label overridden={isOverridden('width')} onReset={() => onClear('width')} scope={scope?.describe('width')}>Width</Label>
           <div className="grid grid-cols-3 gap-1">
             {(['narrow', 'wide', 'full'] as const).map((value) => (
               <button
@@ -259,7 +279,7 @@ export function SectionInspector({
 
         {can('align') ? (
         <div className="grid gap-1.5">
-          <Label overridden={isOverridden('align')} onReset={() => onClear('align')}>Align</Label>
+          <Label overridden={isOverridden('align')} onReset={() => onClear('align')} scope={scope?.describe('align')}>Align</Label>
           <div className="grid grid-cols-3 gap-1">
             {(['left', 'center', 'right'] as const).map((value) => (
               <button

@@ -33,6 +33,12 @@ import {
   resolveSection, setSectionSetting, storeBreakpoints, updateSection,
   type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
+import {
+  applySettingToSections, duplicateSections, extendSelection, orderedSelection,
+  describeScope, primarySelection, pruneSelection, removeSections, sectionsSupporting,
+  setSectionsLocked, setSectionsVisible, toggleSelection,
+} from '@/lib/store-editor/bulk';
+import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
@@ -83,7 +89,15 @@ export function StorefrontBuilder({
   }));
   const layout = editor.doc;
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * Multi-select. The LAST id is the primary — the one the inspector edits and
+   * the one a shift-click extends from — so the panel follows the pointer.
+   */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedId = primarySelection(selectedIds);
+  const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [breakpoint, setBreakpoint] = useState<StoreBreakpoint>('desktop');
   const [zoom, setZoom] = useState(1);
   const [autoFit, setAutoFit] = useState(true);
@@ -113,6 +127,8 @@ export function StorefrontBuilder({
   const saveTimer = useRef<number | null>(null);
 
   const selected = layout.sections.find((section) => section.id === selectedId) ?? null;
+  /** Document order — what a shift-click range is measured against. */
+  const order = layout.sections.map((section) => section.id);
 
   /* ── History ──────────────────────────────────────────────────────────── */
 
@@ -247,15 +263,39 @@ export function StorefrontBuilder({
         event.preventDefault();
         return;
       }
-      if (meta && event.key.toLowerCase() === 'd' && selectedId) {
+      if (meta && event.key.toLowerCase() === 'a') {
         event.preventDefault();
-        commit((current) => duplicateSection(current, selectedId).layout);
+        setSelectedIds(layout.sections.map((section) => section.id));
         return;
       }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
+      if (meta && event.key.toLowerCase() === 'd' && selectedIds.length > 0) {
         event.preventDefault();
-        commit((current) => removeSection(current, selectedId));
-        setSelectedId(null);
+        let created: string[] = [];
+        commit((current) => {
+          const result = duplicateSections(current, selectedIds);
+          created = result.ids;
+          return result.layout;
+        });
+        // Select the copies, not the originals: the thing you just made is the
+        // thing you are about to move.
+        if (created.length > 0) setSelectedIds(created);
+        return;
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedIds.length > 0) {
+        event.preventDefault();
+        // Pruned against the layout the delete PRODUCED, not the one it
+        // started from: a locked section refuses deletion, and clearing the
+        // selection outright would drop it from the selection anyway.
+        let next = layout;
+        commit((current) => {
+          next = removeSections(current, selectedIds);
+          return next;
+        });
+        setSelectedIds(pruneSelection(next, selectedIds));
+        return;
+      }
+      if (event.key === 'Escape') {
+        setSelectedIds([]);
         return;
       }
       if (event.key === '1') setBreakpoint('desktop');
@@ -264,18 +304,130 @@ export function StorefrontBuilder({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, commit, selectedId]);
+  }, [undo, redo, commit, selectedIds, layout]);
 
   /* ── Section operations ───────────────────────────────────────────────── */
 
   const setSetting = <K extends keyof SectionSettings>(key: K, value: SectionSettings[K]) => {
-    if (!selectedId) return;
-    commit((current) => updateSection(current, selectedId, (section) => setSectionSetting(section, breakpoint, key, value)));
+    if (selectedIds.length === 0) return;
+    // Applies across the whole selection, skipping kinds that would ignore the
+    // key — writing a setting the live storefront does not honour is the defect
+    // `sectionCapabilities` exists to prevent, and doing it to six sections at
+    // once does not improve it.
+    commit((current) => applySettingToSections(current, selectedIds, breakpoint, key as never, value as never));
   };
 
   const clearOverride = (key: keyof SectionSettings) => {
-    if (!selectedId) return;
-    commit((current) => updateSection(current, selectedId, (section) => clearSectionOverride(section, breakpoint, key)));
+    if (selectedIds.length === 0) return;
+    // Reset reaches the same sections the write did, so undoing a bulk change
+    // does not leave overrides behind on the ones you cannot see.
+    commit((current) => selectedIds.reduce(
+      (next, id) => updateSection(next, id, (section) => clearSectionOverride(section, breakpoint, key)),
+      current,
+    ));
+  };
+
+  /**
+   * The right-click menu.
+   *
+   * Every entry acts on the whole selection, and each is disabled rather than
+   * hidden when it does not apply — a menu whose shape changes under you is
+   * harder to learn than one whose entries grey out.
+   */
+  const sectionMenuItems = (): ContextMenuItem[] => {
+    const ids = orderedSelection(layout, selectedIds);
+    const many = ids.length > 1;
+    const suffix = many ? ` (${ids.length})` : '';
+    const anyLocked = layout.sections.some((section) => ids.includes(section.id) && section.locked);
+    const hideable = sectionsSupporting(layout, ids, 'visible');
+    const allVisible = hideable.every((id) => {
+      const section = layout.sections.find((item) => item.id === id);
+      return section ? resolveSection(section, breakpoint).visible : true;
+    });
+
+    return [
+      {
+        kind: 'action',
+        label: `Rename`,
+        disabled: many,
+        onSelect: () => { setMenu(null); setRenamingId(selectedId); },
+      },
+      {
+        kind: 'action',
+        label: `Duplicate${suffix}`,
+        shortcut: '⌘D',
+        onSelect: () => {
+          let created: string[] = [];
+          commit((current) => {
+            const result = duplicateSections(current, ids);
+            created = result.ids;
+            return result.layout;
+          });
+          if (created.length > 0) setSelectedIds(created);
+          setMenu(null);
+        },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'action',
+        label: `${allVisible ? 'Hide' : 'Show'} on ${breakpoint}${suffix}`,
+        disabled: hideable.length === 0,
+        onSelect: () => {
+          commit((current) => setSectionsVisible(current, ids, breakpoint, !allVisible));
+          setMenu(null);
+        },
+      },
+      {
+        kind: 'action',
+        label: `${anyLocked ? 'Unlock' : 'Lock'}${suffix}`,
+        onSelect: () => {
+          commit((current) => setSectionsLocked(current, ids, !anyLocked));
+          setMenu(null);
+        },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'action',
+        label: 'Copy style',
+        disabled: many || !selected,
+        onSelect: () => {
+          if (selected) setClipboardStyle(copySectionStyle(selected));
+          setMenu(null);
+        },
+      },
+      {
+        kind: 'action',
+        // Paste is filtered through the capabilities of each target, so a style
+        // copied from a text block lands on a hero as only what a hero honours.
+        label: `Paste style${suffix}`,
+        disabled: !clipboardStyle,
+        onSelect: () => {
+          if (!clipboardStyle) return;
+          commit((current) => ids.reduce(
+            (next, id) => updateSection(next, id, (item) => applySectionStyle(item, clipboardStyle)),
+            current,
+          ));
+          setMenu(null);
+        },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'action',
+        label: `Delete${suffix}`,
+        shortcut: 'Del',
+        danger: true,
+        disabled: anyLocked && ids.length === 1,
+        onSelect: () => {
+          let next = layout;
+          commit((current) => {
+            next = removeSections(current, ids);
+            return next;
+          });
+          setSelectedIds(pruneSelection(next, ids));
+          setMenu(null);
+        },
+      },
+    ];
   };
 
   const width = breakpointWidths[breakpoint];
@@ -414,9 +566,21 @@ export function StorefrontBuilder({
             <>
               <SectionsPanel
                 layout={layout}
-                selectedId={selectedId}
+                selectedIds={selectedIds}
                 breakpoint={breakpoint}
-                onSelect={setSelectedId}
+                onSelect={(id, modifiers) => setSelectedIds((current) => {
+                  if (modifiers.range) return extendSelection(order, current, id);
+                  if (modifiers.meta) return toggleSelection(current, id);
+                  return [id];
+                })}
+                renamingId={renamingId}
+                onRenamingChange={setRenamingId}
+                onContextMenu={(id, at) => {
+                  // Right-clicking outside the selection selects that section
+                  // first, so the menu always acts on what is highlighted.
+                  setSelectedIds((current) => (current.includes(id) ? current : [id]));
+                  setMenu(at);
+                }}
                 onReorder={(id, toIndex) => commit((current) => reorderSection(current, id, toIndex))}
                 onMove={(id, delta) => commit((current) => moveSection(current, id, delta))}
                 onToggle={(id, patch) => commit((current) => updateSection(current, id, (section) => {
@@ -429,7 +593,7 @@ export function StorefrontBuilder({
                 onDuplicate={(id) => commit((current) => duplicateSection(current, id).layout)}
                 onDelete={(id) => {
                   commit((current) => removeSection(current, id));
-                  setSelectedId((current) => (current === id ? null : current));
+                  setSelectedIds((current) => current.filter((item) => item !== id));
                 }}
                 onRename={(id, name) => commit((current) => updateSection(current, id, (section) => ({
                   ...section, name: name.trim() || section.name,
@@ -553,7 +717,8 @@ export function StorefrontBuilder({
             >
               {layout.sections.map((section) => {
                 const settings = resolveSection(section, breakpoint);
-                const isSelected = section.id === selectedId;
+                const isSelected = selectedIds.includes(section.id);
+                const isPrimary = section.id === selectedId;
                 return (
                   <div
                     key={section.id}
@@ -563,12 +728,20 @@ export function StorefrontBuilder({
                     aria-pressed={isSelected}
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (section.id !== selectedId) setSelectedBlockId(null);
-                      setSelectedId(section.id);
+                      if (!isPrimary) setSelectedBlockId(null);
+                      // Same modifiers as the section stack — the canvas and
+                      // the list are two views of one selection.
+                      if (event.shiftKey) setSelectedIds((current) => extendSelection(order, current, section.id));
+                      else if (event.metaKey || event.ctrlKey) setSelectedIds((current) => toggleSelection(current, section.id));
+                      else setSelectedId(section.id);
                     }}
                     className={cn(
                       'relative outline-none transition-shadow',
-                      isSelected ? 'ring-1 ring-inset ring-white/60' : 'hover:ring-1 hover:ring-inset hover:ring-white/20',
+                      // The primary reads brighter: with several selected you
+                      // still need to see which one the inspector is showing.
+                      isPrimary ? 'ring-1 ring-inset ring-white/60'
+                        : isSelected ? 'ring-1 ring-inset ring-white/30'
+                          : 'hover:ring-1 hover:ring-inset hover:ring-white/20',
                       !settings.visible && 'opacity-30',
                     )}
                   >
@@ -635,6 +808,13 @@ export function StorefrontBuilder({
             onClear={clearOverride}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
+            scope={{
+              total: selectedIds.length,
+              describe: (key) => describeScope(
+                selectedIds.length,
+                sectionsSupporting(layout, selectedIds, key as never).length,
+              ),
+            }}
             clipboardStyle={clipboardStyle}
             onCopyStyle={() => {
               if (!selected) return;
@@ -676,6 +856,15 @@ export function StorefrontBuilder({
           />
         </aside>
       </div>
+
+      {menu && selected ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={sectionMenuItems()}
+        />
+      ) : null}
     </div>
   );
 }

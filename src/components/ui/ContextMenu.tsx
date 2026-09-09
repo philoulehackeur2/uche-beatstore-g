@@ -1,7 +1,11 @@
 'use client';
 
 /**
- * Right-click menu for the canvas and the layer list.
+ * Right-click menu.
+ *
+ * Shared: the cover art canvas and layer list use it, and so does the store
+ * editor's section stack. It knows nothing about either — it takes viewport
+ * coordinates and a list of items.
  *
  * Rendered in a fixed-position layer at viewport coordinates. Per the project's
  * gotchas: bounding-rect coords are already viewport-relative, so `window.scrollY`
@@ -82,7 +86,7 @@ export function ContextMenu({
     >
       {items.map((item, index) => (
         item.kind === 'separator' ? (
-          // eslint-disable-next-line react/no-array-index-key -- separators carry no identity of their own
+          // A separator carries no identity of its own, so its index is its key.
           <span key={`sep-${index}`} role="separator" className="my-1 block h-px bg-white/10" />
         ) : (
           <button

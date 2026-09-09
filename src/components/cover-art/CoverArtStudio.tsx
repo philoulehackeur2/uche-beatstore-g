@@ -67,7 +67,7 @@ import { DocumentsPanel } from './DocumentsPanel';
 import { CoverGeneratorPanel } from './CoverGeneratorPanel';
 import { StudioButton } from './StudioControls';
 import { ShortcutSheet } from './ShortcutSheet';
-import { ContextMenu, type ContextMenuItem } from './ContextMenu';
+import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { ContextualToolbar } from './ContextualToolbar';
 import { Dropdown } from '@/components/ui/Dropdown';
 

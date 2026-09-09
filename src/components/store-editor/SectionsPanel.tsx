@@ -24,35 +24,52 @@ import {
 import { cn } from '@/lib/utils';
 
 export function SectionsPanel({
-  layout, selectedId, breakpoint, onSelect, onReorder, onMove, onToggle, onDuplicate, onDelete, onRename,
+  layout, selectedIds, breakpoint, onSelect, onReorder, onMove, onToggle, onDuplicate, onDelete, onRename,
+  onContextMenu, renamingId, onRenamingChange,
 }: {
   layout: StoreLayout;
-  selectedId: string | null;
+  selectedIds: string[];
   breakpoint: StoreBreakpoint;
-  onSelect: (id: string) => void;
+  /**
+   * `modifiers` carries the click's intent: `meta` toggles one section in or
+   * out, `range` extends from the primary. Resolving the new selection here
+   * would put the maths in a component; `lib/store-editor/bulk.ts` owns it.
+   */
+  onSelect: (id: string, modifiers: { meta: boolean; range: boolean }) => void;
   onReorder: (id: string, toIndex: number) => void;
   onMove: (id: string, delta: number) => void;
   onToggle: (id: string, patch: { visible?: boolean; locked?: boolean }) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  /** Viewport coordinates for the right-click menu. */
+  onContextMenu: (id: string, at: { x: number; y: number }) => void;
+  /**
+   * Which row is being renamed. Lifted out of this component so the right-click
+   * menu can start a rename — a menu entry that cannot reach the input it is
+   * supposed to open would be a fake control.
+   */
+  renamingId: string | null;
+  onRenamingChange: (id: string | null) => void;
 }) {
   const dragIndex = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
 
   return (
     <div className="min-h-0 overflow-y-auto">
       <div className="border-b border-white/10 px-3 py-2.5">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
           Sections · {layout.sections.length}
+          {selectedIds.length > 1 ? (
+            <span className="ml-2 text-[#c8a47a]">{selectedIds.length} selected</span>
+          ) : null}
         </p>
       </div>
 
       <ul className="py-1">
         {layout.sections.map((section, index) => {
           const settings = resolveSection(section, breakpoint);
-          const selected = section.id === selectedId;
+          const selected = selectedIds.includes(section.id);
           const hiddenHere = !settings.visible;
           // The catalogue carries the sticky filter toolbar directly above it,
           // and the trust rail is a footer element. Both are anchored on the
@@ -83,6 +100,10 @@ export function SectionsPanel({
                 if (from !== null && from !== index) onReorder(layout.sections[from].id, index);
               }}
               onDragEnd={() => { dragIndex.current = null; setDragOver(null); }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                onContextMenu(section.id, { x: event.clientX, y: event.clientY });
+              }}
               className={cn(
                 'group relative border-l-2 transition-colors',
                 selected ? 'border-l-white/70 bg-white/[0.06]' : 'border-l-transparent hover:bg-white/[0.03]',
@@ -101,19 +122,23 @@ export function SectionsPanel({
 
                 <button
                   type="button"
-                  onClick={() => onSelect(section.id)}
-                  onDoubleClick={() => setRenaming(section.id)}
+                  onClick={(event) => onSelect(section.id, {
+                    meta: event.metaKey || event.ctrlKey,
+                    range: event.shiftKey,
+                  })}
+                  onDoubleClick={() => onRenamingChange(section.id)}
+                  aria-pressed={selected}
                   className="min-w-0 flex-1 text-left"
                 >
-                  {renaming === section.id ? (
+                  {renamingId === section.id ? (
                     <input
                       autoFocus
                       defaultValue={section.name}
-                      onBlur={(event) => { onRename(section.id, event.target.value); setRenaming(null); }}
+                      onBlur={(event) => { onRename(section.id, event.target.value); onRenamingChange(null); }}
                       onKeyDown={(event) => {
                         event.stopPropagation();
-                        if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); setRenaming(null); }
-                        if (event.key === 'Escape') setRenaming(null);
+                        if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); onRenamingChange(null); }
+                        if (event.key === 'Escape') onRenamingChange(null);
                       }}
                       className="w-full border border-white/20 bg-[#090907] px-1 py-0.5 text-[12px] text-white/90 outline-none focus:border-white/60"
                     />
