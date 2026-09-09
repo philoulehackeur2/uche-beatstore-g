@@ -23,7 +23,7 @@ export const shortcutGroups: Array<{ title: string; items: Array<[string, string
       ['T', 'Add text'],
       ['R', 'Add rectangle'],
       ['O', 'Add circle'],
-      ['G', 'Toggle guides'],
+      ['G', 'Toggle grid'],
       ['Shift R', 'Toggle rulers'],
       ['?', 'This sheet'],
     ],

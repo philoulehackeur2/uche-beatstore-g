@@ -26,6 +26,7 @@ import {
   addGuide, moveGuide, removeGuide,
   type DocumentGuides, type GuideAxis,
 } from '@/lib/cover/rulers';
+import { gridLines, gridSnapLines, type GridSettings } from '@/lib/cover/overlay';
 import { RulerBar, RulerCorner, RULER_SIZE } from './RulerBar';
 import {
   clampToArtboard,
@@ -116,7 +117,8 @@ export function StudioCanvas({
   zoom,
   selectedIds,
   editingId,
-  showGuides,
+  grid,
+  safeArea,
   showRulers,
   reactive,
   onSelect,
@@ -131,7 +133,10 @@ export function StudioCanvas({
   zoom: number;
   selectedIds: string[];
   editingId: string | null;
-  showGuides: boolean;
+  /** Division grid. View state owned by the studio; never on the document. */
+  grid: GridSettings;
+  /** Safe-area overlay in document units, already resolved. */
+  safeArea: Rect | null;
   showRulers: boolean;
   /** 0..1 loudness and bass at the playhead, for the audio-reactive preview. */
   reactive: { level: number; bass: number };
@@ -251,7 +256,15 @@ export function StudioCanvas({
         let offsetY = dy;
 
         if (primaryOrigin && !event.altKey) {
-          const targets = collectSnapTargets(doc, doc.layers, selectedIds, documentGuides(doc));
+          // Grid lines ride the guides channel rather than getting a pass of
+          // their own — see `gridSnapLines`. `snapRect` then still picks a
+          // single nearest line per axis.
+          const placed = documentGuides(doc);
+          const gridSnap = gridSnapLines(doc, grid);
+          const targets = collectSnapTargets(doc, doc.layers, selectedIds, {
+            x: [...placed.x, ...gridSnap.x],
+            y: [...placed.y, ...gridSnap.y],
+          });
           const snapped = snapRect(
             { ...primaryOrigin, x: primaryOrigin.x + dx, y: primaryOrigin.y + dy },
             targets,
@@ -807,12 +820,44 @@ export function StudioCanvas({
         )}
         style={{ width: doc.width * zoom, height: doc.height * zoom, background: doc.background }}
       >
-        {showGuides ? (
-          <>
-            <div className="pointer-events-none absolute inset-[8%] border border-dashed border-white/20" />
-            <div className="pointer-events-none absolute left-1/2 top-0 h-full border-l border-white/10" />
-            <div className="pointer-events-none absolute left-0 top-1/2 w-full border-t border-white/10" />
-          </>
+        {/* Grid. Drawn under the layers on purpose: it is a scaffold to place
+            work against, and over the top it would read as part of the cover.
+            The centre pair is emphasised because it is the line designers
+            actually aim at. */}
+        {grid.visible ? (
+          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+            {gridLines(doc.width, grid.divisions).map((line) => (
+              <span
+                key={`gx-${line}`}
+                className={cn('absolute top-0 h-full border-l',
+                  Math.abs(line - doc.width / 2) < 0.5 ? 'border-white/20' : 'border-white/10')}
+                style={{ left: line * zoom }}
+              />
+            ))}
+            {gridLines(doc.height, grid.divisions).map((line) => (
+              <span
+                key={`gy-${line}`}
+                className={cn('absolute left-0 w-full border-t',
+                  Math.abs(line - doc.height / 2) < 0.5 ? 'border-white/20' : 'border-white/10')}
+                style={{ top: line * zoom }}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {/* Safe area. Above the layers, unlike the grid — the whole point is to
+            see what falls outside it, which you cannot do from underneath. */}
+        {safeArea ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute z-[996] border border-dashed border-[#c8a47a]/50"
+            style={{
+              left: safeArea.x * zoom,
+              top: safeArea.y * zoom,
+              width: safeArea.width * zoom,
+              height: safeArea.height * zoom,
+            }}
+          />
         ) : null}
 
         {/* The effect filters every layer references by `url(#fx-canvas-…)`.

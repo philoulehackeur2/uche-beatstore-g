@@ -17,10 +17,10 @@
  * only inside a component here has been silently reverted before.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Download, Grid3x3, Image as ImageIcon, Layers as LayersIcon, Maximize2,
-  Music2, Pause, Play, Redo2, Ruler, Sparkles, SquareStack, Undo2, FolderOpen, Check, Loader2, PanelLeft,
+  Magnet, Music2, Pause, Play, Redo2, Ruler, Sparkles, SquareStack, Undo2, FolderOpen, Check, Loader2, PanelLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { svgToRasterBlob } from '@/design-system';
@@ -32,6 +32,10 @@ import { buildCollage, collageFrame, type CollageLayoutId } from '@/lib/cover/co
 import { fitRectInside } from '@/lib/cover/geometry';
 import { resizeArtboard } from '@/lib/cover/artboard';
 import { restyleDocument } from '@/lib/cover/restyle';
+import {
+  defaultGrid, gridDivisionChoices, safeAreaById, safeAreaPresets, safeAreaRect,
+  type GridSettings,
+} from '@/lib/cover/overlay';
 import { resolveExport, type ExportSettings } from '@/lib/cover/export-settings';
 import { embedFontsInSvg } from '@/lib/cover/font-embed';
 import {
@@ -65,6 +69,7 @@ import { StudioButton } from './StudioControls';
 import { ShortcutSheet } from './ShortcutSheet';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import { ContextualToolbar } from './ContextualToolbar';
+import { Dropdown } from '@/components/ui/Dropdown';
 
 type Surface = 'dev-lab' | 'cover-art-studio';
 type ToolTab = 'documents' | 'source' | 'add' | 'collage' | 'ai' | 'export';
@@ -117,7 +122,18 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
 
   const [tab, setTab] = useState<ToolTab>('add');
   const [zoom, setZoom] = useState(0.22);
-  const [showGuides, setShowGuides] = useState(true);
+  /**
+   * View state, deliberately not on the document: an overlay is how you are
+   * looking at the artwork, and saving it would make one producer's working
+   * preference part of the file everyone else opens.
+   */
+  const [grid, setGrid] = useState<GridSettings>({ ...defaultGrid, visible: true });
+  const [safeAreaId, setSafeAreaId] = useState<string | null>('title-safe');
+
+  const safeArea = useMemo(
+    () => safeAreaRect(document.width, document.height, safeAreaById(safeAreaId)),
+    [document.width, document.height, safeAreaId],
+  );
   const [showRulers, setShowRulers] = useState(false);
   const [showLayers, setShowLayers] = useState(true);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -1047,7 +1063,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
         if (key === 'r' && event.shiftKey) { setShowRulers((value) => !value); return; }
         if (key === 'r') { addShape('rect'); return; }
         if (key === 'o') { addShape('circle'); return; }
-        if (key === 'g') { setShowGuides((value) => !value); return; }
+        if (key === 'g') { setGrid((value) => ({ ...value, visible: !value.visible })); return; }
         if (key === '?' || (key === '/' && event.shiftKey)) {
           event.preventDefault();
           setShowShortcuts((value) => !value);
@@ -1269,13 +1285,46 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
 
           <button
-            type="button" onClick={() => setShowGuides((value) => !value)}
-            aria-pressed={showGuides} aria-label="Toggle guides" title="Guides"
+            type="button" onClick={() => setGrid((value) => ({ ...value, visible: !value.visible }))}
+            aria-pressed={grid.visible} aria-label="Toggle grid" title="Grid (G)"
             className={cn('grid h-7 w-7 place-items-center transition-colors',
-              showGuides ? 'text-white' : 'text-white/40 hover:text-white/90')}
+              grid.visible ? 'text-white' : 'text-white/40 hover:text-white/90')}
           >
             <Grid3x3 size={13} />
           </button>
+          {/* Division count and snapping only mean anything with the grid up,
+              so they appear with it rather than sitting inert. */}
+          {grid.visible ? (
+            <>
+              <Dropdown
+                value={String(grid.divisions)}
+                onChange={(value) => setGrid((current) => ({ ...current, divisions: Number(value) }))}
+                options={gridDivisionChoices.map((count) => ({ value: String(count), label: `${count}` }))}
+                aria-label="Grid divisions"
+                className="w-14"
+                menuWidth={96}
+              />
+              <button
+                type="button" onClick={() => setGrid((value) => ({ ...value, snap: !value.snap }))}
+                aria-pressed={grid.snap} aria-label="Snap to grid" title="Snap to grid"
+                className={cn('grid h-7 w-7 place-items-center transition-colors',
+                  grid.snap ? 'text-white' : 'text-white/40 hover:text-white/90')}
+              >
+                <Magnet size={13} />
+              </button>
+            </>
+          ) : null}
+          <Dropdown
+            value={safeAreaId ?? 'none'}
+            onChange={(value) => setSafeAreaId(value === 'none' ? null : value)}
+            options={[
+              { value: 'none', label: 'No safe area' },
+              ...safeAreaPresets.map((preset) => ({ value: preset.id, label: preset.label })),
+            ]}
+            aria-label="Safe area overlay"
+            className="w-32"
+            menuWidth={180}
+          />
           <button
             type="button" onClick={() => setShowRulers((value) => !value)}
             aria-pressed={showRulers} aria-label="Toggle rulers" title="Rulers (Shift R) — drag from a ruler to place a guide"
@@ -1480,7 +1529,8 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             zoom={zoom}
             selectedIds={selectedIds}
             editingId={editingId}
-            showGuides={showGuides}
+            grid={grid}
+            safeArea={safeArea}
             showRulers={showRulers}
             reactive={reactive}
             onGuidesChange={(guides, commit) => {
