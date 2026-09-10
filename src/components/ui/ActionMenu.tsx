@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -65,6 +65,21 @@ export function ActionMenu({
 
   const resolved = resolveSections(sections);
   const flat = flattenActions(sections);
+
+  /**
+   * Stable per-item DOM ids, so the panel can point `aria-activedescendant` at
+   * the highlighted row.
+   *
+   * The keyboard cursor is a `highlight` index painted as a background class,
+   * and DOM focus deliberately stays on the panel (moving it per item fights
+   * the outside-click and restore-focus logic). Visually that reads fine; to a
+   * screen reader it read as nothing at all — the menu announced itself as a
+   * menu, arrow keys changed the picture, and no item was ever announced.
+   * That is the same broken promise `role="menu"` makes when it has no arrow
+   * keys, one level further in.
+   */
+  const menuId = useId();
+  const itemId = (action: MenuAction) => `${menuId}-${action.id}`;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -225,6 +240,9 @@ export function ActionMenu({
           role="menu"
           tabIndex={-1}
           aria-label={label}
+          aria-activedescendant={
+            highlight >= 0 && flat[highlight] ? itemId(flat[highlight]) : undefined
+          }
           onKeyDown={onKeyDown}
           onClick={(e) => e.stopPropagation()}
           style={{ position: 'fixed', top: coords.top, left: coords.left, width }}
@@ -253,8 +271,13 @@ export function ActionMenu({
                   return (
                     <button
                       key={action.id}
+                      id={itemId(action)}
                       type="button"
-                      role="menuitem"
+                      // A row that carries a check mark is a toggle, and
+                      // `menuitem` has nowhere to put that state — the mark
+                      // would be visual only.
+                      role={action.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                      aria-checked={action.checked}
                       disabled={action.disabled || action.busy}
                       onMouseEnter={() => setHighlight(idx)}
                       onClick={() => void invoke(action)}
