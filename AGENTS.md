@@ -108,6 +108,8 @@ The ⋯ menu holds only what is left, grouped by frequency and keyboard-navigabl
 
 The same rules apply to playlists, to the project and playlist grid cards (rename edits the card's own title), and to the track details drawer, where the title and tags are now editable rather than sending the producer to `/library/[id]`.
 
+`/links` follows them as well. A share row's title is its rename field and its ⋯ menu copies, shares, toggles downloads and deletes — copying a URL, the thing done most on that page, no longer starts by opening a detail popup. The popup is where the full URL, the track list, and the expiry/password settings live.
+
 `/store-editor` follows them too. Its Beat Listing rows previously carried seven icon-only buttons and a line of copy telling the producer to open the beat in the Library to set a price — the one screen for deciding what sells could not set a price. Cover, title and lease price are now edited in the row; the on/off toggle stays visible because it is what the section is for; everything else is in the row's ⋯ menu. A blank price still means "inherit the profile default", which is not the same as free.
 
 ### Producer: make cover art
