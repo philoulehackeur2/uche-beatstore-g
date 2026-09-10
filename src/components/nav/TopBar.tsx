@@ -67,6 +67,8 @@ export function TopBar() {
   // ── Notifications ──────────────────────────────────────────────
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
+  /** The panel renders a page of rows; the badge counts every unread row. */
+  const [hasMore, setHasMore] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const fetchNotifs = async () => {
@@ -76,6 +78,7 @@ export function TopBar() {
       const j = await res.json();
       setNotifs(j.notifications ?? []);
       setUnread(j.unread ?? 0);
+      setHasMore(Boolean(j.hasMore));
     } catch {/* silent */}
   };
 
@@ -318,6 +321,14 @@ export function TopBar() {
                     })
                   )}
                 </div>
+                {hasMore && (
+                  <button
+                    onClick={() => { setNotifOpen(false); setActivityOpen(true); }}
+                    className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white"
+                  >
+                    Showing the latest 20 — open activity log →
+                  </button>
+                )}
               </div>
           </Popover>
 

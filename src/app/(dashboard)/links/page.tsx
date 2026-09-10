@@ -324,6 +324,8 @@ export default function LinksPage() {
               return (
                 <ListRow
                   key={key}
+                  label={`Open ${link.title || link.token}`}
+                  titleInteractive
                   onClick={() => setActive(link)}
                   className={cn(expired && 'opacity-40')}
                   leading={
